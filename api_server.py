@@ -34,7 +34,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 # Load environment variables from .env file
-load_dotenv()
+if load_dotenv:
+    load_dotenv()
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
