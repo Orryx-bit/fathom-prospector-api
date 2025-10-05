@@ -131,7 +131,7 @@ class GooglePlacesAPI:
             logger.error(f"Geocoding error for '{address}': {e}")
             return []
     
-    def places_nearby(self, location: dict, radius: int, keyword: str, place_type: str = 'health') -> List[dict]:
+    def places_nearby(self, location: dict, radius: int, keyword: str) -> dict:
         """
         Search for places nearby with pagination support
         
@@ -139,10 +139,9 @@ class GooglePlacesAPI:
             location: Dict with 'lat' and 'lng' keys
             radius: Search radius in meters
             keyword: Search keyword
-            place_type: Place type filter
             
         Returns:
-            List of all places found (handles pagination automatically)
+            Dict with 'results' key containing list of places found (handles pagination automatically)
         """
         endpoint = "/place/nearbysearch/json"
         all_results = []
@@ -152,8 +151,7 @@ class GooglePlacesAPI:
             params = {
                 'location': f"{location['lat']},{location['lng']}",
                 'radius': radius,
-                'keyword': keyword,
-                'type': place_type
+                'keyword': keyword
             }
             
             if next_page_token:
@@ -178,7 +176,8 @@ class GooglePlacesAPI:
                 logger.error(f"Error fetching places: {e}")
                 break
         
-        return all_results
+        # Return in format compatible with calling code
+        return {'results': all_results}
     
     def place_details(self, place_id: str, fields: List[str]) -> Optional[dict]:
         """
