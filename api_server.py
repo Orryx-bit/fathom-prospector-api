@@ -198,6 +198,72 @@ def verify_api_key(x_api_key: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return x_api_key
 
+def calculate_dynamic_timeout(estimated_results: int) -> int:
+    """
+    Calculate optimal timeout based on estimated result count
+    Progressive timeout strategy - scales with expected workload
+    
+    Args:
+        estimated_results: Estimated number of businesses to process
+        
+    Returns:
+        Timeout in seconds
+    """
+    if estimated_results < 20:
+        timeout = 10 * 60  # 10 minutes for small searches
+        logger.info(f"Dynamic timeout: 10 minutes for ~{estimated_results} results")
+    elif estimated_results < 50:
+        timeout = 15 * 60  # 15 minutes for medium searches
+        logger.info(f"Dynamic timeout: 15 minutes for ~{estimated_results} results")
+    elif estimated_results < 80:
+        timeout = 20 * 60  # 20 minutes for large searches
+        logger.info(f"Dynamic timeout: 20 minutes for ~{estimated_results} results")
+    elif estimated_results < 120:
+        timeout = 30 * 60  # 30 minutes for very large searches
+        logger.info(f"Dynamic timeout: 30 minutes for ~{estimated_results} results")
+    else:
+        timeout = 40 * 60  # 40 minutes max for extremely large searches
+        logger.info(f"Dynamic timeout: 40 minutes (max) for ~{estimated_results} results")
+    
+    return timeout
+
+def estimate_result_count_for_search(request: SearchRequest) -> int:
+    """
+    Estimate result count by calling prospect.py's estimate function
+    
+    Args:
+        request: Search request parameters
+        
+    Returns:
+        Estimated number of results
+    """
+    try:
+        logger.info("Estimating result count for dynamic timeout calculation...")
+        
+        # Import prospect module
+        script_dir = os.path.dirname(__file__)
+        sys.path.insert(0, script_dir)
+        
+        from prospect import VenusProspector
+        
+        # Create prospector instance
+        prospector = VenusProspector()
+        
+        # Estimate result count
+        estimated = prospector.estimate_result_count(
+            keywords=request.keywords,
+            location=request.location,
+            radius=request.radius
+        )
+        
+        logger.info(f"Estimated {estimated} results for this search")
+        return estimated
+        
+    except Exception as e:
+        logger.warning(f"Could not estimate result count: {str(e)}")
+        logger.info("Using default estimate of 50 results")
+        return 50  # Default safe estimate
+
 @app.get("/")
 async def root():
     """Health check endpoint"""
@@ -519,25 +585,38 @@ async def run_prospect_search(job_id: str, request: SearchRequest):
     """
     Async wrapper for prospect search
     Uses semaphore to limit concurrent searches and thread pool to prevent blocking
+    Implements progressive timeout strategy based on estimated result count
     """
     async with search_semaphore:
         logger.info(f"Job {job_id}: Starting search (concurrency: {MAX_CONCURRENT_SEARCHES - search_semaphore._value}/{MAX_CONCURRENT_SEARCHES})")
         
         try:
-            # Run synchronous search in thread pool with timeout
+            # Estimate result count and calculate dynamic timeout
+            estimated_results = estimate_result_count_for_search(request)
+            timeout_seconds = calculate_dynamic_timeout(estimated_results)
+            timeout_minutes = timeout_seconds // 60
+            
+            logger.info(f"Job {job_id}: Using {timeout_minutes}-minute timeout for estimated {estimated_results} results")
+            
+            # Store timeout info in job metadata
+            with search_jobs_lock:
+                search_jobs[job_id]["estimated_results"] = estimated_results
+                search_jobs[job_id]["timeout_minutes"] = timeout_minutes
+            
+            # Run synchronous search in thread pool with dynamic timeout
             loop = asyncio.get_event_loop()
             await asyncio.wait_for(
                 loop.run_in_executor(executor, _run_prospect_search_sync, job_id, request),
-                timeout=900  # 15 minute max per search
+                timeout=timeout_seconds
             )
         except asyncio.TimeoutError:
-            logger.error(f"Job {job_id}: Search timed out after 15 minutes")
+            logger.error(f"Job {job_id}: Search timed out after {timeout_minutes} minutes")
             with search_jobs_lock:
                 search_jobs[job_id].update({
                     "status": "failed",
                     "progress": 0,
                     "message": "Search timed out",
-                    "error": "Search exceeded 15 minute time limit",
+                    "error": f"Search exceeded {timeout_minutes} minute time limit (estimated {estimated_results} results)",
                     "completed_at": datetime.now().isoformat()
                 })
             update_metrics("search_failed", error_type="timeout")
@@ -669,12 +748,18 @@ if __name__ == "__main__":
     print(f"  • Thread Pool Workers: 10")
     print(f"  • Daily Quota Per User: {PER_USER_DAILY_LIMIT} searches")
     print(f"  • Rate Limit: 10 searches/minute per IP")
-    print(f"  • Search Timeout: 15 minutes")
+    print(f"  • Progressive Timeout Strategy:")
+    print(f"      - Small searches (<20 results): 10 minutes")
+    print(f"      - Medium searches (20-50 results): 15 minutes")
+    print(f"      - Large searches (50-80 results): 20 minutes")
+    print(f"      - Very large (80-120 results): 30 minutes")
+    print(f"      - Extremely large (120+ results): 40 minutes")
     print(f"  • API Key: {API_KEY[:20]}...")
     print("=" * 80)
     print("PHASE 1 FIXES (Applied):")
     print("  ✅ Async/blocking issue FIXED - Event loop will not block")
     print("  ✅ Concurrency protection enabled (semaphore + thread pool)")
+    print("  ✅ Progressive timeout strategy - scales with search size")
     print("  ✅ Production-ready configuration applied")
     print("  ✅ Timeout protection enabled")
     print("=" * 80)
