@@ -1,8 +1,9 @@
+
 #!/usr/bin/env python3
 """
 Venus Medical Device Prospecting System
 Comprehensive tool for finding and scoring medical practices for Venus device sales
-Version 2.1 - Direct Google Places API implementation with robust timeout handling
+Version 2.0 - Now with advanced ML-based scoring engine
 """
 
 import argparse
@@ -20,7 +21,7 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
-# REMOVED: import googlemaps
+import googlemaps
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -56,175 +57,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-class GooglePlacesAPI:
-    """Direct Google Places API wrapper with guaranteed timeouts"""
-    
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-        self.base_url = "https://maps.googleapis.com/maps/api"
-        # Connection timeout, Read timeout
-        self.timeout = (10, 30)
-        
-    def _make_request(self, endpoint: str, params: dict, max_retries: int = 3) -> dict:
-        """
-        Make API request with timeout and retry logic
-        
-        Args:
-            endpoint: API endpoint (e.g., '/place/nearbysearch/json')
-            params: Query parameters
-            max_retries: Number of retry attempts
-            
-        Returns:
-            API response as dict
-        """
-        url = f"{self.base_url}{endpoint}"
-        params['key'] = self.api_key
-        
-        for attempt in range(max_retries):
-            try:
-                logger.debug(f"API request attempt {attempt + 1}/{max_retries}: {endpoint}")
-                response = requests.get(url, params=params, timeout=self.timeout)
-                response.raise_for_status()
-                data = response.json()
-                
-                # Check API status
-                status = data.get('status')
-                if status == 'OK' or status == 'ZERO_RESULTS':
-                    return data
-                elif status == 'OVER_QUERY_LIMIT':
-                    logger.error("Google API quota exceeded")
-                    raise Exception("API quota exceeded")
-                elif status == 'REQUEST_DENIED':
-                    logger.error("Google API request denied - check API key")
-                    raise Exception("Invalid API key or permissions")
-                elif status == 'INVALID_REQUEST':
-                    logger.error(f"Invalid API request: {data.get('error_message', 'Unknown error')}")
-                    raise Exception(f"Invalid request: {data.get('error_message')}")
-                else:
-                    logger.warning(f"API returned status: {status}")
-                    return data
-                    
-            except requests.Timeout:
-                logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}")
-                if attempt == max_retries - 1:
-                    raise Exception("API request timed out after multiple attempts")
-                time.sleep(2 ** attempt)  # Exponential backoff
-                
-            except requests.RequestException as e:
-                logger.warning(f"Request error on attempt {attempt + 1}/{max_retries}: {e}")
-                if attempt == max_retries - 1:
-                    raise Exception(f"API request failed: {str(e)}")
-                time.sleep(2 ** attempt)
-                
-        raise Exception("Max retries exceeded")
-    
-    def geocode(self, address: str) -> List[dict]:
-        """
-        Geocode an address to lat/lng
-        
-        Args:
-            address: Address string to geocode
-            
-        Returns:
-            List of geocoding results
-        """
-        endpoint = "/geocode/json"
-        params = {'address': address}
-        
-        try:
-            data = self._make_request(endpoint, params)
-            return data.get('results', [])
-        except Exception as e:
-            logger.error(f"Geocoding error for '{address}': {e}")
-            return []
-    
-    def places_nearby(self, location: dict, radius: int, keyword: str, place_type: str = 'health') -> List[dict]:
-        """
-        Search for places nearby with pagination support
-        
-        Args:
-            location: Dict with 'lat' and 'lng' keys
-            radius: Search radius in meters
-            keyword: Search keyword
-            place_type: Place type filter
-            
-        Returns:
-            List of all places found (handles pagination automatically)
-        """
-        endpoint = "/place/nearbysearch/json"
-        all_results = []
-        next_page_token = None
-        
-        while True:
-            params = {
-                'location': f"{location['lat']},{location['lng']}",
-                'radius': radius,
-                'keyword': keyword,
-                'type': place_type
-            }
-            
-            if next_page_token:
-                params['pagetoken'] = next_page_token
-                # Google requires 2-second delay between paginated requests
-                logger.debug("Waiting 2 seconds before next page request...")
-                time.sleep(2)
-            
-            try:
-                data = self._make_request(endpoint, params)
-                results = data.get('results', [])
-                all_results.extend(results)
-                
-                logger.info(f"Fetched {len(results)} results (total so far: {len(all_results)})")
-                
-                # Check for more pages
-                next_page_token = data.get('next_page_token')
-                if not next_page_token:
-                    break
-                    
-            except Exception as e:
-                logger.error(f"Error fetching places: {e}")
-                break
-        
-        return all_results
-    
-    def place_details(self, place_id: str, fields: List[str]) -> Optional[dict]:
-        """
-        Get detailed information for a specific place
-        
-        Args:
-            place_id: Google Place ID
-            fields: List of fields to retrieve
-            
-        Returns:
-            Place details dict or None
-        """
-        endpoint = "/place/details/json"
-        params = {
-            'place_id': place_id,
-            'fields': ','.join(fields)
-        }
-        
-        try:
-            data = self._make_request(endpoint, params)
-            return data.get('result', {})
-        except Exception as e:
-            logger.error(f"Error fetching place details for {place_id}: {e}")
-            return None
-
-
 class VenusProspector:
     """Main prospecting system for Venus medical devices"""
     
     def __init__(self, demo_mode=False, existing_customers_csv=None):
-        # Initialize Google Places API client
+        # Initialize Google Maps client
         self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
         if not self.gmaps_key:
             raise ValueError('GOOGLE_PLACES_API_KEY environment variable is required. Please set it in your .env file.')
-        
-        # Use direct API implementation instead of googlemaps library
-        self.gmaps_api = GooglePlacesAPI(self.gmaps_key)
-        
         self.demo_mode = demo_mode
         self.existing_customers = set()
         
@@ -234,23 +74,23 @@ class VenusProspector:
         
         # Try multiple paths to find config file
         possible_paths = [
-            os.path.join(os.path.dirname(__file__), 'config', 'scoring_config.yaml'),
-            os.path.join(os.getcwd(), 'config', 'scoring_config.yaml'),
-            '/app/config/scoring_config.yaml',
+            os.path.join(os.path.dirname(__file__), 'config', 'scoring_config.yaml'),  # Relative to script
+            os.path.join(os.getcwd(), 'config', 'scoring_config.yaml'),  # Relative to working directory
+            '/app/config/scoring_config.yaml',  # Absolute path in Railway container
         ]
         
         config_path = None
         for path in possible_paths:
             if os.path.exists(path):
                 config_path = path
-                logger.info(f"✓ Found scoring config at: {path}")
+                logger.info(f"âœ“ Found scoring config at: {path}")
                 break
         
         if config_path:
             try:
                 self.scoring_engine = LeadScoringEngine(config_path)
                 self.scoring_adapter = VenusScoringAdapter()
-                logger.info("✓ New scoring engine initialized successfully")
+                logger.info("âœ“ New scoring engine initialized successfully")
             except Exception as e:
                 logger.error(f"Failed to initialize scoring engine: {str(e)}")
                 logger.warning("Falling back to legacy scoring system")
@@ -269,16 +109,15 @@ class VenusProspector:
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
         
-        # Test API key if not in demo mode
         if not demo_mode:
             try:
-                logger.info("Testing Google Places API key...")
-                test_result = self.gmaps_api.geocode("Austin, TX")
+                # Initialize Google Maps client with 30-second timeout to prevent hanging
+                self.gmaps = googlemaps.Client(key=self.gmaps_key, timeout=30)
+                # Test the API key with a simple request
+                test_result = self.gmaps.geocode("Austin, TX")
                 if not test_result:
                     logger.warning("Google Places API test failed - switching to demo mode")
                     self.demo_mode = True
-                else:
-                    logger.info("✓ Google Places API key verified")
             except Exception as e:
                 logger.warning(f"Google Places API initialization failed: {str(e)} - switching to demo mode")
                 self.demo_mode = True
@@ -317,6 +156,8 @@ class VenusProspector:
                 'keywords': ['weight loss', 'ems', 'muscle building', 'fat reduction', 'glp-1']
             }
         }
+        
+        # Initialize session for web scraping
         
     def load_existing_customers(self, csv_file_path: str):
         """Load existing customers from CSV for exclusion from prospecting"""
@@ -366,6 +207,8 @@ class VenusProspector:
                 return True
         
         return False
+
+
 
     def get_mock_data(self, query: str, location: str) -> List[Dict]:
         """Generate mock data for demo purposes"""
@@ -447,8 +290,8 @@ class VenusProspector:
         try:
             logger.info(f"Estimating result count for {keywords} near {location}")
             
-            # Geocode the location using direct API
-            geocode_result = self.gmaps_api.geocode(location)
+            # Geocode the location
+            geocode_result = self.gmaps.geocode(location)
             if not geocode_result:
                 logger.warning(f"Could not geocode location for estimate: {location}")
                 return 50  # Default estimate
@@ -459,17 +302,17 @@ class VenusProspector:
             total_estimate = 0
             for keyword in keywords:
                 try:
-                    # Quick search without pagination (first page only for estimate)
-                    places = self.gmaps_api.places_nearby(
+                    # Quick search without fetching details
+                    places_result = self.gmaps.places_nearby(
                         location=lat_lng,
                         radius=radius * 1000,  # Convert km to meters
                         keyword=keyword,
-                        place_type='health'
+                        type='health'
                     )
                     
-                    result_count = len(places)
+                    result_count = len(places_result.get('results', []))
                     total_estimate += result_count
-                    logger.info(f"  • {keyword}: ~{result_count} results")
+                    logger.info(f"  â€¢ {keyword}: ~{result_count} results")
                     
                 except Exception as e:
                     logger.warning(f"Error estimating results for '{keyword}': {str(e)}")
@@ -486,7 +329,7 @@ class VenusProspector:
             return 50  # Default safe estimate
     
     def google_places_search(self, query: str, location: str, radius: int = 25000) -> List[Dict]:
-        """Search Google Places API for medical practices using direct API"""
+        """Search Google Places API for medical practices"""
         
         if self.demo_mode:
             logger.info(f"DEMO MODE: Generating mock data for {query} near {location}")
@@ -495,30 +338,26 @@ class VenusProspector:
         try:
             logger.info(f"Searching Google Places: {query} near {location}")
             
-            # Geocode the location first using direct API
-            geocode_result = self.gmaps_api.geocode(location)
+            # Geocode the location first
+            geocode_result = self.gmaps.geocode(location)
             if not geocode_result:
                 logger.error(f"Could not geocode location: {location}")
                 return []
             
             lat_lng = geocode_result[0]['geometry']['location']
-            logger.info(f"Geocoded {location} to: {lat_lng}")
             
-            # Search for places (with automatic pagination)
-            places = self.gmaps_api.places_nearby(
+            # Search for places
+            places_result = self.gmaps.places_nearby(
                 location=lat_lng,
                 radius=radius,
                 keyword=query,
-                place_type='health'
+                type='health'
             )
             
-            logger.info(f"Found {len(places)} places total")
-            
             results = []
-            for place in places:
+            for place in places_result.get('results', []):
                 # Skip hospitals and medical centers
                 if self.is_hospital_system(place.get('name', '')):
-                    logger.debug(f"Skipping hospital: {place.get('name')}")
                     continue
                     
                 place_details = self.get_place_details(place['place_id'])
@@ -527,7 +366,6 @@ class VenusProspector:
                     
                 time.sleep(0.1)  # Small delay between API calls
                 
-            logger.info(f"Returning {len(results)} valid results after filtering")
             return results
             
         except Exception as e:
@@ -537,16 +375,16 @@ class VenusProspector:
             return self.get_mock_data(query, location)
 
     def get_place_details(self, place_id: str) -> Optional[Dict]:
-        """Get detailed information for a specific place using direct API"""
+        """Get detailed information for a specific place"""
         try:
-            fields = [
-                'name', 'formatted_address', 'formatted_phone_number',
-                'website', 'rating', 'user_ratings_total', 'type',
-                'opening_hours', 'geometry', 'reviews'
-            ]
+            details = self.gmaps.place(
+                place_id=place_id,
+                fields=['name', 'formatted_address', 'formatted_phone_number', 
+                       'website', 'rating', 'user_ratings_total', 'type',
+                       'opening_hours', 'geometry', 'reviews']
+            )
             
-            details = self.gmaps_api.place_details(place_id, fields)
-            return details
+            return details.get('result', {})
             
         except Exception as e:
             logger.error(f"Error getting place details: {str(e)}")
@@ -556,6 +394,10 @@ class VenusProspector:
         """Check if a practice name indicates a hospital system"""
         name_lower = name.lower()
         return any(re.search(pattern, name_lower, re.IGNORECASE) for pattern in self.hospital_patterns)
+
+    def check_robots_txt(self, url: str) -> bool:
+        """Check if scraping is allowed by robots.txt"""
+        try:
             parsed_url = urlparse(url)
             robots_url = f"{parsed_url.scheme}://{parsed_url.netloc}/robots.txt"
             
@@ -1573,7 +1415,7 @@ def main():
     print(f"Location: {city}")
     print(f"Radius: {radius} km")
     print(f"Max results per keyword: {max_results}")
-    print(f"Google Places API Key: {'✓ Configured' if prospector.gmaps_key else '✗ Missing'}")
+    print(f"Google Places API Key: {'âœ“ Configured' if prospector.gmaps_key else 'âœ— Missing'}")
     sys.stdout.flush()
     
     try:
