@@ -388,8 +388,10 @@ class FathomProspector:
                     continue
                     
                 place_details = self.get_place_details(place['place_id'])
-                if place_details:
+                if place_details and place_details.get('name'):
                     results.append(place_details)
+                else:
+                    logger.debug(f"Skipping place with no details: {place.get('place_id', 'unknown')}")
                     
                 time.sleep(0.1)
                 
@@ -410,7 +412,8 @@ class FathomProspector:
                        'website', 'rating', 'user_ratings_total', 'type']
             )
             
-            return details.get('result', {})
+            # place_details() already returns the result dict, not the full response
+            return details if details else None
             
         except Exception as e:
             logger.error(f"Error getting place details: {str(e)}")
