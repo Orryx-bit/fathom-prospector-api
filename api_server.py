@@ -23,7 +23,10 @@ import csv
 import uuid
 from datetime import datetime, timedelta
 import logging
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import threading
@@ -32,11 +35,9 @@ import time
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-
 # Load environment variables from .env file
 if load_dotenv:
     load_dotenv()
-
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
