@@ -111,7 +111,8 @@ class VenusProspector:
         
         if not demo_mode:
             try:
-                self.gmaps = googlemaps.Client(key=self.gmaps_key)
+                # Initialize Google Maps client with 30-second timeout to prevent hanging
+                self.gmaps = googlemaps.Client(key=self.gmaps_key, timeout=30)
                 # Test the API key with a simple request
                 test_result = self.gmaps.geocode("Austin, TX")
                 if not test_result:
@@ -1306,6 +1307,9 @@ TOP 10 HIGH-PRIORITY PROSPECTS
     def run_prospecting(self, keywords: List[str], location: str, radius: int, max_results: int):
         """Main prospecting workflow"""
         
+        print(f"DEBUG: run_prospecting() called")
+        sys.stdout.flush()
+        
         logger.info(f"Starting Venus prospecting for {keywords} near {location}")
         
         all_results = []
@@ -1412,10 +1416,15 @@ def main():
     print(f"Radius: {radius} km")
     print(f"Max results per keyword: {max_results}")
     print(f"Google Places API Key: {'✓ Configured' if prospector.gmaps_key else '✗ Missing'}")
+    sys.stdout.flush()
     
     try:
+        print(f"DEBUG: About to call run_prospecting()")
+        sys.stdout.flush()
         # Run prospecting
         results, csv_file, report_file = prospector.run_prospecting(keywords, city, radius, max_results)
+        print(f"DEBUG: run_prospecting() returned")
+        sys.stdout.flush()
         
         print(f"\n=== PROSPECTING COMPLETE ===")
         print(f"Total prospects found: {len(results)}")
