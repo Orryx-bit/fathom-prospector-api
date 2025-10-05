@@ -61,17 +61,36 @@ class VenusProspector:
         self.demo_mode = demo_mode
         self.existing_customers = set()
         
-        # Initialize the new scoring engine
-        config_path = os.path.join(os.path.dirname(__file__), 'config', 'scoring_config.yaml')
-        try:
-            self.scoring_engine = LeadScoringEngine(config_path)
-            self.scoring_adapter = VenusScoringAdapter()
-            logger.info("✓ New scoring engine initialized successfully")
-        except Exception as e:
-            logger.error(f"Failed to initialize scoring engine: {str(e)}")
-            logger.warning("Falling back to legacy scoring system")
-            self.scoring_engine = None
-            self.scoring_adapter = None
+        # Initialize the new scoring engine with robust path resolution
+        self.scoring_engine = None
+        self.scoring_adapter = None
+        
+        # Try multiple paths to find config file
+        possible_paths = [
+            os.path.join(os.path.dirname(__file__), 'config', 'scoring_config.yaml'),  # Relative to script
+            os.path.join(os.getcwd(), 'config', 'scoring_config.yaml'),  # Relative to working directory
+            '/app/config/scoring_config.yaml',  # Absolute path in Railway container
+        ]
+        
+        config_path = None
+        for path in possible_paths:
+            if os.path.exists(path):
+                config_path = path
+                logger.info(f"✓ Found scoring config at: {path}")
+                break
+        
+        if config_path:
+            try:
+                self.scoring_engine = LeadScoringEngine(config_path)
+                self.scoring_adapter = VenusScoringAdapter()
+                logger.info("✓ New scoring engine initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize scoring engine: {str(e)}")
+                logger.warning("Falling back to legacy scoring system")
+                self.scoring_engine = None
+                self.scoring_adapter = None
+        else:
+            logger.info("Scoring config not found in any expected location - using legacy scoring system")
         
         # Load existing customers for exclusion
         if existing_customers_csv and os.path.exists(existing_customers_csv):
@@ -550,7 +569,7 @@ class VenusProspector:
                 'staff_count': 0
             }
         except requests.exceptions.RequestException as e:
-            logger.error(f"Request error scraping website {url}: {str(e)}")
+            logger.warning(f"Connection issue scraping {url}: {type(e).__name__} (website unavailable, continuing...)")
             return {
                 'title': 'Not Available - Connection Error',
                 'description': 'Not Available - Connection Error',
