@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Venus Medical Device Prospecting System
@@ -37,16 +38,22 @@ from scoring_system.venus_adapter import VenusScoringAdapter
 load_dotenv()
 
 # Configure logging
-# Create logs directory if it doesn't exist
-os.makedirs('logs', exist_ok=True)
+# Use container-friendly logging (stdout only, no file logging in production)
+handlers = [logging.StreamHandler(sys.stdout)]
+
+# Try to add file logging if possible (development/local only)
+try:
+    log_dir = os.getenv('LOG_DIR', '/tmp/logs')
+    os.makedirs(log_dir, exist_ok=True)
+    handlers.append(logging.FileHandler(f'{log_dir}/prospector.log'))
+except Exception:
+    # If file logging fails, continue with stdout only (production containers)
+    pass
 
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('logs/prospector.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
+    handlers=handlers
 )
 logger = logging.getLogger(__name__)
 
