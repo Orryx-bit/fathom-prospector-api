@@ -1,5 +1,20 @@
 #!/bin/Bash Terminal
+set -e
+
 echo "🚀 Starting Fathom API with dependency verification..."
+
+echo "Checking Python version..."
+python --version
+
+# CRITICAL: Set PYTHONPATH to include current directory for scoring_system module
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+echo "✅ PYTHONPATH set to: $PYTHONPATH"
+
+# Activate virtual environment if it exists
+if [ -d ".venv" ]; then
+    echo "Activating virtual environment..."
+    source .venv/bin/activate
+fi
 
 # Upgrade pip
 echo "📦 Upgrading pip..."
@@ -19,6 +34,10 @@ python -c "import google.generativeai; print('✅ google.generativeai installed'
 echo "🔍 Verifying requests installation..."
 python -c "import requests; print(f'✅ requests installed')"
 
-# Start the server
-echo "🎯 Starting API server..."
-python api_server.py
+echo "🔍 Verifying scoring_system module..."
+python -c "import scoring_system; print('✅ scoring_system module found!')"
+
+# Start the server with uvicorn (required by Railway)
+echo "🎯 Starting API server on port $PORT..."
+cd /app || cd "$(pwd)"
+exec python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 300
