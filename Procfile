@@ -1,1 +1,1 @@
-Bash Terminal start.sh
+web: bash start.sh
