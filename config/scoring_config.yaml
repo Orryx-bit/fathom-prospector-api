@@ -1,0 +1,236 @@
+# Venus Medical Device Lead Scoring System Configuration
+# Version: 2.0
+# Purpose: AI-powered scoring for Venus device prospecting
+# Based on real-world sales data and device-specific criteria
+
+# =============================================================================
+# FEATURE CATEGORY WEIGHTS (must sum to 1.0)
+# =============================================================================
+# Optimized weights based on Venus device sales patterns
+
+category_weights:
+  specialty_match: 0.20          # Practice type alignment
+  aesthetic_services: 0.15       # Current service offerings  
+  competing_devices: 0.12        # Existing equipment context
+  social_activity: 0.08          # Social media engagement
+  practice_size: 0.15            # Team size (prefer smaller)
+  reviews_rating: 0.05           # Reputation indicators
+  search_visibility: 0.05        # Online presence
+  geography_fit: 0.10            # Market density
+  weight_loss_glp1: 0.08         # Weight management services (Bliss MAX)
+  skin_laxity_triggers: 0.02     # Post-surgical/weight loss patients
+
+# =============================================================================
+# FEATURE-LEVEL WEIGHTS (within each category)
+# =============================================================================
+
+feature_weights:
+  # SPECIALTY MATCH (20% total)
+  specialty_match:
+    dermatology: 0.25
+    plastic_surgery: 0.25
+    cosmetic_clinic: 0.20
+    med_spa: 0.15
+    aesthetic_clinic: 0.15
+  
+  # AESTHETIC SERVICES (15% total)
+  aesthetic_services:
+    body_contouring: 0.30
+    laser_hair_removal: 0.25
+    injectables: 0.20
+    skin_tightening: 0.15
+    photorejuvenation: 0.10
+  
+  # COMPETING DEVICES (12% total)
+  competing_devices:
+    multi_platform_present: 0.40      # Lumenis, Alma, Cutera, etc.
+    single_device_present: 0.35       # CoolSculpting, Ultherapy, etc.
+    no_devices: 0.25                  # Clean slate opportunity
+  
+  # SOCIAL ACTIVITY (8% total)
+  social_activity:
+    instagram_present: 0.35
+    facebook_present: 0.25
+    linkedin_present: 0.20
+    social_engagement: 0.20
+  
+  # PRACTICE SIZE (15% total) - INVERTED: smaller = higher score
+  practice_size:
+    startup_very_small: 0.40          # 1-2 staff
+    small_practice: 0.35              # 3-4 staff
+    medium_practice: 0.20             # 5-8 staff
+    large_practice: 0.05              # 9+ staff
+  
+  # REVIEWS & RATING (5% total)
+  reviews_rating:
+    high_rating_high_volume: 0.40     # 4.5+ with 50+ reviews
+    high_rating_medium_volume: 0.30   # 4.0+ with 20+ reviews
+    medium_rating: 0.20               # 3.5+ rating
+    low_rating: 0.10                  # Below 3.5
+  
+  # SEARCH VISIBILITY (5% total)
+  search_visibility:
+    has_website: 0.60
+    has_phone: 0.30
+    has_email: 0.10
+  
+  # GEOGRAPHY FIT (10% total)
+  geography_fit:
+    small_market: 0.40                # Less populated areas
+    suburban: 0.35                    # Standard markets
+    urban: 0.15                       # Competitive urban
+    over_serviced: 0.10               # Beverly Hills, Manhattan, etc.
+  
+  # WEIGHT LOSS / GLP-1 (8% total) - Critical for Bliss MAX
+  weight_loss_glp1:
+    glp1_services: 0.40               # Semaglutide, tirzepatide
+    weight_management: 0.30           # General weight loss
+    hormone_therapy: 0.20             # Biote, pellets
+    iv_therapy: 0.10                  # Complementary services
+  
+  # SKIN LAXITY TRIGGERS (2% total)
+  skin_laxity_triggers:
+    post_surgical: 0.40               # Post-op patients
+    bariatric_patients: 0.35          # Weight loss surgery
+    postpartum: 0.25                  # Post-pregnancy
+
+# =============================================================================
+# NORMALIZATION PARAMETERS
+# =============================================================================
+
+normalization:
+  # Robust scaling parameters (percentiles for outlier handling)
+  robust_scaling:
+    lower_percentile: 5
+    upper_percentile: 95
+  
+  # Log transformation for highly skewed features
+  log_transform_features:
+    - instagram_followers
+    - google_reviews_count
+    - competitors_5mi_radius
+  
+  # Expected ranges for features (for validation)
+  expected_ranges:
+    instagram_followers: [0, 100000]
+    posts_90d: [0, 100]
+    google_reviews_count: [0, 5000]
+    google_rating: [0, 5]
+    staff_count_est: [1, 100]
+    treatment_rooms: [1, 20]
+    job_postings_90d: [0, 20]
+    competitors_5mi_radius: [0, 50]
+    engagement_rate: [0, 1]
+
+# =============================================================================
+# CATEGORICAL FEATURE MAPPINGS
+# =============================================================================
+
+categorical_mappings:
+  # Service offering scoring
+  service_match_scores:
+    exact_match: 1.0      # Explicitly offers the service
+    partial_match: 0.6    # Related/similar service
+    no_match: 0.0         # Service not offered
+  
+  # Device brand recognition scoring
+  device_brand_scores:
+    coolsculpting: 1.0    # Premium brands
+    sculptsure: 1.0
+    cynosure: 0.9
+    candela: 0.9
+    syneron: 0.8
+    generic: 0.5
+    none: 0.0
+
+# =============================================================================
+# CONFIDENCE SCORING PARAMETERS
+# =============================================================================
+
+confidence_thresholds:
+  # Minimum data completeness for high confidence
+  high_confidence_threshold: 0.80    # 80% of features present
+  medium_confidence_threshold: 0.60  # 60% of features present
+  # Below medium = low confidence
+  
+  # Critical features that must be present
+  critical_features:
+    - name
+    - address
+    - city
+    - main_services
+  
+  # Missing data imputation strategies
+  imputation:
+    numeric_default: 0.0              # Conservative default
+    categorical_default: "unknown"
+    boolean_default: false
+
+# =============================================================================
+# COMPETITIVE CONTEXT PARAMETERS
+# =============================================================================
+
+competitive_density:
+  # Scoring logic: inverse relationship with density
+  ideal_competitor_count: 3           # Sweet spot
+  overcrowded_threshold: 10           # Too competitive
+  undercrowded_threshold: 1           # Possibly underserved market
+  
+  # Scoring formula: score decreases as competitors increase beyond ideal
+  apply_penalty_above: 5
+
+# =============================================================================
+# TERRITORY DEFINITIONS
+# =============================================================================
+
+territories:
+  austin:
+    center_lat: 30.2672
+    center_lon: -97.7431
+    radius_miles: 30
+  
+  san_antonio:
+    center_lat: 29.4241
+    center_lon: -98.4936
+    radius_miles: 30
+  
+  el_paso:
+    center_lat: 31.7619
+    center_lon: -106.4850
+    radius_miles: 30
+  
+  waco:
+    center_lat: 31.5493
+    center_lon: -97.1467
+    radius_miles: 30
+
+# =============================================================================
+# SCORING OUTPUT PARAMETERS
+# =============================================================================
+
+output:
+  # Score range
+  min_score: 0.0
+  max_score: 100.0
+  
+  # Top N contributors to report
+  top_contributors_count: 3
+  
+  # Minimum contribution percentage to report
+  min_contribution_percentage: 5.0
+
+# =============================================================================
+# VALIDATION RULES
+# =============================================================================
+
+validation:
+  # Weight sum validation
+  category_weights_must_sum_to: 1.0
+  tolerance: 0.001
+  
+  # Feature weight validation (within each category)
+  feature_weights_must_sum_to: 1.0
+  
+  # Score range validation
+  min_valid_score: 0.0
+  max_valid_score: 100.0
