@@ -380,8 +380,7 @@ class FathomProspector:
             places_result = self.gmaps_api.places_nearby(
                 location=lat_lng,
                 radius=radius,
-                keyword=query,
-                type='health'
+                keyword=query
             )
             
             results = []
