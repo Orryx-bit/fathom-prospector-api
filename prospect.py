@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 Venus Medical Device Prospecting System
@@ -253,6 +252,55 @@ class VenusProspector:
 
     @sleep_and_retry
     @limits(calls=10, period=60)  # Rate limiting: 10 calls per minute
+    def estimate_result_count(self, keywords: List[str], location: str, radius: int) -> int:
+        """
+        Quick estimate of total result count for dynamic timeout calculation
+        Returns estimated number of businesses that will be found
+        """
+        if self.demo_mode:
+            return 30  # Demo mode estimate
+        
+        try:
+            logger.info(f"Estimating result count for {keywords} near {location}")
+            
+            # Geocode the location
+            geocode_result = self.gmaps.geocode(location)
+            if not geocode_result:
+                logger.warning(f"Could not geocode location for estimate: {location}")
+                return 50  # Default estimate
+            
+            lat_lng = geocode_result[0]['geometry']['location']
+            
+            # Do a quick count across all keywords
+            total_estimate = 0
+            for keyword in keywords:
+                try:
+                    # Quick search without fetching details
+                    places_result = self.gmaps.places_nearby(
+                        location=lat_lng,
+                        radius=radius * 1000,  # Convert km to meters
+                        keyword=keyword,
+                        type='health'
+                    )
+                    
+                    result_count = len(places_result.get('results', []))
+                    total_estimate += result_count
+                    logger.info(f"  • {keyword}: ~{result_count} results")
+                    
+                except Exception as e:
+                    logger.warning(f"Error estimating results for '{keyword}': {str(e)}")
+                    continue
+            
+            # Remove duplicate estimate (assume 30% overlap across keywords)
+            estimated_unique = int(total_estimate * 0.7)
+            logger.info(f"Estimated total unique results: {estimated_unique}")
+            
+            return estimated_unique
+            
+        except Exception as e:
+            logger.warning(f"Error estimating result count: {str(e)}")
+            return 50  # Default safe estimate
+    
     def google_places_search(self, query: str, location: str, radius: int = 25000) -> List[Dict]:
         """Search Google Places API for medical practices"""
         
