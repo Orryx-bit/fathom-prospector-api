@@ -404,7 +404,7 @@ class FathomProspector:
     def get_place_details(self, place_id: str) -> Optional[Dict]:
         """Get detailed information for a specific place"""
         try:
-            details = self.gmaps_api.place(
+            details = self.gmaps_api.place_details(
                 place_id=place_id,
                 fields=['name', 'formatted_address', 'formatted_phone_number', 
                        'website', 'rating', 'user_ratings_total', 'type']
