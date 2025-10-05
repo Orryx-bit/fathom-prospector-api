@@ -1,3 +1,5 @@
+
+
 """
 Fathom Prospector - Python API Server (Phase 2: Production Hardened)
 Wraps prospect.py in a FastAPI server for remote calls from Next.js app
@@ -209,20 +211,20 @@ def calculate_dynamic_timeout(estimated_results: int) -> int:
         Timeout in seconds
     """
     if estimated_results < 20:
-        timeout = 10 * 60  # 10 minutes for small searches
-        logger.info(f"Dynamic timeout: 10 minutes for ~{estimated_results} results")
-    elif estimated_results < 50:
-        timeout = 15 * 60  # 15 minutes for medium searches
-        logger.info(f"Dynamic timeout: 15 minutes for ~{estimated_results} results")
-    elif estimated_results < 80:
-        timeout = 20 * 60  # 20 minutes for large searches
+        timeout = 20 * 60  # 20 minutes for small searches (increased from 10)
         logger.info(f"Dynamic timeout: 20 minutes for ~{estimated_results} results")
-    elif estimated_results < 120:
-        timeout = 30 * 60  # 30 minutes for very large searches
+    elif estimated_results < 50:
+        timeout = 30 * 60  # 30 minutes for medium searches (increased from 15)
         logger.info(f"Dynamic timeout: 30 minutes for ~{estimated_results} results")
+    elif estimated_results < 80:
+        timeout = 40 * 60  # 40 minutes for large searches (increased from 20)
+        logger.info(f"Dynamic timeout: 40 minutes for ~{estimated_results} results")
+    elif estimated_results < 120:
+        timeout = 50 * 60  # 50 minutes for very large searches (increased from 30)
+        logger.info(f"Dynamic timeout: 50 minutes for ~{estimated_results} results")
     else:
-        timeout = 40 * 60  # 40 minutes max for extremely large searches
-        logger.info(f"Dynamic timeout: 40 minutes (max) for ~{estimated_results} results")
+        timeout = 60 * 60  # 60 minutes max for extremely large searches (increased from 40)
+        logger.info(f"Dynamic timeout: 60 minutes (max) for ~{estimated_results} results")
     
     return timeout
 
