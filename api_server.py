@@ -1,3 +1,4 @@
+
 """
 Fathom Prospector - Python API Server (Phase 2: Production Hardened)
 Wraps prospect.py in a FastAPI server for remote calls from Next.js app
@@ -448,7 +449,7 @@ async def start_search(
     # Log with quota warning if approaching limit
     quota_msg = f"(Quota: {quota_info['used']}/{quota_info['limit']})"
     if quota_info["warn"]:
-        quota_msg += " â ï¸ APPROACHING LIMIT"
+        quota_msg += " ⚠️ APPROACHING LIMIT"
     logger.info(f"Started search job {job_id} for user {user_id}, location: {search_request.location} {quota_msg}")
     
     return SearchResponse(
@@ -734,7 +735,7 @@ if __name__ == "__main__":
     workers = int(os.getenv("WORKERS", "4"))  # Multiple workers for production
     
     print("=" * 80)
-    print("ð Fathom Prospector API Server - PHASE 2: PRODUCTION HARDENED")
+    print("🚀 Fathom Prospector API Server - PHASE 2: PRODUCTION HARDENED")
     print("=" * 80)
     print(f"Server: http://localhost:{port}")
     print(f"API Docs: http://localhost:{port}/docs")
@@ -742,34 +743,34 @@ if __name__ == "__main__":
     print(f"Metrics: http://localhost:{port}/metrics")
     print("=" * 80)
     print("CONFIGURATION:")
-    print(f"  â¢ Workers: {workers}")
-    print(f"  â¢ Max Concurrent Searches: {MAX_CONCURRENT_SEARCHES}")
-    print(f"  â¢ Thread Pool Workers: 10")
-    print(f"  â¢ Daily Quota Per User: {PER_USER_DAILY_LIMIT} searches")
-    print(f"  â¢ Rate Limit: 10 searches/minute per IP")
-    print(f"  â¢ Progressive Timeout Strategy:")
+    print(f"  • Workers: {workers}")
+    print(f"  • Max Concurrent Searches: {MAX_CONCURRENT_SEARCHES}")
+    print(f"  • Thread Pool Workers: 10")
+    print(f"  • Daily Quota Per User: {PER_USER_DAILY_LIMIT} searches")
+    print(f"  • Rate Limit: 10 searches/minute per IP")
+    print(f"  • Progressive Timeout Strategy:")
     print(f"      - Small searches (<20 results): 10 minutes")
     print(f"      - Medium searches (20-50 results): 15 minutes")
     print(f"      - Large searches (50-80 results): 20 minutes")
     print(f"      - Very large (80-120 results): 30 minutes")
     print(f"      - Extremely large (120+ results): 40 minutes")
-    print(f"  â¢ API Key: {API_KEY[:20]}...")
+    print(f"  • API Key: {API_KEY[:20]}...")
     print("=" * 80)
     print("PHASE 1 FIXES (Applied):")
-    print("  â Async/blocking issue FIXED - Event loop will not block")
-    print("  â Concurrency protection enabled (semaphore + thread pool)")
-    print("  â Progressive timeout strategy - scales with search size")
-    print("  â Production-ready configuration applied")
-    print("  â Timeout protection enabled")
+    print("  ✅ Async/blocking issue FIXED - Event loop will not block")
+    print("  ✅ Concurrency protection enabled (semaphore + thread pool)")
+    print("  ✅ Progressive timeout strategy - scales with search size")
+    print("  ✅ Production-ready configuration applied")
+    print("  ✅ Timeout protection enabled")
     print("=" * 80)
     print("PHASE 2 ENHANCEMENTS (New):")
-    print("  â API quota management (per-user daily limits)")
-    print("  â Rate limiting (10 searches/minute)")
-    print("  â Performance monitoring & metrics tracking")
-    print("  â Error tracking by type")
-    print("  â Enhanced health checks with system stats")
+    print("  ✅ API quota management (per-user daily limits)")
+    print("  ✅ Rate limiting (10 searches/minute)")
+    print("  ✅ Performance monitoring & metrics tracking")
+    print("  ✅ Error tracking by type")
+    print("  ✅ Enhanced health checks with system stats")
     print("=" * 80)
-    print("ð¯ System Status: PRODUCTION READY - Multi-User Hardened")
+    print("🎯 System Status: PRODUCTION READY - Multi-User Hardened")
     print("=" * 80)
     
     # Production configuration - no reload, proper timeouts
