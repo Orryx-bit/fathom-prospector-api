@@ -1766,3 +1766,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# Backward-compatibility alias for API server imports
+MedicalProspector = FathomProspector
