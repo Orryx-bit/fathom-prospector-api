@@ -485,8 +485,8 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
         cmd = [
             sys.executable,
             script_path,
-            "--query", query,
-            "--location", request.location,
+            "--keywords", query,
+            "--city", request.location,
             "--radius", str(request.radius)
         ]
         
