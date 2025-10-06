@@ -1,0 +1,23 @@
+
+# HEALTHCARE SYSTEM EXCLUSION LIST
+# These large healthcare systems/franchises will be automatically skipped during searches
+# to avoid wasting time on deep scraping of very large corporate websites.
+#
+# One system name per line. Comments start with #.
+# Fuzzy matching is used, so partial matches will also be caught.
+
+Ascension
+Tenet Healthcare
+Baylor Scott & White Health
+CHRISTUS Health
+Texas Health Resources
+St. David's HealthCare
+HCA Healthcare
+Memorial Hermann Health
+Methodist Health System
+UMC Health System
+Medical Center Health System
+Northwest Texas Healthcare
+Austin Regional Clinic
+Texas Tech University Health Sciences
+Providence Health
