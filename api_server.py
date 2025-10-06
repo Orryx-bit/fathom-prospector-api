@@ -501,8 +501,7 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             bufsize=1,
             env={
                 **os.environ,
-                "GOOGLE_PLACES_API_KEY": os.getenv("GOOGLE_PLACES_API_KEY", ""),
-                "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
+                "FATHOM_API_KEY": os.getenv("GOOGLE_PLACES_API_KEY", ""),  # Map Railway env var to new name
                 "PYTHONUNBUFFERED": "1"
             }
         )
@@ -639,30 +638,55 @@ async def run_prospect_search(job_id: str, request: SearchRequest):
             update_metrics("search_failed", error_type="async_error")
 
 def update_progress_from_output(job_id: str, output: str):
-    """Update job progress based on script output"""
+    """Update job progress based on script output (supports both old and new formats)"""
     with search_jobs_lock:
-        if "Searching for:" in output:
+        # New format patterns
+        if "🔍 Searching:" in output or "🔍 Starting search:" in output:
+            search_jobs[job_id]["progress"] = 20
+            search_jobs[job_id]["message"] = "Finding practices..."
+        elif "✅ Found" in output and "practices" in output:
+            search_jobs[job_id]["progress"] = 40
+            search_jobs[job_id]["message"] = "Analyzing practices..."
+        elif "🏥 Processing:" in output:
+            search_jobs[job_id]["progress"] = 60
+            search_jobs[job_id]["message"] = "Scraping practice data..."
+        elif "📊 Progress:" in output:
+            # Extract percentage from "📊 Progress: X/Y (Z%)"
+            import re
+            match = re.search(r'\((\d+)%\)', output)
+            if match:
+                pct = int(match.group(1))
+                search_jobs[job_id]["progress"] = min(max(pct, 10), 95)
+                search_jobs[job_id]["message"] = "Processing practices..."
+        elif "✅ Score:" in output:
+            search_jobs[job_id]["progress"] = 80
+            search_jobs[job_id]["message"] = "AI scoring in progress..."
+        elif "✅ Exported" in output or "Export results" in output:
+            search_jobs[job_id]["progress"] = 90
+            search_jobs[job_id]["message"] = "Generating reports..."
+        # Old format patterns (fallback)
+        elif "Searching for:" in output:
             search_jobs[job_id]["progress"] = 20
             search_jobs[job_id]["message"] = "Finding practices..."
         elif "Found" in output and "prospects" in output:
             search_jobs[job_id]["progress"] = 40
             search_jobs[job_id]["message"] = "Analyzing practices..."
-        elif "Processing practice:" in output:
-            search_jobs[job_id]["progress"] = 60
-            search_jobs[job_id]["message"] = "Scraping practice data..."
-        elif "Processed:" in output and "Score:" in output:
-            search_jobs[job_id]["progress"] = 80
-            search_jobs[job_id]["message"] = "AI scoring in progress..."
-        elif "Export results" in output:
-            search_jobs[job_id]["progress"] = 90
-            search_jobs[job_id]["message"] = "Generating reports..."
 
 def extract_file_paths(output: str):
-    """Extract CSV and report file paths from output"""
+    """Extract CSV and report file paths from output (supports both old and new formats)"""
     import re
     
-    csv_match = re.search(r'Results exported to: (.+\.csv)', output)
-    report_match = re.search(r'Summary report: (.+\.txt)', output)
+    # Try new format first: "✅ Exported X practices to filename.csv"
+    csv_match = re.search(r'✅ Exported .+ to (.+\.csv)', output)
+    if not csv_match:
+        # Try old format: "Results exported to: filename.csv"
+        csv_match = re.search(r'Results exported to: (.+\.csv)', output)
+    
+    # Try new format first: "📄 Summary: filename.txt"
+    report_match = re.search(r'📄 Summary: (.+\.txt)', output)
+    if not report_match:
+        # Try old format: "Summary report: filename.txt"
+        report_match = re.search(r'Summary report: (.+\.txt)', output)
     
     csv_file = csv_match.group(1).strip() if csv_match else None
     report_file = report_match.group(1).strip() if report_match else None
