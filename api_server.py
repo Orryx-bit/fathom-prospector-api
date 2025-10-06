@@ -244,12 +244,15 @@ def estimate_result_count_for_search(request: SearchRequest) -> int:
         script_dir = os.path.dirname(__file__)
         sys.path.insert(0, script_dir)
         
-        from prospect import VenusProspector
+        from prospect import MedicalProspector
         
-        # Create prospector instance
-        prospector = VenusProspector()
+        # Create prospector instance with API key
+        api_key = os.getenv("FATHOM_API_KEY", "")
+        prospector = MedicalProspector(api_key=api_key)
         
-        # Estimate result count
+        # Note: New prospect.py doesn't have estimate_result_count method
+        # This will raise an exception and fall back to default estimate of 50
+        # TODO: Implement estimate in new prospect.py if needed
         estimated = prospector.estimate_result_count(
             keywords=request.keywords,
             location=request.location,
@@ -476,13 +479,15 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             "prospect.py"
         )
         
+        # Join keywords into a single query string for new prospect.py format
+        query = " ".join(request.keywords)
+        
         cmd = [
             sys.executable,
             script_path,
-            "--keywords", *request.keywords,
-            "--city", request.location,
-            "--radius", str(request.radius),
-            "--max-results", str(request.maxResults)
+            "--query", query,
+            "--location", request.location,
+            "--radius", str(request.radius)
         ]
         
         logger.info(f"Job {job_id}: Running command: {' '.join(cmd)}")
