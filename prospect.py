@@ -5,42 +5,6 @@ Fathom Medical Device Prospecting System
 Comprehensive tool for finding and scoring medical practices
 Production-Hardened Version 3.0
 """
-# --- Intent Gate Utilities (additive, non-breaking) ---
-INTENT_TYPES = {"spa","beauty_salon","dermatologist","plastic_surgeon"}
-
-AESTHETIC_TERMS = [
-    "med spa","aesthetic","laser","ipl","rf microneedling","microneedling",
-    "skin tightening","resurfacing","botox","filler","hydrafacial","hair removal"
-]
-WEIGHT_LOSS_TERMS = [
-    "semaglutide","tirzepatide","glp-1","medical weight","weight management",
-    "peptides","hormone therapy","hrt","testosterone","weight loss"
-]
-SYSTEM_DENYLIST = [
-    "ascension","baylor scott","waco family medicine","hca","adventhealth",
-    "methodist","christus","memorial hermann","uak","ova"
-]
-
-def _lc(s): return (s or "").lower()
-
-def intent_gate(place_types, name, first_page_text, jsonld_services, booking_urls):
-    """Return True if this prospect shows aesthetics/weight-loss/booking intent."""
-    types = set(map(_lc, place_types or []))
-    if INTENT_TYPES.intersection(types):
-        return True
-    text = _lc(first_page_text or "")
-    # positive terms
-    if any(t in text for t in AESTHETIC_TERMS): return True
-    if any(t in text for t in WEIGHT_LOSS_TERMS): return True
-    if any(t in " ".join(jsonld_services or []).lower() for t in AESTHETIC_TERMS): return True
-    if booking_urls: return True
-
-    # negative: clear system names without any positives
-    nm = _lc(name or "")
-    if any(d in nm for d in SYSTEM_DENYLIST):
-        return False
-    return False
-
 
 import argparse
 import csv
@@ -55,13 +19,6 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
-
-# === Gemini optional enrichment (feature-flagged) ===
-import os, time, json, urllib.request
-USE_GEMINI = os.getenv("FEATURE_GEMINI", "false").lower() == "true"
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
-_GEM_CACHE = {}  # key -> {"ts": epoch, "data": dict}
-_GEM_TTL = 24 * 3600
 
 import pandas as pd
 import requests
@@ -144,7 +101,7 @@ logger = logging.getLogger(__name__)
 class GooglePlacesAPI:
     """Direct Google Places API wrapper with guaranteed timeouts"""
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://maps.googleapis.com/maps/api"
         # Connection timeout, Read timeout
@@ -1417,50 +1374,7 @@ class FathomProspector:
         keyword_bonus = min(keyword_bonus, 10)
         
         
-        
-        # --- Prospect Category Classification (A/B/C/D) ---
-        # A: Established Aesthetics | B: Bridge (injectables/weight-loss) | C: Cash-Pay PCP | D: Low-likelihood Enterprise
-        text_blob = f"{practice_name} {practice_desc} " + " ".join(services).lower()
-        INJECTABLES = ["botox","dysport","xeomin","juvederm","juvéderm","restylane","kysse","voluma","volux","filler"]
-        CASHPAY = ["direct primary care","concierge","membership","self-pay","cash pay","cash price","no insurance","transparent pricing"]
-        has_aesthetics = any(t in text_blob for t in ["med spa","aesthetic","laser","ipl","rf microneedling","microneedling","skin tightening","resurfacing","hair removal","hydrafacial"])
-        has_injectables = any(t in text_blob for t in INJECTABLES)
-        has_weightloss = practice_data.get('weight_loss_present') or any(t in text_blob for t in WEIGHT_LOSS_HINTS)
-        has_cashpay = any(t in text_blob for t in CASHPAY)
-        has_booking = bool(practice_data.get('booking_platforms'))
-
-        category = "C"  # default allow: Cash-Pay/General PCP potential
-        rationale_bits = []
-        if has_aesthetics:
-            category = "A"; rationale_bits.append("aesthetic services on site")
-        elif has_injectables or has_weightloss:
-            category = "B"; 
-            if has_injectables: rationale_bits.append("injectables present")
-            if has_weightloss: rationale_bits.append("weight-loss present")
-        elif has_cashpay or has_booking:
-            category = "C"
-            if has_cashpay: rationale_bits.append("cash-pay model")
-            if has_booking: rationale_bits.append("online booking")
-        # Enterprise/FQHC denylist check (only demote to D if no positives)
-        name_lc = practice_name.lower()
-        if category in ["B","C"] and any(d in name_lc for d in SYSTEM_DENYLIST) and not (has_injectables or has_weightloss or has_aesthetics):
-            category = "D"; rationale_bits = ["enterprise/FQHC pattern with no cash-pay/aesthetics"]
-
-        # Category-aware score nudges (within existing caps)
-        if category == "B":
-            scores['decision_autonomy'] = min(20 if 'decision_autonomy' in scores else 10, scores['decision_autonomy'] + 1)
-            scores['financial_indicators'] = min(10, scores['financial_indicators'] + 1)
-            scores['aesthetic_services'] = min(20 if 'aesthetic_services' in scores else 10, scores['aesthetic_services'] + (1 if has_injectables else 0))
-        elif category == "C":
-            scores['decision_autonomy'] = min(20 if 'decision_autonomy' in scores else 10, scores['decision_autonomy'] + 1)
-            scores['financial_indicators'] = min(10, scores['financial_indicators'] + 1)
-            if has_cashpay or has_booking:
-                scores['search_visibility'] = min(10, scores['search_visibility'] + 1)
-
-        # Attach annotation for downstream logs/records (CSV ignores unknown fields)
-        practice_data['prospect_category'] = category
-        practice_data['category_rationale'] = ", ".join(rationale_bits) if rationale_bits else ("established aesthetics" if category=="A" else ("bridge signals" if category=="B" else "cash-pay potential" if category=="C" else "enterprise system"))
-# === Non-breaking detector boosts ===
+        # === Non-breaking detector boosts ===
         if practice_data.get('booking_platforms'):
             scores['decision_autonomy'] = min(10, scores['decision_autonomy'] + 1)
             scores['search_visibility'] = min(10, scores['search_visibility'] + 1)
@@ -1579,53 +1493,7 @@ class FathomProspector:
             'title': 'Not Available'
         }
         
-        
-        # ---- Intent Gate (conservative) ----
-        place_types = place_data.get('types', []) or []
-        name = practice_record.get('name', '')
-        website = practice_record.get('website', '')
-        first_text = ""
-        jsonld_services = []
-        booking_urls = []
-
-        # Do a light, single-page scrape first (respects robots) to collect signals
-        if website:
-            light = self.scrape_website(website)
-            # Merge light data but do not overwrite fields already set
-            for k, v in light.items():
-                if k not in practice_record or not practice_record[k]:
-                    practice_record[k] = v
-            # Build first-page text for the gate
-            first_text = f"{practice_record.get('title','')} {practice_record.get('description','')} " + " ".join(practice_record.get('services') or [])
-
-        # 
-        # ---- Optional Gemini enrichment (segment/readiness) ----
-        try:
-            page_text = " ".join([practice_record.get('title',''), practice_record.get('description','')] + (practice_record.get('services') or []))
-            domain = practice_record.get('website','')
-            gem = gemini_classify_and_extract(domain, page_text)
-        except Exception:
-            gem = {}
-
-        # If Gemini signals exist, softly enrich inputs so existing scoring picks them up
-        if gem:
-            seg = (gem.get("segment") or "").upper()
-            services_list = practice_record.get('services') or []
-            desc = practice_record.get('description') or ""
-            # Add light tokens (won't harm scoring if already present)
-            if gem.get("has_injectables"):
-                services_list += ["botox","filler","injectables"]
-            if gem.get("has_weight_loss"):
-                services_list += ["weight loss program","semaglutide","tirzepatide"]
-            if gem.get("self_pay_terms"):
-                desc += " self-pay membership concierge cash pricing"
-            practice_record['services'] = list(dict.fromkeys(services_list))  # dedupe
-            practice_record['description'] = desc
-        # Apply gate: keep only if aesthetics/weight-loss/booking signals or supportive Place types
-        if not intent_gate(place_types, name, first_text, practice_record.get('services'), booking_urls):
-            logger.info(f"Rejected by intent gate: {name} | types={place_types}")
-            return None
-# Scrape website if available (using deep multi-page scraping)
+        # Scrape website if available (using deep multi-page scraping)
         if practice_record['website']:
             logger.info(f"Deep scraping website: {practice_record['website']}")
             website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
@@ -1775,8 +1643,6 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         logger.info(f"Starting prospecting for {keywords} near {location}")
         
         all_results = []
-        kept_cnt = 0
-        rej_cnt = 0
         
         for keyword in keywords:
             logger.info(f"Searching for: {keyword}")
@@ -1787,10 +1653,7 @@ TOP 10 HIGH-PRIORITY PROSPECTS
                 try:
                     processed_practice = self.process_practice(place)
                     if processed_practice:
-                        kept_cnt += 1
                         all_results.append(processed_practice)
-                    else:
-                        rej_cnt += 1
                         logger.info(f"Processed: {processed_practice.get('name', 'Unknown')} - Score: {processed_practice.get('ai_score', 0)}")
                     
                 except Exception as e:
@@ -1815,9 +1678,7 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         self.export_to_csv(unique_results, csv_filename)
         self.generate_summary_report(unique_results, report_filename)
         
-        return unique_results, csv_filename, report_filenam
-        logger.info(f"Run summary: kept={kept_cnt} rejected={rej_cnt} total_candidates={kept_cnt+rej_cnt}")
-e
+        return unique_results, csv_filename, report_filename
 
 
 def main():
@@ -1909,69 +1770,3 @@ if __name__ == "__main__":
 
 # Backward-compatibility alias for API server imports
 MedicalProspector = FathomProspector
-
-
-def gemini_classify_and_extract(domain: str, page_text: str) -> dict:
-    """
-    Returns dict with keys:
-      segment: "AESTHETIC_CORE" | "PROTO_AESTHETIC" | "PRIMARY_CARE_NO_CASHPAY" | "SYSTEM"
-      has_injectables: bool
-      has_weight_loss: bool
-      autonomy_hint: "independent"|"system"|"unknown"
-      self_pay_terms: bool
-      notes: str
-    Falls back to {} on error or when disabled.
-    """
-    if not USE_GEMINI or not os.getenv("GEMINI_API_KEY"):
-        return {}
-    try:
-        now = time.time()
-        key = f"{domain}:{hash(page_text) & 0xffffffff:x}"
-        hit = _GEM_CACHE.get(key)
-        if hit and now - hit["ts"] < _GEM_TTL:
-            return hit["data"]
-
-        body = {
-          "contents": [{
-            "parts": [{
-              "text": (
-                "You classify a medical clinic page.\n"
-                "SEGMENTS:\n"
-                "- AESTHETIC_CORE: spa/derm/plastic/cosmetic or clearly offers devices/aesthetic services.\n"
-                "- PROTO_AESTHETIC: family/primary care/OB-GYN/wellness with any cash-pay evidence "
-                "(injectables like Botox/filler, weight-loss like semaglutide/tirzepatide, HRT/peptides, IV therapy) or online booking.\n"
-                "- PRIMARY_CARE_NO_CASHPAY: no clear cash-pay signals.\n"
-                "- SYSTEM: health system/FQHC or hospital location page.\n\n"
-                "Return strict JSON with keys: segment, has_injectables, has_weight_loss, autonomy_hint, self_pay_terms, notes.\n\n"
-                f"TEXT:\n{(page_text or '')[:7000]}"
-              )
-            }]
-          }],
-          "generationConfig": {"temperature": 0.2, "maxOutputTokens": 128},
-          "safetySettings": []
-        }
-        req = urllib.request.Request(
-          f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={os.getenv('GEMINI_API_KEY')}",
-          data=json.dumps(body).encode("utf-8"),
-          headers={"Content-Type": "application/json"},
-          method="POST",
-        )
-        timeout_s = max(1.0, float(os.getenv("GEMINI_TIMEOUT_MS", "4000"))/1000.0)
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            raw = json.loads(resp.read().decode("utf-8"))
-        text_out = raw.get("candidates",[{}])[0].get("content",{}).get("parts",[{}])[0].get("text","").strip()
-        # Strip code fences if present
-        text_out = text_out.strip("`").strip()
-        data = {}
-        if text_out.startswith("{"):
-            data = json.loads(text_out)
-        else:
-            start = text_out.find("{"); end = text_out.rfind("}")
-            if start != -1 and end != -1:
-                data = json.loads(text_out[start:end+1])
-        if not isinstance(data, dict) or "segment" not in data:
-            data = {}
-        _GEM_CACHE[key] = {"ts": now, "data": data}
-        return data
-    except Exception:
-        return {}
