@@ -1621,7 +1621,7 @@ class FathomProspector:
                 desc += " self-pay membership concierge cash pricing"
             practice_record['services'] = list(dict.fromkeys(services_list))  # dedupe
             practice_record['description'] = desc
-        Apply gate: keep only if aesthetics/weight-loss/booking signals or supportive Place types
+        # Apply gate: keep only if aesthetics/weight-loss/booking signals or supportive Place types
         if not intent_gate(place_types, name, first_text, practice_record.get('services'), booking_urls):
             logger.info(f"Rejected by intent gate: {name} | types={place_types}")
             return None
