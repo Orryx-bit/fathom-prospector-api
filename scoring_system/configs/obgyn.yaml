@@ -1,4 +1,3 @@
-
 # OB/GYN Specialty Scoring Configuration
 # Production Rebuild V4.0 - Optimized for Limited Data & Solo Practices
 
@@ -16,96 +15,45 @@ thresholds:
   
   minimum_data:
     high_fit: 35  # Very forgiving
-    medium_fit: 20  # Catch nearly all valid OB/GYNs
+    medium_fit: 20  # Capture solo or new OBs
     low_fit: 0
 
-# Scoring Weights (Optimized for OB/GYN characteristics)
+# Scoring Weights
 weights:
-  # Core Specialty Match (25 points - BOOSTED)
   specialty_match:
-    obgyn_practice: 25
-    womens_health: 20
-    gynecology_only: 18
-  
-  # Decision Autonomy (20 points - CRITICAL for OB/GYN)
-  decision_autonomy:
-    solo_practitioner: 15  # Heavily favor solo
-    independent_ownership: 15
-    small_practice: 10  # 1-5 providers
-    not_hospital_affiliated: 15
-  
-  # Aesthetic GYN Services (20 points)
-  aesthetic_services:
-    vaginal_rejuvenation: 10
-    hormone_therapy: 6
-    aesthetic_gynecology: 8
-    wellness_services: 4
-  
-  # Reviews & Rating (10 points - BOOSTED for limited data)
+    obgyn: 20
+    women's_health: 18
+    prenatal_care: 10
+
+  services_offered:
+    birth_control: 5
+    hormone_therapy: 5
+    menopause_support: 4
+    pelvic_ultrasound: 3
+    robotic_surgery: 3
+
+  ownership_model:
+    independent: 10
+    solo_practice: 8
+    not_affiliated: 6
+
   reviews_rating:
-    rating_4_5_plus: 6
-    rating_4_0_to_4_5: 4
+    rating_4_5_plus: 5
     review_count_50_plus: 4
-    review_count_20_to_50: 3
-  
-  # Digital Presence (8 points)
+
   digital_presence:
-    has_website: 4
-    active_social_media: 4
-  
-  # Wellness Focus (12 points - NEW for OB/GYN)
-  wellness_focus:
-    functional_medicine: 6
-    integrative_health: 4
-    anti_aging: 4
-  
-  # Financial Model (5 points)
-  financial_indicators:
-    cashpay_services: 3
-    membership_model: 2
+    has_website: 5
+    has_portal: 4
+    instagram_found: 3
+    facebook_found: 2
 
-# Data Quality Adjustments (AGGRESSIVE for OB/GYN)
-data_quality_multipliers:
-  # Heavily boost limited data scenarios
-  limited_data_boost:
-    specialty_match: 1.5  # 50% boost
-    reviews_rating: 1.6   # 60% boost
-    decision_autonomy: 1.4  # 40% boost
-  
-  # Even with rich data, keep scores high
-  rich_data_boost:
-    aesthetic_services: 1.2
-    wellness_focus: 1.1
+  high_value_keywords:
+    - "gynecologist"
+    - "obstetrician"
+    - "pap smear"
+    - "annual exam"
+    - "pregnancy care"
+    - "female doctor"
 
-# High-Value Keywords (OB/GYN specific)
-high_value_keywords:
-  - "vaginal rejuvenation"
-  - "hormone therapy"
-  - "menopause management"
-  - "aesthetic gynecology"
-  - "functional medicine"
-  - "wellness"
-  - "anti-aging"
-  - "integrative"
-  
-  keyword_bonus: 3  # Higher bonus for OB/GYN
-  max_keyword_bonus: 15
-
-# Special Rules for OB/GYN
-special_rules:
-  # If practice name contains "OB" or "GYN", boost specialty match
-  name_based_boost:
-    enabled: true
-    boost_amount: 10
-  
-  # If solo/small practice + OB/GYN, boost autonomy
-  solo_obgyn_boost:
-    enabled: true
-    boost_amount: 8
-  
-  # If good reviews but limited services, still score medium
-  reviews_fallback:
-    enabled: true
-    min_rating: 4.0
-    min_review_count: 20
-    fallback_score: 40
+keyword_bonus: 2
+max_keyword_bonus: 8
