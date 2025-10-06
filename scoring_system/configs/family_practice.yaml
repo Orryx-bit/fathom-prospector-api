@@ -1,202 +1,103 @@
 
-# Family Practice Scoring Configuration
-# Optimized for family/primary care practices offering aesthetic services
-# Focus: Cash-pay services, aesthetic integration, independent practices
+# Family Practice Specialty Scoring Configuration
+# Production Rebuild V4.0 - Optimized for DPC/Concierge Models
 
-weights:
-  cash_pay_model: 0.26              # Cash/elective services vs. insurance-only
-  aesthetic_indicators: 0.24        # Aesthetic services offered
-  independent_practice: 0.22        # Independent vs. hospital system
-  digital_presence: 0.15            # Website and online presence
-  location_quality: 0.08            # Affluent area indicators
-  practice_size: 0.05               # Small-to-medium preferred
-
-features:
-  cash_pay_model:
-    keywords:
-      high_value:
-        - direct primary care
-        - dpc
-        - concierge medicine
-        - membership medicine
-        - cash pay
-        - subscription model
-        - monthly fee
-        - retainer practice
-        - elective services
-        - cosmetic services
-        - aesthetic medicine
-        - wellness services
-      medium_value:
-        - out of pocket
-        - self-pay options
-        - elective procedures
-      negative:
-        - insurance only
-        - medicare only
-        - medicaid
-        - insurance-based
-        - no cash services
-    weight_multiplier: 2.0
-    
-  aesthetic_indicators:
-    keywords:
-      high_value:
-        - botox
-        - filler
-        - aesthetic medicine
-        - cosmetic treatments
-        - anti-aging
-        - laser treatments
-        - skin rejuvenation
-        - weight loss
-        - body contouring
-        - hormone therapy
-        - testosterone therapy
-        - peptide therapy
-        - iv therapy
-        - vitamin injections
-        - medspa services
-      medium_value:
-        - wellness
-        - preventive medicine
-        - functional medicine
-        - integrative health
-      negative:
-        - primary care only
-        - insurance billing only
-        - urgent care
-        - walk-in clinic
-    weight_multiplier: 1.5
-    
-  independent_practice:
-    practice_types:
-      highly_preferred:
-        - solo practitioner
-        - private practice
-        - independent
-        - direct primary care
-        - concierge practice
-      preferred:
-        - small group (2-4 providers)
-        - family practice partnership
-        - physician-owned
-      avoid:
-        - hospital-owned
-        - health system
-        - corporate medicine
-        - large medical group
-        - urgent care chain
-    scoring:
-      dpc_concierge: 100
-      solo_independent: 95
-      small_group_2_4: 80
-      medium_group_5_8: 50
-      hospital_affiliated: 20
-      corporate_chain: 10
-      
-  digital_presence:
-    website_indicators:
-      strong_signals:
-        - aesthetic services page
-        - cash-pay pricing
-        - membership information
-        - online booking
-        - patient portal
-        - wellness programs
-        - before/after gallery
-        - testimonials
-        - blog/education
-      medium_signals:
-        - modern website
-        - contact form
-        - service descriptions
-        - provider credentials
-      quality_multipliers:
-        has_aesthetic_services: 1.3
-        has_membership_info: 1.25
-        has_cash_pricing: 1.2
-        has_online_booking: 1.15
-        
-  location_quality:
-    affluent_indicators:
-      - upscale
-      - affluent
-      - private
-      - boutique
-      - concierge
-    area_type_scores:
-      affluent_residential: 100
-      upscale_medical_plaza: 90
-      suburban_upscale: 80
-      downtown: 70
-      suburban_standard: 55
-      rural: 40
-      
-  practice_size:
-    optimal_indicators:
-      - solo
-      - small group
-      - intimate
-      - personalized
-      - boutique
-    size_scores:
-      solo: 100
-      2_4_providers: 90
-      5_8_providers: 65
-      9plus_providers: 35
-
-penalties:
-  insurance_only: -40
-  hospital_affiliation: -35
-  no_cash_services: -45
-  urgent_care_model: -40
-  walk_in_clinic: -35
-  no_aesthetic_services: -30
-  no_website: -30
-  no_membership_option: -20
-
-bonuses:
-  dpc_model: 35                # Direct Primary Care
-  concierge_medicine: 35
-  aafp_member: 10              # American Academy of Family Physicians
-  abfm_certified: 15           # American Board of Family Medicine
-  aesthetic_training: 25
-  functional_medicine_certified: 20
-  offers_aesthetic_services: 25
-  medspa_integration: 20
-  hormone_optimization: 15
-  iv_therapy: 15
-  weight_loss_program: 15
-  membership_model: 25
-  cash_only_practice: 30
-  wellness_focus: 15
-
+# Score Thresholds
 thresholds:
-  minimum_score: 35
-  good_prospect: 70
-  excellent_prospect: 85
+  standard:
+    high_fit: 70
+    medium_fit: 50
+    low_fit: 0
   
-notes: |
-  Family practice prospects are best when they've evolved beyond traditional insurance-based care.
-  Key success factors:
-  - Direct Primary Care (DPC) or concierge model
-  - Offers aesthetic/cosmetic services (botox, fillers, lasers)
-  - Cash-pay or membership-based revenue
-  - Independent decision-making (not hospital-controlled)
-  - Wellness/preventive focus (vs. sick care only)
-  - Located in affluent areas
-  - Small practice size (faster decisions)
+  limited_data:
+    high_fit: 50
+    medium_fit: 35
+    low_fit: 0
   
-  AVOID:
-  - Traditional insurance-only practices
-  - Hospital-owned family medicine clinics
-  - Urgent care chains
-  - Large multi-physician groups
-  - Medicare/Medicaid-focused practices
+  minimum_data:
+    high_fit: 40
+    medium_fit: 25
+    low_fit: 0
+
+# Scoring Weights
+weights:
+  # Core Specialty Match (20 points)
+  specialty_match:
+    family_practice: 20
+    primary_care: 18
+    internal_medicine: 15
   
-  IDEAL TARGET:
-  - Solo DPC physician offering aesthetic services
-  - Concierge practice with wellness/anti-aging focus
-  - Small independent practice adding cosmetic procedures
-  - Family practice transitioning to cash-pay model
+  # Business Model (25 points - CRITICAL for FP)
+  decision_autonomy:
+    dpc_model: 20  # Direct Primary Care
+    concierge_model: 20
+    independent_ownership: 10
+    membership_based: 15
+  
+  # Aesthetic/Wellness Services (20 points)
+  aesthetic_services:
+    aesthetic_procedures: 10
+    weight_loss_services: 6
+    hormone_therapy: 6
+    iv_therapy: 4
+  
+  # Reviews & Rating (10 points)
+  reviews_rating:
+    rating_4_5_plus: 5
+    rating_4_0_to_4_5: 3
+    review_count_50_plus: 5
+    review_count_20_to_50: 3
+  
+  # Digital Presence (10 points)
+  digital_presence:
+    has_website: 5
+    active_social_media: 3
+    online_scheduling: 2
+  
+  # Wellness Focus (10 points)
+  wellness_focus:
+    functional_medicine: 5
+    integrative_health: 3
+    preventive_care: 2
+  
+  # Financial Model (5 points)
+  financial_indicators:
+    membership_revenue: 3
+    cashpay_services: 2
+
+# Data Quality Adjustments
+data_quality_multipliers:
+  limited_data_boost:
+    specialty_match: 1.3
+    decision_autonomy: 1.5
+    reviews_rating: 1.4
+  
+  rich_data_boost:
+    aesthetic_services: 1.0
+    wellness_focus: 1.0
+
+# High-Value Keywords
+high_value_keywords:
+  - "direct primary care"
+  - "dpc"
+  - "concierge medicine"
+  - "membership"
+  - "functional medicine"
+  - "aesthetic procedures"
+  - "weight loss"
+  
+  keyword_bonus: 3
+  max_keyword_bonus: 15
+
+# Special Rules
+special_rules:
+  # Heavily boost DPC/Concierge models
+  dpc_boost:
+    enabled: true
+    boost_amount: 15
+  
+  # Penalize traditional insurance-based practices
+  insurance_based_penalty:
+    enabled: true
+    keywords: ["accepts all insurance", "medicare", "medicaid"]
+    penalty_amount: -10
