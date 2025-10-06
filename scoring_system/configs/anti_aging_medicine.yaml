@@ -1,187 +1,102 @@
 
-# Anti-Aging Medicine Scoring Configuration
-# Optimized for longevity, functional medicine, and preventive health practices
-# Focus: Cash-pay model, wellness-focused, high patient engagement
+# Anti-Aging Medicine Specialty Scoring Configuration
+# Production Rebuild V4.0 - Optimized for Membership Models
 
-weights:
-  cash_pay_model: 0.28              # Strong preference for cash/membership practices
-  aesthetic_indicators: 0.24        # Aesthetic procedures as revenue stream
-  independent_practice: 0.20        # Independent vs. traditional medical system
-  digital_presence: 0.15            # Website and online engagement
-  wellness_focus: 0.08              # Preventive/functional medicine approach
-  location_quality: 0.05            # Less critical than other specialties
-
-features:
-  cash_pay_model:
-    keywords:
-      high_value:
-        - membership
-        - concierge
-        - cash pay
-        - direct pay
-        - monthly fee
-        - subscription
-        - wellness program
-        - package pricing
-        - VIP care
-      medium_value:
-        - self-pay
-        - out of pocket
-        - elective
-      negative:
-        - insurance accepted
-        - medicare
-        - medicaid
-        - insurance billing
-    weight_multiplier: 2.0
-    
-  aesthetic_indicators:
-    keywords:
-      high_value:
-        - anti-aging
-        - age management
-        - aesthetic medicine
-        - cosmetic
-        - rejuvenation
-        - beauty
-        - youth restoration
-        - hormone optimization
-        - body sculpting
-        - skin rejuvenation
-        - botox
-        - filler
-        - laser treatments
-        - IV therapy
-        - peptide therapy
-      medium_value:
-        - wellness
-        - preventive
-        - longevity
-        - functional medicine
-        - integrative
-      negative:
-        - urgent care
-        - emergency
-        - hospital
-        - insurance-based
-    weight_multiplier: 1.4
-    
-  independent_practice:
-    practice_types:
-      highly_preferred:
-        - solo practitioner
-        - boutique practice
-        - wellness center
-        - longevity clinic
-        - private practice
-      preferred:
-        - small group
-        - partnership
-        - medical spa affiliation
-      avoid:
-        - hospital system
-        - insurance-based clinic
-        - urgent care chain
-        - corporate medicine
-    scoring:
-      boutique_independent: 100
-      solo: 95
-      small_group: 80
-      medium_group: 50
-      hospital_affiliated: 15
-      corporate: 10
-      
-  digital_presence:
-    website_indicators:
-      strong_signals:
-        - membership portal
-        - online scheduling
-        - patient resources
-        - blog/education
-        - before/after gallery
-        - video content
-        - social media active
-        - telemedicine offered
-        - supplement store
-        - treatment packages
-      medium_signals:
-        - contact form
-        - doctor credentials
-        - service descriptions
-        - testimonials
-      quality_multipliers:
-        has_membership_info: 1.4
-        has_online_booking: 1.2
-        has_educational_content: 1.15
-        has_supplement_store: 1.2
-        
-  wellness_focus:
-    keywords:
-      - preventive medicine
-      - functional medicine
-      - integrative health
-      - holistic
-      - optimization
-      - longevity
-      - biohacking
-      - performance
-      - vitality
-      - personalized medicine
-    weight_multiplier: 1.2
-    
-  location_quality:
-    affluent_indicators:
-      - upscale
-      - luxury
-      - exclusive
-      - private
-      - boutique wellness
-    area_type_scores:
-      affluent_area: 100
-      upscale_shopping: 95
-      medical_plaza: 85
-      downtown: 80
-      suburban: 70
-      rural: 50
-
-penalties:
-  insurance_dependent: -40
-  hospital_affiliation: -35
-  no_cash_pay_options: -30
-  urgent_care_model: -40
-  no_aesthetic_services: -25
-  no_website: -35
-  outdated_website: -20
-  no_membership_program: -15
-
-bonuses:
-  abaarm_member: 20            # American Board of Anti-Aging & Regenerative Medicine
-  a4m_member: 20               # American Academy of Anti-Aging Medicine
-  ifm_certified: 15            # Institute for Functional Medicine
-  membership_model: 30
-  med_spa_integration: 20
-  iv_therapy_offered: 15
-  hormone_optimization: 15
-  peptide_therapy: 15
-  cash_only_practice: 35
-  concierge_model: 30
-  supplement_sales: 10
-  telemedicine_offered: 10
-  wellness_packages: 15
-
+# Score Thresholds
 thresholds:
-  minimum_score: 35
-  good_prospect: 70
-  excellent_prospect: 85
+  standard:
+    high_fit: 70
+    medium_fit: 50
+    low_fit: 0
   
-notes: |
-  Anti-aging medicine practices are excellent prospects for aesthetic devices.
-  Key success factors:
-  - Cash-pay or membership-based model (not insurance-dependent)
-  - Combination of aesthetic and wellness services
-  - High patient engagement and retention
-  - Focus on preventive/optimization vs. sick care
-  - Independent decision-making
-  - Affluent patient base willing to invest in appearance and longevity
-  - Modern digital presence with educational content
-  - Often combine traditional aesthetic procedures with newer modalities
+  limited_data:
+    high_fit: 50
+    medium_fit: 35
+    low_fit: 0
+  
+  minimum_data:
+    high_fit: 40
+    medium_fit: 25
+    low_fit: 0
+
+# Scoring Weights
+weights:
+  # Core Specialty Match (20 points)
+  specialty_match:
+    anti_aging_practice: 20
+    longevity_medicine: 18
+    age_management: 18
+  
+  # Business Model (20 points)
+  decision_autonomy:
+    membership_model: 20
+    concierge_model: 15
+    independent_ownership: 10
+  
+  # Service Offerings (25 points)
+  aesthetic_services:
+    hormone_therapy: 10
+    iv_therapy: 6
+    aesthetic_procedures: 6
+    peptide_therapy: 3
+  
+  # Reviews & Rating (10 points)
+  reviews_rating:
+    rating_4_5_plus: 5
+    rating_4_0_to_4_5: 3
+    review_count_50_plus: 5
+    review_count_20_to_50: 3
+  
+  # Digital Presence (10 points)
+  digital_presence:
+    has_website: 5
+    educational_content: 3
+    active_social_media: 2
+  
+  # Wellness Focus (10 points)
+  wellness_focus:
+    functional_medicine: 5
+    integrative_health: 3
+    preventive_focus: 2
+  
+  # Premium Positioning (5 points)
+  financial_indicators:
+    premium_services: 3
+    membership_revenue: 2
+
+# Data Quality Adjustments
+data_quality_multipliers:
+  limited_data_boost:
+    specialty_match: 1.3
+    decision_autonomy: 1.5
+    reviews_rating: 1.4
+  
+  rich_data_boost:
+    aesthetic_services: 1.0
+    wellness_focus: 1.0
+
+# High-Value Keywords
+high_value_keywords:
+  - "anti-aging"
+  - "longevity"
+  - "hormone optimization"
+  - "peptide therapy"
+  - "iv therapy"
+  - "functional medicine"
+  - "age management"
+  
+  keyword_bonus: 3
+  max_keyword_bonus: 15
+
+# Special Rules
+special_rules:
+  # Boost membership-based practices
+  membership_boost:
+    enabled: true
+    boost_amount: 12
+  
+  # Boost hormone/peptide therapy providers
+  advanced_therapy_boost:
+    enabled: true
+    keywords: ["hormone", "peptide", "bioidentical"]
+    boost_amount: 10
