@@ -1,11 +1,18 @@
 
 """
 Venus-specific adapter for the lead scoring system.
-Converts Venus practice data to the format expected by the scoring engine.
+Enhanced Version 2.0 - Production Rebuild
+
+New Features:
+- Review text preprocessing
+- Service extraction from descriptions
+- Data quality indicators
+- Better feature engineering for limited data scenarios
 """
 
 import pandas as pd
 import numpy as np
+import re
 from typing import Dict, List, Optional
 import logging
 
@@ -16,8 +23,37 @@ class VenusScoringAdapter:
     """Adapts Venus practice data to the scoring engine format"""
     
     def __init__(self):
-        """Initialize the adapter"""
-        pass
+        """Initialize the adapter with enhanced feature extractors"""
+        
+        # Service keyword mappings for better detection
+        self.service_mappings = {
+            'injectables': ['botox', 'dysport', 'xeomin', 'filler', 'juvederm', 
+                           'restylane', 'sculptra', 'radiesse', 'belotero'],
+            'body_contouring': ['coolsculpting', 'emsculpt', 'body contouring',
+                               'fat reduction', 'body sculpting', 'liposuction'],
+            'laser': ['laser hair removal', 'laser resurfacing', 'ipl', 
+                     'laser treatment', 'laser therapy'],
+            'skin_rejuvenation': ['microneedling', 'chemical peel', 'hydrafacial',
+                                 'dermaplaning', 'prp', 'vampire facial', 'facials'],
+            'advanced': ['vaginal rejuvenation', 'hormone therapy', 'iv therapy',
+                        'platelet rich plasma', 'stem cell']
+        }
+        
+        # Specialty indicators
+        self.specialty_indicators = {
+            'dermatology': ['dermatology', 'dermatologist', 'skin care', 'skin clinic',
+                           'medical dermatology', 'cosmetic dermatology'],
+            'plastic_surgery': ['plastic surgery', 'plastic surgeon', 'cosmetic surgery',
+                               'cosmetic surgeon', 'reconstructive surgery'],
+            'obgyn': ['obgyn', 'ob-gyn', 'ob/gyn', 'obstetrics', 'gynecology', 
+                     'women\'s health', 'womens health', 'gynecologist'],
+            'medspa': ['med spa', 'medical spa', 'medspa', 'aesthetic center',
+                      'cosmetic center', 'rejuvenation center'],
+            'family_practice': ['family medicine', 'family practice', 'family physician',
+                               'primary care', 'general practice', 'internal medicine']
+        }
+        
+        logger.info("✅ VenusScoringAdapter v2.0 initialized")
     
     def convert_practice_to_features(self, practice_data: Dict) -> Dict:
         """
@@ -31,278 +67,376 @@ class VenusScoringAdapter:
         """
         features = {}
         
-        # Extract basic info
+        # Extract and normalize text data
         practice_name = practice_data.get('name', '').lower()
         practice_desc = practice_data.get('description', '').lower()
-        all_text = f"{practice_name} {practice_desc}".lower()
         services = practice_data.get('services', [])
-        service_text = ' '.join([s.lower() for s in services])
+        service_text = ' '.join([s.lower() for s in services if s])
+        all_text = f"{practice_name} {practice_desc} {service_text}".lower()
         
+        # ═══════════════════════════════════════════════════════════════════
         # SPECIALTY MATCH FEATURES
-        # Dermatology & Plastic Surgery (original)
-        features['dermatology'] = 1.0 if any(term in all_text for term in ['dermatology', 'dermatologist', 'skin care', 'skin clinic']) else 0.0
-        features['plastic_surgery'] = 1.0 if any(term in all_text for term in ['plastic surgery', 'plastic surgeon', 'cosmetic surgery']) else 0.0
-        features['cosmetic_clinic'] = 1.0 if any(term in all_text for term in ['cosmetic clinic', 'cosmetic center']) else 0.0
-        features['med_spa'] = 1.0 if any(term in all_text for term in ['med spa', 'medical spa', 'medspa']) else 0.0
+        # ═══════════════════════════════════════════════════════════════════
+        
+        features['dermatology'] = self._detect_specialty(all_text, 'dermatology')
+        features['plastic_surgery'] = self._detect_specialty(all_text, 'plastic_surgery')
+        features['obgyn_practice'] = self._detect_specialty(all_text, 'obgyn')
+        features['med_spa'] = self._detect_specialty(all_text, 'medspa')
+        features['family_practice'] = self._detect_specialty(all_text, 'family_practice')
+        features['cosmetic_clinic'] = 1.0 if any(term in all_text for term in ['cosmetic clinic', 'cosmetic center', 'aesthetic clinic']) else 0.0
         features['aesthetic_clinic'] = 1.0 if any(term in all_text for term in ['aesthetic', 'beauty', 'rejuvenation']) else 0.0
         
-        # OB/GYN Specialty Features
-        features['obgyn_practice'] = 1.0 if any(term in all_text for term in ['obgyn', 'ob-gyn', 'ob/gyn', 'obstetrics', 'gynecology']) else 0.0
-        features['womens_health_clinic'] = 1.0 if any(term in all_text for term in ["women's health", 'womens health', 'female health']) else 0.0
-        features['cosmetic_gynecology'] = 1.0 if any(term in all_text for term in ['cosmetic gynecology', 'aesthetic gynecology', 'vaginal rejuvenation']) else 0.0
+        # ═══════════════════════════════════════════════════════════════════
+        # OWNERSHIP & AUTONOMY FEATURES
+        # ═══════════════════════════════════════════════════════════════════
         
-        # Family Practice Specialty Features
-        features['family_practice_aesthetic'] = 1.0 if any(term in all_text for term in ['family medicine', 'family practice']) and any(term in all_text for term in ['aesthetic', 'cosmetic', 'beauty']) else 0.0
-        features['integrative_medicine'] = 1.0 if any(term in all_text for term in ['integrative medicine', 'holistic medicine', 'functional medicine']) else 0.0
-        features['functional_medicine'] = 1.0 if any(term in all_text for term in ['functional medicine', 'anti-aging', 'longevity', 'regenerative medicine']) else 0.0
-        features['internal_medicine'] = 1.0 if any(term in all_text for term in ['internal medicine', 'internist']) else 0.0
-        features['general_practice'] = 1.0 if any(term in all_text for term in ['general practice', 'general practitioner', 'primary care']) else 0.0
+        # Solo practitioner indicators
+        solo_indicators = ['solo', 'private', 'independent', 'boutique', 'exclusive', 'owner']
+        features['solo_practitioner'] = 1.0 if any(ind in all_text for ind in solo_indicators) else 0.0
         
-        # AESTHETIC SERVICES FEATURES
-        features['body_contouring'] = 1.0 if any(term in service_text for term in ['body contouring', 'body sculpting', 'coolsculpting', 'fat reduction']) else 0.0
-        features['laser_hair_removal'] = 1.0 if any(term in service_text for term in ['laser hair removal', 'hair removal', 'laser']) else 0.0
-        features['injectables'] = 1.0 if any(term in service_text for term in ['botox', 'filler', 'injectable', 'juvederm', 'restylane']) else 0.0
-        features['skin_tightening'] = 1.0 if any(term in service_text for term in ['skin tightening', 'tightening', 'firming']) else 0.0
-        features['photorejuvenation'] = 1.0 if any(term in service_text for term in ['photorejuvenation', 'ipl', 'photo facial', 'rejuvenation']) else 0.0
+        # Hospital system indicators (negative)
+        hospital_indicators = ['hospital', 'medical center', 'health system', 'healthcare system']
+        features['hospital_affiliated'] = 1.0 if any(ind in all_text for ind in hospital_indicators) else 0.0
         
-        # COMPETING DEVICES FEATURES
-        multi_platform_competitors = ['lumenis m22', 'alma harmony', 'cutera xeo', 'syneron etwo', 'cynosure elite', 'vydence', 'btl exilis']
-        single_devices = ['coolsculpting', 'thermage', 'ultherapy', 'sculptra', 'morpheus8', 'potenza']
+        # Independent ownership indicators
+        ownership_indicators = ['physician-owned', 'doctor-owned', 'owner-operated', 'privately owned']
+        features['independent_ownership'] = 1.0 if any(ind in all_text for ind in ownership_indicators) else 0.0
         
-        has_multi_platform = any(device in all_text for device in multi_platform_competitors)
-        has_single_device = any(device in all_text for device in single_devices)
+        # ═══════════════════════════════════════════════════════════════════
+        # SERVICE CATEGORY FEATURES
+        # ═══════════════════════════════════════════════════════════════════
         
-        features['multi_platform_present'] = 1.0 if has_multi_platform else 0.0
-        features['single_device_present'] = 1.0 if has_single_device and not has_multi_platform else 0.0
-        features['no_devices'] = 1.0 if not has_multi_platform and not has_single_device else 0.0
+        for category, keywords in self.service_mappings.items():
+            feature_name = f'{category}_services'
+            match_count = sum(1 for keyword in keywords if keyword in all_text)
+            # Normalize to 0-1 scale
+            features[feature_name] = min(match_count / 3.0, 1.0)
         
-        # SOCIAL ACTIVITY FEATURES
+        # ═══════════════════════════════════════════════════════════════════
+        # DIGITAL PRESENCE FEATURES
+        # ═══════════════════════════════════════════════════════════════════
+        
+        features['has_website'] = 1.0 if practice_data.get('website') else 0.0
+        
         social_links = practice_data.get('social_links', [])
-        features['instagram_present'] = 1.0 if any('instagram' in link.lower() for link in social_links) else 0.0
-        features['facebook_present'] = 1.0 if any('facebook' in link.lower() for link in social_links) else 0.0
-        features['linkedin_present'] = 1.0 if any('linkedin' in link.lower() for link in social_links) else 0.0
-        features['social_engagement'] = min(1.0, len(social_links) / 3.0)  # Normalized by 3 platforms
+        features['social_media_count'] = min(len(social_links) / 3.0, 1.0)
+        features['has_instagram'] = 1.0 if 'Instagram' in social_links else 0.0
+        features['has_facebook'] = 1.0 if 'Facebook' in social_links else 0.0
         
-        # PRACTICE SIZE FEATURES (inverted - smaller is better)
+        # ═══════════════════════════════════════════════════════════════════
+        # PRACTICE SIZE & SOPHISTICATION
+        # ═══════════════════════════════════════════════════════════════════
+        
         staff_count = practice_data.get('staff_count', 0)
+        features['staff_size'] = min(staff_count / 10.0, 1.0)
+        features['small_practice'] = 1.0 if staff_count <= 5 else 0.0
+        features['medium_practice'] = 1.0 if 6 <= staff_count <= 15 else 0.0
+        features['large_practice'] = 1.0 if staff_count > 15 else 0.0
         
-        # Check for startup indicators
-        startup_indicators = ['new', 'recently opened', 'grand opening', 'now open', 'established 202', 'founded 202']
-        is_startup = any(indicator in all_text for indicator in startup_indicators)
+        # Service variety (indicates sophistication)
+        service_count = len(services) if services else 0
+        features['service_variety'] = min(service_count / 10.0, 1.0)
+        features['multi_service'] = 1.0 if service_count >= 5 else 0.0
         
-        if is_startup or staff_count <= 2:
-            features['startup_very_small'] = 1.0
-            features['small_practice'] = 0.0
-            features['medium_practice'] = 0.0
-            features['large_practice'] = 0.0
-        elif staff_count <= 4:
-            features['startup_very_small'] = 0.0
-            features['small_practice'] = 1.0
-            features['medium_practice'] = 0.0
-            features['large_practice'] = 0.0
-        elif staff_count <= 8:
-            features['startup_very_small'] = 0.0
-            features['small_practice'] = 0.0
-            features['medium_practice'] = 1.0
-            features['large_practice'] = 0.0
-        else:
-            features['startup_very_small'] = 0.0
-            features['small_practice'] = 0.0
-            features['medium_practice'] = 0.0
-            features['large_practice'] = 1.0
+        # ═══════════════════════════════════════════════════════════════════
+        # REPUTATION & SOCIAL PROOF
+        # ═══════════════════════════════════════════════════════════════════
         
-        # REVIEWS & RATING FEATURES
         rating = practice_data.get('rating', 0)
         review_count = practice_data.get('review_count', 0)
         
-        if rating >= 4.5 and review_count >= 50:
-            features['high_rating_high_volume'] = 1.0
-            features['high_rating_medium_volume'] = 0.0
-            features['medium_rating'] = 0.0
-            features['low_rating'] = 0.0
-        elif rating >= 4.0 and review_count >= 20:
-            features['high_rating_high_volume'] = 0.0
-            features['high_rating_medium_volume'] = 1.0
-            features['medium_rating'] = 0.0
-            features['low_rating'] = 0.0
-        elif rating >= 3.5:
-            features['high_rating_high_volume'] = 0.0
-            features['high_rating_medium_volume'] = 0.0
-            features['medium_rating'] = 1.0
-            features['low_rating'] = 0.0
-        else:
-            features['high_rating_high_volume'] = 0.0
-            features['high_rating_medium_volume'] = 0.0
-            features['medium_rating'] = 0.0
-            features['low_rating'] = 1.0
+        features['high_rating'] = 1.0 if rating >= 4.5 else 0.0
+        features['good_rating'] = 1.0 if 4.0 <= rating < 4.5 else 0.0
+        features['low_rating'] = 1.0 if rating < 4.0 else 0.0
         
-        # SEARCH VISIBILITY FEATURES
-        features['has_website'] = 1.0 if practice_data.get('website') else 0.0
-        features['has_phone'] = 1.0 if practice_data.get('phone') else 0.0
-        features['has_email'] = 1.0 if '@' in practice_desc else 0.0  # Rough check
+        features['high_review_volume'] = 1.0 if review_count >= 50 else 0.0
+        features['medium_review_volume'] = 1.0 if 20 <= review_count < 50 else 0.0
+        features['low_review_volume'] = 1.0 if review_count < 20 else 0.0
         
-        # GEOGRAPHY FIT FEATURES
-        address = practice_data.get('address', '').lower()
+        # Combined reputation score
+        features['reputation_score'] = (rating / 5.0) * 0.6 + min(review_count / 100.0, 1.0) * 0.4
         
-        small_market_indicators = ['rd', 'drive', 'country', 'rural', 'main street', 'main st', 'town', 'village']
-        over_serviced_areas = ['beverly hills', 'manhattan', 'miami beach', 'scottsdale', 'malibu', 'newport beach', 'la jolla']
+        # ═══════════════════════════════════════════════════════════════════
+        # FINANCIAL & BUSINESS MODEL INDICATORS
+        # ═══════════════════════════════════════════════════════════════════
         
-        if any(indicator in address for indicator in small_market_indicators):
-            features['small_market'] = 1.0
-            features['suburban'] = 0.0
-            features['urban'] = 0.0
-            features['over_serviced'] = 0.0
-        elif any(area in address for area in over_serviced_areas):
-            features['small_market'] = 0.0
-            features['suburban'] = 0.0
-            features['urban'] = 0.0
-            features['over_serviced'] = 1.0
-        elif any(term in address for term in ['downtown', 'center city', 'midtown']):
-            features['small_market'] = 0.0
-            features['suburban'] = 0.0
-            features['urban'] = 1.0
-            features['over_serviced'] = 0.0
-        else:
-            features['small_market'] = 0.0
-            features['suburban'] = 1.0
-            features['urban'] = 0.0
-            features['over_serviced'] = 0.0
+        # Cash-pay service indicators
+        cashpay_keywords = ['cash', 'elective', 'cosmetic', 'aesthetic', 'spa', 
+                           'membership', 'concierge', 'boutique']
+        features['cashpay_focus'] = min(
+            sum(1 for kw in cashpay_keywords if kw in all_text) / 3.0, 1.0
+        )
         
-        # WEIGHT LOSS / GLP-1 FEATURES
-        glp1_keywords = ['semaglutide', 'tirzepatide', 'ozempic', 'wegovy', 'mounjaro', 'compounded glp-1']
-        weight_keywords = ['weight loss', 'weight management', 'medical weight', 'metabolic medicine']
-        hormone_keywords = ['biote', 'hormone pellets', 'hormone optimization', 'hormone therapy']
-        iv_keywords = ['iv therapy', 'iv drip', 'vitamin infusion']
-        nutrition_keywords = ['nutrition', 'nutritional counseling', 'dietitian', 'diet program']
+        # Premium service indicators
+        premium_keywords = ['luxury', 'premium', 'exclusive', 'vip', 'elite', 
+                           'boutique', 'upscale', 'high-end']
+        features['premium_positioning'] = 1.0 if any(kw in all_text for kw in premium_keywords) else 0.0
         
-        features['glp1_services'] = 1.0 if any(kw in all_text for kw in glp1_keywords) else 0.0
-        features['weight_management'] = 1.0 if any(kw in all_text for kw in weight_keywords) else 0.0
-        features['hormone_therapy'] = 1.0 if any(kw in all_text for kw in hormone_keywords) else 0.0
-        features['iv_therapy'] = 1.0 if any(kw in all_text for kw in iv_keywords) else 0.0
-        features['nutrition_counseling'] = 1.0 if any(kw in all_text for kw in nutrition_keywords) else 0.0
-        features['weight_loss_aesthetics'] = 1.0 if any(kw in all_text for kw in weight_keywords) and any(kw in all_text for kw in ['body contouring', 'skin tightening', 'aesthetic']) else 0.0
+        # Membership/subscription model
+        membership_keywords = ['membership', 'subscription', 'club', 'concierge']
+        features['membership_model'] = 1.0 if any(kw in all_text for kw in membership_keywords) else 0.0
         
-        # POSTPARTUM SERVICES FEATURES (for OB/GYN)
-        mommy_makeover_keywords = ['mommy makeover', 'post-pregnancy', 'postpartum body', 'after baby']
-        postpartum_contouring_keywords = ['postpartum body contouring', 'post-pregnancy body sculpting', 'after pregnancy body']
-        diastasis_keywords = ['diastasis recti', 'abdominal separation', 'post-pregnancy core']
-        postpartum_tightening_keywords = ['postpartum skin tightening', 'post-pregnancy skin', 'after baby skin']
+        # ═══════════════════════════════════════════════════════════════════
+        # DATA QUALITY INDICATORS (NEW)
+        # ═══════════════════════════════════════════════════════════════════
         
-        features['mommy_makeover'] = 1.0 if any(kw in all_text for kw in mommy_makeover_keywords) else 0.0
-        features['postpartum_body_contouring'] = 1.0 if any(kw in all_text for kw in postpartum_contouring_keywords) or (features['body_contouring'] and features['obgyn_practice']) else 0.0
-        features['diastasis_recti_treatment'] = 1.0 if any(kw in all_text for kw in diastasis_keywords) else 0.0
-        features['postpartum_skin_tightening'] = 1.0 if any(kw in all_text for kw in postpartum_tightening_keywords) or (features['skin_tightening'] and features['obgyn_practice']) else 0.0
+        # Measure how much data we have about this practice
+        data_quality_score = 0.0
         
-        # WELLNESS PROGRAMS FEATURES (for Family Practice)
-        longevity_keywords = ['longevity', 'healthspan', 'lifespan optimization', 'age management']
-        preventive_keywords = ['preventive care', 'preventative medicine', 'wellness program', 'health optimization']
-        concierge_keywords = ['concierge', 'membership medicine', 'direct primary care', 'dpc']
+        if practice_data.get('website'):
+            data_quality_score += 0.25
+        if service_count > 0:
+            data_quality_score += 0.25
+        if practice_desc and practice_desc != 'not available':
+            data_quality_score += 0.25
+        if rating > 0 and review_count > 0:
+            data_quality_score += 0.25
         
-        features['longevity_programs'] = 1.0 if any(kw in all_text for kw in longevity_keywords) else 0.0
-        features['preventive_care_focus'] = 1.0 if any(kw in all_text for kw in preventive_keywords) else 0.0
-        features['concierge_medicine'] = 1.0 if any(kw in all_text for kw in concierge_keywords) else 0.0
+        features['data_quality'] = data_quality_score
+        features['has_rich_data'] = 1.0 if data_quality_score >= 0.75 else 0.0
+        features['has_limited_data'] = 1.0 if data_quality_score < 0.5 else 0.0
         
-        # SKIN LAXITY TRIGGERS FEATURES
-        post_surgical_keywords = ['post-surgical', 'facelift', 'body contouring surgery', 'blepharoplasty', 'mommy makeover', 'post-cosmetic surgery']
-        bariatric_keywords = ['bariatric surgery', 'gastric bypass', 'significant weight loss', 'post-bariatric']
-        postpartum_keywords = ['post-pregnancy', 'postpartum', 'post-natal', 'after pregnancy']
+        # ═══════════════════════════════════════════════════════════════════
+        # ENHANCED SERVICE DETECTION (from reviews/descriptions)
+        # ═══════════════════════════════════════════════════════════════════
         
-        features['post_surgical'] = 1.0 if any(kw in all_text for kw in post_surgical_keywords) else 0.0
-        features['bariatric_patients'] = 1.0 if any(kw in all_text for kw in bariatric_keywords) else 0.0
-        features['postpartum'] = 1.0 if any(kw in all_text for kw in postpartum_keywords) else 0.0
+        # If we have description but no services detected, try to extract
+        if service_count == 0 and practice_desc and practice_desc != 'not available':
+            extracted_services = self._extract_services_from_description(practice_desc)
+            if extracted_services:
+                features['services_from_description'] = 1.0
+                # Update service category features based on extracted services
+                for category, keywords in self.service_mappings.items():
+                    if any(kw in extracted_services for kw in keywords):
+                        feature_name = f'{category}_services'
+                        features[feature_name] = max(features.get(feature_name, 0), 0.5)
         
-        # GROWTH INDICATORS FEATURES
-        recently_opened_keywords = ['new', 'recently opened', 'grand opening', 'now open', 'opening soon', 'established 202', 'founded 202', 'new location']
-        expanding_keywords = ['expanding', 'adding services', 'new treatments', 'introducing', 'upgraded', 'state-of-the-art', 'newly renovated']
-        active_marketing_keywords = ['follow us', 'like us', '@', 'social media', 'check out our']
-        professional_branding_keywords = ['award-winning', 'certified', 'accredited', 'board-certified', 'premier', 'leading', 'elite']
+        # ═══════════════════════════════════════════════════════════════════
+        # SPECIALTY-SPECIFIC FEATURES (Enhanced)
+        # ═══════════════════════════════════════════════════════════════════
         
-        features['recently_opened'] = 1.0 if any(kw in all_text for kw in recently_opened_keywords) else 0.0
-        features['expanding_services'] = 1.0 if any(kw in all_text for kw in expanding_keywords) else 0.0
-        features['active_marketing'] = 1.0 if (len(social_links) >= 2 or any(kw in all_text for kw in active_marketing_keywords)) else 0.0
-        features['professional_branding'] = 1.0 if any(kw in all_text for kw in professional_branding_keywords) else 0.0
+        # OB/GYN specific
+        if features['obgyn_practice'] > 0:
+            features['offers_aesthetic_gyn'] = 1.0 if any(
+                term in all_text for term in ['vaginal rejuvenation', 'cosmetic gynecology', 
+                                               'feminine wellness', 'vaginal health']
+            ) else 0.0
+            
+            features['womens_wellness_focus'] = 1.0 if any(
+                term in all_text for term in ['hormone', 'menopause', 'wellness', 
+                                               'anti-aging', 'functional medicine']
+            ) else 0.0
         
-        # HIGH VALUE SPECIALTIES FEATURES
-        family_practice_keywords = ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice']
-        obgyn_keywords = ['obgyn', 'ob-gyn', 'obstetrics', 'gynecology', "women's health", 'womens health']
-        concierge_keywords = ['concierge medicine', 'concierge practice', 'membership practice', 'direct primary care', 'dpc']
-        functional_medicine_keywords = ['functional medicine', 'integrative medicine', 'holistic', 'wellness center', 'anti-aging']
+        # MedSpa specific
+        if features['med_spa'] > 0:
+            features['medical_director'] = 1.0 if any(
+                term in all_text for term in ['medical director', 'physician-owned', 'doctor-owned']
+            ) else 0.0
+            
+            features['advanced_technology'] = 1.0 if any(
+                term in all_text for term in ['laser', 'coolsculpt', 'emsculpt', 
+                                               'technology', 'device', 'equipment']
+            ) else 0.0
         
-        features['family_practice'] = 1.0 if any(kw in all_text for kw in family_practice_keywords) else 0.0
-        features['obgyn'] = 1.0 if any(kw in all_text for kw in obgyn_keywords) else 0.0
-        features['concierge_medicine'] = 1.0 if any(kw in all_text for kw in concierge_keywords) else 0.0
-        features['functional_medicine'] = 1.0 if any(kw in all_text for kw in functional_medicine_keywords) else 0.0
+        # Plastic Surgery specific
+        if features['plastic_surgery'] > 0:
+            features['board_certified'] = 1.0 if any(
+                term in all_text for term in ['board certified', 'board-certified', 'abps', 
+                                               'american board']
+            ) else 0.0
+            
+            features['non_surgical_focus'] = 1.0 if any(
+                term in all_text for term in ['non-surgical', 'nonsurgical', 'non-invasive', 
+                                               'noninvasive', 'aesthetic']
+            ) else 0.0
+        
+        # Family Practice specific
+        if features['family_practice'] > 0:
+            features['dpc_model'] = 1.0 if any(
+                term in all_text for term in ['direct primary care', 'dpc', 'membership medicine', 
+                                               'concierge']
+            ) else 0.0
+            
+            features['functional_medicine'] = 1.0 if any(
+                term in all_text for term in ['functional medicine', 'integrative', 
+                                               'holistic', 'wellness']
+            ) else 0.0
+        
+        # ═══════════════════════════════════════════════════════════════════
+        # WEIGHT ADJUSTMENT FOR LIMITED DATA
+        # ═══════════════════════════════════════════════════════════════════
+        
+        # When data is limited, boost high-confidence signals
+        if features['has_limited_data'] > 0:
+            # Boost specialty match if clearly indicated in name
+            if any(ind in practice_name for ind in ['dermatology', 'derm', 'skin']):
+                features['dermatology'] = 1.0
+            if any(ind in practice_name for ind in ['plastic surgery', 'cosmetic']):
+                features['plastic_surgery'] = 1.0
+            if any(ind in practice_name for ind in ['obgyn', 'ob-gyn', 'women']):
+                features['obgyn_practice'] = 1.0
+            if any(ind in practice_name for ind in ['med spa', 'medspa', 'spa']):
+                features['med_spa'] = 1.0
+            
+            # Boost reputation if we have good reviews
+            if features['high_rating'] > 0 and features['medium_review_volume'] > 0:
+                features['reputation_score'] = min(features['reputation_score'] * 1.3, 1.0)
+        
+        logger.debug(f"Converted practice '{practice_name[:30]}' to {len(features)} features")
         
         return features
     
-    def create_dataframe_from_practices(self, practices: List[Dict]) -> pd.DataFrame:
+    def _detect_specialty(self, text: str, specialty: str) -> float:
         """
-        Convert list of practices to DataFrame for scoring
+        Detect if text indicates a specific specialty
+        Returns confidence score 0.0 to 1.0
+        """
+        if specialty not in self.specialty_indicators:
+            return 0.0
+        
+        indicators = self.specialty_indicators[specialty]
+        matches = sum(1 for ind in indicators if ind in text)
+        
+        # Return normalized confidence
+        return min(matches / 2.0, 1.0)
+    
+    def _extract_services_from_description(self, description: str) -> List[str]:
+        """
+        Extract service keywords from practice description
+        Returns list of detected services
+        """
+        description_lower = description.lower()
+        extracted_services = []
+        
+        # Check all service mappings
+        for category, keywords in self.service_mappings.items():
+            for keyword in keywords:
+                if keyword in description_lower:
+                    extracted_services.append(keyword)
+        
+        return list(set(extracted_services))
+    
+    def batch_convert_practices(self, practices: List[Dict]) -> pd.DataFrame:
+        """
+        Convert multiple practices to feature DataFrame
         
         Args:
             practices: List of practice dictionaries
             
         Returns:
-            DataFrame ready for scoring engine
+            DataFrame with one row per practice, columns are features
         """
-        rows = []
-        for i, practice in enumerate(practices):
-            features = self.convert_practice_to_features(practice)
-            # Add identifier
-            features['business_id'] = practice.get('name', f'practice_{i}')
-            features['name'] = practice.get('name', f'Practice {i}')
-            rows.append(features)
+        feature_dicts = []
         
-        df = pd.DataFrame(rows)
+        for practice in practices:
+            try:
+                features = self.convert_practice_to_features(practice)
+                # Add practice identifier
+                features['practice_name'] = practice.get('name', 'Unknown')
+                features['practice_id'] = practice.get('id', '')
+                feature_dicts.append(features)
+            except Exception as e:
+                logger.error(f"Error converting practice {practice.get('name', 'Unknown')}: {str(e)}")
+                continue
         
-        # Ensure business_id is first column
-        if 'business_id' in df.columns:
-            cols = ['business_id'] + [col for col in df.columns if col != 'business_id']
-            df = df[cols]
+        if not feature_dicts:
+            logger.warning("No practices successfully converted")
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(feature_dicts)
+        logger.info(f"✅ Converted {len(df)} practices to feature DataFrame")
         
         return df
     
-    def map_score_back_to_practice(self, practice_data: Dict, score_result: Dict) -> Dict:
+    def enrich_with_external_data(self, practice_data: Dict, external_data: Dict) -> Dict:
         """
-        Map scoring results back to practice format
+        Enrich practice data with external information
+        (e.g., from review analysis, Google Maps enrichment)
         
         Args:
-            practice_data: Original practice data
-            score_result: Scoring engine results
+            practice_data: Base practice dictionary
+            external_data: Additional data to merge
             
         Returns:
-            Enhanced practice data with scores
+            Enriched practice dictionary
         """
-        # Create enhanced practice record
-        enhanced = practice_data.copy()
+        enriched = practice_data.copy()
         
-        # Add scoring data
-        enhanced['ai_score'] = int(score_result.get('score', 0))
-        enhanced['confidence_level'] = score_result.get('confidence_flag', 'Low')
-        enhanced['data_completeness'] = score_result.get('data_completeness', 0.0)
+        # Merge services
+        if 'services' in external_data:
+            existing_services = set(enriched.get('services', []))
+            new_services = set(external_data['services'])
+            enriched['services'] = list(existing_services | new_services)
         
-        # Parse top contributors
-        top_contributors = score_result.get('top_3_contributors', '')
-        enhanced['top_contributors'] = top_contributors
+        # Merge social proof
+        if 'social_proof' in external_data:
+            enriched['social_proof'] = external_data['social_proof']
         
-        # Create score breakdown dict
-        score_breakdown = {}
-        if 'top_1_feature' in score_result:
-            score_breakdown['top_1'] = {
-                'feature': score_result.get('top_1_feature', ''),
-                'contribution': score_result.get('top_1_contribution_pct', 0.0)
-            }
-        if 'top_2_feature' in score_result:
-            score_breakdown['top_2'] = {
-                'feature': score_result.get('top_2_feature', ''),
-                'contribution': score_result.get('top_2_contribution_pct', 0.0)
-            }
-        if 'top_3_feature' in score_result:
-            score_breakdown['top_3'] = {
-                'feature': score_result.get('top_3_feature', ''),
-                'contribution': score_result.get('top_3_contribution_pct', 0.0)
-            }
+        # Merge staff mentions
+        if 'staff_mentions' in external_data:
+            enriched['staff_count'] = len(external_data['staff_mentions'])
         
-        enhanced['score_breakdown'] = score_breakdown
+        # Update description if available
+        if 'description' in external_data and external_data['description']:
+            if not enriched.get('description') or enriched['description'] == 'Not Available':
+                enriched['description'] = external_data['description']
         
-        return enhanced
+        logger.debug(f"Enriched practice data with external information")
+        
+        return enriched
+    
+    def get_feature_importance_for_specialty(self, specialty: str) -> Dict[str, float]:
+        """
+        Get feature importance weights for a specific specialty
+        
+        Args:
+            specialty: Specialty name (dermatology, plastic_surgery, etc.)
+            
+        Returns:
+            Dictionary of feature names to importance weights
+        """
+        # Default weights
+        base_weights = {
+            'specialty_match': 1.0,
+            'service_variety': 0.8,
+            'reputation_score': 0.9,
+            'independent_ownership': 0.7,
+            'cashpay_focus': 0.8,
+            'digital_presence': 0.6
+        }
+        
+        # Specialty-specific adjustments
+        if specialty == 'dermatology':
+            base_weights['dermatology'] = 1.0
+            base_weights['injectables_services'] = 0.9
+            base_weights['laser_services'] = 0.9
+            
+        elif specialty == 'plastic_surgery':
+            base_weights['plastic_surgery'] = 1.0
+            base_weights['board_certified'] = 0.9
+            base_weights['non_surgical_focus'] = 0.8
+            
+        elif specialty == 'obgyn':
+            base_weights['obgyn_practice'] = 1.0
+            base_weights['offers_aesthetic_gyn'] = 0.9
+            base_weights['womens_wellness_focus'] = 0.8
+            base_weights['solo_practitioner'] = 0.9
+            
+        elif specialty == 'medspa':
+            base_weights['med_spa'] = 1.0
+            base_weights['medical_director'] = 0.9
+            base_weights['advanced_technology'] = 0.8
+            base_weights['independent_ownership'] = 0.9
+            
+        elif specialty == 'family_practice':
+            base_weights['family_practice'] = 1.0
+            base_weights['dpc_model'] = 0.9
+            base_weights['functional_medicine'] = 0.8
+        
+        return base_weights
+
+
+# Export convenience function
+def create_adapter() -> VenusScoringAdapter:
+    """Create and return a Venus adapter instance"""
+    return VenusScoringAdapter()
