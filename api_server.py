@@ -229,11 +229,11 @@ def calculate_dynamic_timeout(estimated_results: int) -> int:
     elif estimated_results < 50:
         timeout = 30 * 60  # 30 minutes for medium searches (doubled from 15)
         logger.info(f"Dynamic timeout: 30 minutes for ~{estimated_results} results")
-    elif estimated_results < 80:
-        timeout = 60 * 60  # 60 minutes for large searches (doubled from 30)
+    elif estimated_results < 100:
+        timeout = 60 * 60  # 60 minutes for large searches
         logger.info(f"Dynamic timeout: 60 minutes for ~{estimated_results} results")
-    elif estimated_results < 120:
-        timeout = 90 * 60  # 90 minutes for very large searches (doubled from 45)
+    elif estimated_results < 150:
+        timeout = 90 * 60  # 90 minutes for very large searches
         logger.info(f"Dynamic timeout: 90 minutes for ~{estimated_results} results")
     else:
         timeout = 120 * 60  # 120 minutes max for extremely large searches (doubled from 60)
