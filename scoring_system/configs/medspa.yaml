@@ -1,0 +1,192 @@
+
+# Medical Spa (MedSpa) Scoring Configuration
+# Optimized for aesthetic medical spas and cosmetic treatment centers
+# Focus: High aesthetic focus, independent ownership, strong digital marketing
+
+weights:
+  aesthetic_indicators: 0.32        # Primary focus on cosmetics/aesthetics
+  independent_practice: 0.24        # Independent vs. franchise/corporate
+  digital_presence: 0.22            # Website, social media, online booking
+  location_quality: 0.12            # Affluent area indicators
+  recency: 0.06                     # Recent activity and updates
+  practice_size: 0.04               # Less critical for medspas
+
+features:
+  aesthetic_indicators:
+    keywords:
+      high_value:
+        - medspa
+        - medical spa
+        - aesthetic spa
+        - beauty spa
+        - cosmetic treatments
+        - laser treatments
+        - botox
+        - dermal fillers
+        - coolsculpting
+        - body contouring
+        - skin rejuvenation
+        - anti-aging treatments
+        - facial rejuvenation
+        - injectable treatments
+        - non-surgical facelift
+        - laser hair removal
+        - microneedling
+        - chemical peels
+        - hydrafacial
+        - prp facial
+        - vampire facial
+        - lip enhancement
+        - wrinkle treatment
+      medium_value:
+        - spa
+        - wellness center
+        - beauty clinic
+        - aesthetic center
+      negative:
+        - day spa only
+        - massage only
+        - nail salon
+        - hair salon
+    weight_multiplier: 1.8
+    
+  independent_practice:
+    practice_types:
+      highly_preferred:
+        - independently owned
+        - owner-operated
+        - private medspa
+        - boutique spa
+        - physician-owned
+      preferred:
+        - small chain (2-3 locations)
+        - local brand
+      avoid:
+        - large franchise
+        - corporate chain
+        - national brand
+        - 5+ locations under same ownership
+    scoring:
+      independent_owner_operated: 100
+      physician_owned: 95
+      small_chain_2_3: 80
+      regional_chain_4_6: 55
+      large_franchise: 25
+      corporate_chain: 15
+      
+  digital_presence:
+    website_indicators:
+      strong_signals:
+        - online booking system
+        - before/after gallery
+        - treatment videos
+        - patient testimonials
+        - active blog
+        - instagram integration
+        - facebook integration
+        - tiktok presence
+        - special offers/promotions
+        - email signup
+        - loyalty program
+        - gift cards
+        - membership program
+      medium_signals:
+        - contact form
+        - treatment menu
+        - pricing information
+        - provider bios
+        - location/hours
+      quality_multipliers:
+        has_online_booking: 1.3
+        has_gallery: 1.25
+        active_social_media: 1.3
+        has_promotions: 1.15
+        has_membership: 1.2
+        
+  location_quality:
+    affluent_indicators:
+      - upscale
+      - luxury
+      - high-end
+      - exclusive
+      - boutique
+      - premium
+    area_type_scores:
+      upscale_shopping_center: 100
+      affluent_residential: 95
+      downtown_luxury: 90
+      medical_plaza: 85
+      suburban_upscale: 75
+      suburban_standard: 55
+      rural: 25
+      
+  recency:
+    activity_signals:
+      - recently opened
+      - new treatments
+      - latest technology
+      - recent social posts
+      - current promotions
+      - updated website
+      - new reviews
+    time_decay_months: 4
+    
+  practice_size:
+    optimal_indicators:
+      - boutique
+      - intimate
+      - luxury experience
+      - personalized care
+    size_scores:
+      boutique_small: 100
+      medium: 85
+      large_facility: 60
+
+penalties:
+  franchise_operation: -30
+  corporate_chain: -40
+  no_physician_oversight: -25
+  day_spa_only: -50
+  no_medical_services: -45
+  no_website: -40
+  inactive_social_media: -20
+  no_online_booking: -15
+  no_before_after: -15
+
+bonuses:
+  physician_owned: 20
+  nurse_practitioner_onsite: 15
+  plastic_surgeon_affiliated: 25
+  dermatologist_affiliated: 25
+  multiple_service_lines: 15
+  membership_program: 20
+  loyalty_program: 15
+  active_social_media_10k_plus: 20
+  online_booking: 15
+  financing_options: 15
+  package_deals: 10
+  referral_program: 10
+  vip_services: 15
+
+thresholds:
+  minimum_score: 30
+  good_prospect: 70
+  excellent_prospect: 85
+  
+notes: |
+  Medical spas are prime targets for aesthetic devices.
+  Key success factors:
+  - Pure aesthetic focus (no medical/insurance services)
+  - Independent or physician-owned (not franchise)
+  - Strong digital marketing and social media presence
+  - Located in affluent areas
+  - Active online booking and customer engagement
+  - Offers multiple aesthetic service lines
+  - Fast decision-making (owner-operator model)
+  - Cash-pay business model
+  
+  RED FLAGS:
+  - Large franchise chains (slow corporate decisions)
+  - Day spa without medical services
+  - No physician oversight
+  - Inactive social media or outdated website
