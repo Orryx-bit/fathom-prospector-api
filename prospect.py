@@ -348,6 +348,24 @@ class FathomProspector:
                     'botox', 'fillers', 'skin tightening', 'cellulite',
                     'inch loss', 'fat reduction'
                 ]
+            },
+            'familypractice': {
+                'weights': {
+                    'specialty_match': 18,
+                    'decision_autonomy': 25,
+                    'aesthetic_services': 12,
+                    'competing_devices': 8,
+                    'social_activity': 5,
+                    'reviews_rating': 8,
+                    'search_visibility': 5,
+                    'financial_indicators': 12,
+                    'weight_loss_services': 20  # HIGHEST - key entry point
+                },
+                'high_value_keywords': [
+                    'weight loss', 'glp-1', 'semaglutide', 'tirzepatide',
+                    'wellness', 'longevity', 'preventive care', 'functional medicine',
+                    'integrative medicine', 'anti-aging', 'hormone therapy'
+                ]
             }
         }
     
@@ -745,7 +763,7 @@ class FathomProspector:
     def detect_specialty(self, practice_data: Dict) -> str:
         """
         Detect the primary specialty of a practice
-        Returns: 'dermatology', 'plastic_surgery', 'obgyn', 'medspa', or 'general'
+        Returns: 'dermatology', 'plastic_surgery', 'obgyn', 'medspa', 'familypractice', or 'general'
         """
         name = practice_data.get('name', '').lower()
         desc = practice_data.get('description', '').lower()
@@ -757,10 +775,12 @@ class FathomProspector:
             return 'dermatology'
         elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
             return 'plastic_surgery'
-        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health']):
+        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
             return 'obgyn'
         elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
             return 'medspa'
+        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
+            return 'familypractice'
         else:
             return 'general'
     
