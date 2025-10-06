@@ -1,0 +1,189 @@
+
+# OB/GYN Scoring Configuration
+# Optimized for OB/GYN practices offering aesthetic/cosmetic services
+# Focus: Small independent practices, aesthetic services, cash-pay options
+
+weights:
+  independent_practice: 0.30        # Solo/small practices preferred
+  aesthetic_indicators: 0.25        # Aesthetic gynecology focus
+  digital_presence: 0.18            # Website and online presence
+  cash_pay_model: 0.15              # Cash-pay vs. insurance-only
+  location_quality: 0.07            # Affluent area indicators
+  practice_size: 0.05               # Smaller is better
+
+features:
+  independent_practice:
+    practice_types:
+      highly_preferred:
+        - solo practitioner
+        - single provider
+        - private practice
+        - independent obgyn
+        - boutique women's health
+      preferred:
+        - 2-physician practice
+        - small partnership
+        - women's health center
+      avoid:
+        - hospital-based
+        - large medical group
+        - health system
+        - corporate medicine
+        - 5+ physician group
+    scoring:
+      solo: 100
+      two_provider: 90
+      small_group_3_4: 70
+      medium_group_5plus: 35
+      hospital_affiliated: 15
+      corporate: 10
+    
+  aesthetic_indicators:
+    keywords:
+      high_value:
+        - vaginal rejuvenation
+        - laser vaginal therapy
+        - cosmetic gynecology
+        - aesthetic gynecology
+        - intimate wellness
+        - feminine rejuvenation
+        - labiaplasty
+        - vaginal tightening
+        - o-shot
+        - urinary incontinence treatment
+        - hormone pellets
+        - bioidentical hormones
+        - sexual wellness
+        - anti-aging
+        - aesthetic services
+        - medspa
+        - botox
+        - filler
+      medium_value:
+        - women's wellness
+        - menopause management
+        - hormone therapy
+        - wellness services
+      negative:
+        - delivery only
+        - hospital privileges only
+        - emergency obstetrics
+        - high-risk pregnancy only
+        - insurance only
+    weight_multiplier: 1.6
+    
+  digital_presence:
+    website_indicators:
+      strong_signals:
+        - aesthetic services page
+        - vaginal rejuvenation info
+        - online consultation
+        - online booking
+        - patient testimonials
+        - before/after (if applicable)
+        - educational content
+        - blog about aesthetic procedures
+        - social media presence
+      medium_signals:
+        - modern website design
+        - contact form
+        - service descriptions
+        - provider bio
+      quality_multipliers:
+        has_aesthetic_services: 1.4
+        has_online_booking: 1.2
+        has_testimonials: 1.15
+        
+  cash_pay_model:
+    indicators:
+      high_value:
+        - cash pay options
+        - self-pay pricing
+        - elective procedures
+        - cosmetic services
+        - membership program
+        - package pricing
+        - financing available
+      medium_value:
+        - accepts some insurance
+        - out-of-network options
+      negative:
+        - insurance only
+        - medicare/medicaid only
+        - no cash-pay services
+    scoring:
+      cash_pay_focus: 100
+      mixed_model: 75
+      insurance_primary: 40
+      insurance_only: 10
+    
+  location_quality:
+    affluent_indicators:
+      - upscale
+      - private
+      - boutique
+      - wellness center
+      - medical plaza
+    area_type_scores:
+      affluent_area: 100
+      medical_plaza: 85
+      suburban_upscale: 80
+      downtown: 70
+      suburban: 60
+      rural: 40
+      
+  practice_size:
+    optimal_indicators:
+      - solo
+      - single provider
+      - intimate care
+      - personalized
+      - boutique
+    size_scores:
+      solo: 100
+      two_providers: 85
+      three_to_four: 60
+      five_plus: 30
+
+penalties:
+  hospital_only_privileges: -40
+  large_group_5plus: -35
+  no_aesthetic_services: -50
+  insurance_only: -30
+  no_website: -35
+  delivery_only_focus: -40
+  emergency_focus: -45
+
+bonuses:
+  acog_member: 10              # American College of Obstetricians and Gynecologists
+  abog_certified: 15           # American Board of Obstetrics and Gynecology
+  aesthetic_training: 25
+  laser_certified: 20
+  offers_vaginal_rejuvenation: 30
+  medspa_integration: 20
+  hormone_therapy_specialist: 15
+  cash_pay_options: 20
+  membership_model: 15
+  boutique_practice: 20
+  solo_practitioner: 25
+
+thresholds:
+  minimum_score: 35
+  good_prospect: 70
+  excellent_prospect: 85
+  
+notes: |
+  OB/GYN practices offering aesthetic services are excellent device prospects.
+  Key success factors:
+  - Small, independent practice (solo or 2-provider ideal)
+  - Offers vaginal rejuvenation or other aesthetic gynecology
+  - Cash-pay services available (not insurance-only)
+  - Decision-making autonomy (not hospital-controlled)
+  - Willing to invest in new technology
+  - Serves affluent patient population
+  
+  WARNING: Large hospital-based OB groups score very low due to:
+  - Complex buying committees
+  - Insurance-focused revenue model
+  - Limited autonomy for equipment purchases
+  - Focus on traditional obstetrics vs. elective procedures
