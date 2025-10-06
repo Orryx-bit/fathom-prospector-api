@@ -1,8 +1,9 @@
+
 #!/usr/bin/env python3
 """
 Fathom Medical Device Prospecting System
 Comprehensive tool for finding and scoring medical practices
-Production-Hardened Version 4.0 - ENHANCED SEARCH
+Production-Hardened Version 3.0
 """
 
 import argparse
@@ -56,7 +57,7 @@ class GooglePlacesAPI:
         self.base_url = "https://maps.googleapis.com/maps/api"
         # Connection timeout, Read timeout
         self.timeout = (10, 30)
-    
+        
     def _make_request(self, endpoint: str, params: dict, max_retries: int = 3) -> dict:
         """
         Make API request with timeout and retry logic
@@ -65,7 +66,7 @@ class GooglePlacesAPI:
             endpoint: API endpoint (e.g., '/place/nearbysearch/json')
             params: Query parameters
             max_retries: Number of retry attempts
-        
+            
         Returns:
             API response as dict
         """
@@ -95,19 +96,19 @@ class GooglePlacesAPI:
                 else:
                     logger.warning(f"API returned status: {status}")
                     return data
-            
+                    
             except requests.Timeout:
                 logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}")
                 if attempt == max_retries - 1:
                     raise Exception("API request timed out after multiple attempts")
                 time.sleep(2 ** attempt)  # Exponential backoff
-            
+                
             except requests.RequestException as e:
                 logger.warning(f"Request error on attempt {attempt + 1}/{max_retries}: {e}")
                 if attempt == max_retries - 1:
                     raise Exception(f"API request failed: {str(e)}")
                 time.sleep(2 ** attempt)
-        
+                
         raise Exception("Max retries exceeded")
     
     def geocode(self, address: str) -> List[dict]:
@@ -116,7 +117,7 @@ class GooglePlacesAPI:
         
         Args:
             address: Address string to geocode
-        
+            
         Returns:
             List of geocoding results
         """
@@ -130,7 +131,7 @@ class GooglePlacesAPI:
             logger.error(f"Geocoding error for '{address}': {e}")
             return []
     
-    def places_nearby(self, location: dict, radius: int, keyword: str, place_type: str = 'health') -> List[dict]:
+    def places_nearby(self, location: dict, radius: int, keyword: str) -> dict:
         """
         Search for places nearby with pagination support
         
@@ -138,10 +139,9 @@ class GooglePlacesAPI:
             location: Dict with 'lat' and 'lng' keys
             radius: Search radius in meters
             keyword: Search keyword
-            place_type: Place type filter
-        
+            
         Returns:
-            List of all places found (handles pagination automatically)
+            Dict with 'results' key containing list of places found (handles pagination automatically)
         """
         endpoint = "/place/nearbysearch/json"
         all_results = []
@@ -151,8 +151,7 @@ class GooglePlacesAPI:
             params = {
                 'location': f"{location['lat']},{location['lng']}",
                 'radius': radius,
-                'keyword': keyword,
-                'type': place_type
+                'keyword': keyword
             }
             
             if next_page_token:
@@ -172,61 +171,13 @@ class GooglePlacesAPI:
                 next_page_token = data.get('next_page_token')
                 if not next_page_token:
                     break
-                
+                    
             except Exception as e:
                 logger.error(f"Error fetching places: {e}")
                 break
         
-        return all_results
-    
-    def places_text_search(self, query: str, location: dict = None, radius: int = None) -> List[dict]:
-        """
-        Text-based search for places (like Google search)
-        
-        Args:
-            query: Search query string (e.g., "med spa in San Marcos, TX")
-            location: Optional dict with 'lat' and 'lng' for biasing results
-            radius: Optional radius in meters for biasing results
-        
-        Returns:
-            List of all places found (handles pagination automatically)
-        """
-        endpoint = "/place/textsearch/json"
-        all_results = []
-        next_page_token = None
-        
-        while True:
-            params = {'query': query}
-            
-            if location:
-                params['location'] = f"{location['lat']},{location['lng']}"
-            
-            if radius:
-                params['radius'] = radius
-            
-            if next_page_token:
-                params['pagetoken'] = next_page_token
-                # Google requires 2-second delay between paginated requests
-                logger.debug("Waiting 2 seconds before next page request...")
-                time.sleep(2)
-            
-            try:
-                data = self._make_request(endpoint, params)
-                results = data.get('results', [])
-                all_results.extend(results)
-                
-                logger.info(f"Text search fetched {len(results)} results (total: {len(all_results)})")
-                
-                # Check for more pages
-                next_page_token = data.get('next_page_token')
-                if not next_page_token:
-                    break
-                    
-            except Exception as e:
-                logger.error(f"Error in text search: {e}")
-                break
-        
-        return all_results
+        # Return in format compatible with calling code
+        return {'results': all_results}
     
     def place_details(self, place_id: str, fields: List[str]) -> Optional[dict]:
         """
@@ -235,7 +186,7 @@ class GooglePlacesAPI:
         Args:
             place_id: Google Place ID
             fields: List of fields to retrieve
-        
+            
         Returns:
             Place details dict or None
         """
@@ -295,39 +246,14 @@ class FathomProspector:
         if self.demo_mode:
             logger.info("Running in DEMO MODE with mock data")
         
-        # ENHANCED Search templates for different practice types
+        # Search templates for different practice types
         self.search_templates = {
-            'med_spa': [
-                'med spa', 'medical spa', 'medspa',
-                'aesthetic clinic', 'cosmetic clinic',
-                'aesthetic medical spa', 'laser spa'
-            ],
-            'plastic_surgeon': [
-                'plastic surgeon', 'cosmetic surgeon',
-                'aesthetic surgeon', 'plastic surgery center',
-                'cosmetic surgery'
-            ],
-            'dermatologist': [
-                'dermatologist', 'dermatology clinic',
-                'skin clinic', 'cosmetic dermatology',
-                'medical dermatology'
-            ],
-            'cosmetic_surgeon': [
-                'cosmetic surgery', 'aesthetic surgery',
-                'beauty surgery', 'cosmetic procedures'
-            ],
-            'obgyn': [
-                'obgyn', 'gynecologist',
-                'women\'s health clinic',
-                'obstetrics gynecology',
-                'ob-gyn', 'obgyn clinic'
-            ],
-            'wellness': [
-                'wellness center', 'medical spa',
-                'aesthetic clinic', 'anti-aging clinic',
-                'rejuvenation clinic', 'longevity clinic',
-                'functional medicine', 'integrative medicine'
-            ]
+            'med_spa': ['med spa', 'medical spa', 'aesthetic clinic', 'cosmetic clinic'],
+            'plastic_surgeon': ['plastic surgeon', 'cosmetic surgeon', 'aesthetic surgeon'],
+            'dermatologist': ['dermatologist', 'dermatology clinic', 'skin clinic'],
+            'cosmetic_surgeon': ['cosmetic surgery', 'aesthetic surgery', 'beauty surgery'],
+            'obgyn': ['obgyn', 'gynecologist', 'women\'s health clinic'],
+            'wellness': ['wellness center', 'anti-aging clinic', 'rejuvenation clinic']
         }
         
         # Hospital/medical center exclusion patterns
@@ -349,6 +275,97 @@ class FathomProspector:
             'Device C': {
                 'specialties': ['weight loss', 'muscle stimulation', 'body contouring'],
                 'keywords': ['weight loss', 'ems', 'muscle building', 'fat reduction']
+            }
+        }
+        
+        # Specialty-specific scoring configurations
+        self.specialty_scoring = {
+            'dermatology': {
+                'weights': {
+                    'specialty_match': 20,
+                    'decision_autonomy': 20,
+                    'aesthetic_services': 15,
+                    'competing_devices': 10,
+                    'social_activity': 10,
+                    'reviews_rating': 10,
+                    'search_visibility': 10,
+                    'financial_indicators': 10,
+                    'weight_loss_services': 5
+                },
+                'high_value_keywords': [
+                    'laser', 'ipl', 'photorejuvenation', 'hair removal',
+                    'botox', 'fillers', 'skin tightening', 'acne treatment'
+                ]
+            },
+            'plastic_surgery': {
+                'weights': {
+                    'specialty_match': 20,
+                    'decision_autonomy': 20,
+                    'aesthetic_services': 18,
+                    'competing_devices': 12,
+                    'social_activity': 10,
+                    'reviews_rating': 8,
+                    'search_visibility': 7,
+                    'financial_indicators': 10,
+                    'weight_loss_services': 5
+                },
+                'high_value_keywords': [
+                    'body contouring', 'liposuction', 'coolsculpting',
+                    'breast augmentation', 'tummy tuck', 'fat reduction'
+                ]
+            },
+            'obgyn': {
+                'weights': {
+                    'specialty_match': 20,
+                    'decision_autonomy': 25,
+                    'aesthetic_services': 12,
+                    'competing_devices': 8,
+                    'social_activity': 8,
+                    'reviews_rating': 12,
+                    'search_visibility': 10,
+                    'financial_indicators': 10,
+                    'weight_loss_services': 8
+                },
+                'high_value_keywords': [
+                    'women\'s wellness', 'aesthetic gynecology', 'vaginal rejuvenation',
+                    'hormone therapy', 'postpartum', 'wellness', 'cosmetic gynecology'
+                ]
+            },
+            'medspa': {
+                'weights': {
+                    'specialty_match': 18,
+                    'decision_autonomy': 22,
+                    'aesthetic_services': 20,
+                    'competing_devices': 15,
+                    'social_activity': 12,
+                    'reviews_rating': 8,
+                    'search_visibility': 8,
+                    'financial_indicators': 12,
+                    'weight_loss_services': 10
+                },
+                'high_value_keywords': [
+                    'body sculpting', 'coolsculpting', 'emsculpt', 'laser',
+                    'botox', 'fillers', 'skin tightening', 'cellulite',
+                    'inch loss', 'fat reduction'
+                ]
+            },
+            'familypractice': {
+                'weights': {
+                    'specialty_match': 18,
+                    'decision_autonomy': 25,
+                    'aesthetic_services': 12,
+                    'competing_devices': 8,
+                    'social_activity': 5,
+                    'reviews_rating': 8,
+                    'search_visibility': 5,
+                    'financial_indicators': 12,
+                    'weight_loss_services': 20  # HIGHEST - key entry point
+                },
+                'high_value_keywords': [
+                    'weight loss', 'glp-1', 'semaglutide', 'tirzepatide',
+                    'wellness', 'longevity', 'preventive care', 'functional medicine',
+                    'integrative medicine', 'anti-aging', 'hormone therapy'
+                ]
             }
         }
     
@@ -376,7 +393,7 @@ class FathomProspector:
                 self.existing_customers.add(cleaned_name)
             
             logger.info(f"Loaded {len(self.existing_customers)} existing customers for exclusion")
-        
+            
         except Exception as e:
             logger.error(f"Failed to load existing customers CSV: {str(e)}")
     
@@ -431,60 +448,10 @@ class FathomProspector:
         
         return mock_practices
     
-    def _generate_keyword_variations(self, base_keyword: str) -> List[str]:
-        """Generate keyword variations for better search coverage"""
-        variations = [base_keyword]
-        
-        base_lower = base_keyword.lower()
-        
-        # Common medical spa variations
-        if 'med spa' in base_lower:
-            variations.extend([
-                base_keyword.replace('med spa', 'medical spa'),
-                base_keyword.replace('med spa', 'medspa'),
-                base_keyword.replace('med spa', 'aesthetic clinic'),
-                base_keyword.replace('med spa', 'cosmetic clinic')
-            ])
-        
-        # Cosmetic surgery variations
-        if 'cosmetic' in base_lower:
-            variations.extend([
-                base_keyword.replace('cosmetic', 'aesthetic'),
-                base_keyword.replace('cosmetic', 'plastic surgery')
-            ])
-        
-        # OBGYN variations
-        if 'obgyn' in base_lower:
-            variations.extend([
-                base_keyword.replace('obgyn', 'gynecologist'),
-                base_keyword.replace('obgyn', 'women\'s health'),
-                base_keyword.replace('obgyn', 'obstetrics gynecology')
-            ])
-        
-        # Wellness variations
-        if 'wellness' in base_lower:
-            variations.extend([
-                base_keyword.replace('wellness center', 'medical spa'),
-                base_keyword.replace('wellness center', 'aesthetic clinic'),
-                base_keyword.replace('wellness', 'integrative medicine')
-            ])
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_variations = []
-        for v in variations:
-            v_lower = v.lower().strip()
-            if v_lower not in seen and v_lower:
-                seen.add(v_lower)
-                unique_variations.append(v)
-        
-        # Limit to 5 variations to avoid quota issues
-        return unique_variations[:5]
-    
     @sleep_and_retry
     @limits(calls=10, period=60)
     def google_places_search(self, query: str, location: str, radius: int = 25000) -> List[Dict]:
-        """Search Google Places API with enhanced text search and keyword variations"""
+        """Search Google Places API for medical practices"""
         
         if self.demo_mode:
             logger.info(f"DEMO MODE: Generating mock data for {query} near {location}")
@@ -493,85 +460,48 @@ class FathomProspector:
         try:
             logger.info(f"Searching Google Places: {query} near {location}")
             
-            # Geocode location
             geocode_result = self.gmaps_api.geocode(location)
             if not geocode_result:
                 logger.error(f"Could not geocode location: {location}")
                 return []
             
             lat_lng = geocode_result[0]['geometry']['location']
-            logger.info(f"Geocoded {location} to: {lat_lng}")
             
-            # Generate keyword variations
-            keyword_variations = self._generate_keyword_variations(query)
-            logger.info(f"Searching with {len(keyword_variations)} keyword variations: {keyword_variations}")
+            places_result = self.gmaps_api.places_nearby(
+                location=lat_lng,
+                radius=radius,
+                keyword=query
+            )
             
-            # Use Text Search (better results than Nearby Search)
-            all_places = []
-            seen_place_ids = set()
-            
-            for keyword_var in keyword_variations:
-                # Build full query
-                full_query = f"{keyword_var} in {location}"
-                logger.info(f"Text search query: {full_query}")
-                
-                # Use text search instead of nearby
-                places_result = self.gmaps_api.places_text_search(
-                    query=full_query,
-                    location=lat_lng,
-                    radius=radius
-                )
-                
-                logger.info(f"Text search returned {len(places_result)} results for '{keyword_var}'")
-                
-                for place in places_result:
-                    place_id = place.get('place_id')
-                    
-                    # Skip duplicates and hospitals
-                    if place_id in seen_place_ids:
-                        logger.debug(f"Skipping duplicate: {place.get('name')}")
-                        continue
-                    if self.is_hospital_system(place.get('name', '')):
-                        logger.info(f"Skipping hospital system: {place.get('name')}")
-                        continue
-                    
-                    seen_place_ids.add(place_id)
-                    all_places.append(place)
-                
-                # Rate limiting between keyword searches
-                time.sleep(1)
-            
-            logger.info(f"Found {len(all_places)} unique places across all keyword variations")
-            
-            # Get detailed info for all places
             results = []
-            for i, place in enumerate(all_places, 1):
-                try:
-                    logger.info(f"Fetching details for place {i}/{len(all_places)}: {place.get('name')}")
-                    
-                    place_details = self.gmaps_api.place_details(
-                        place_id=place['place_id'],
-                        fields=['name', 'formatted_address', 'formatted_phone_number', 
-                               'website', 'rating', 'user_ratings_total', 'types',
-                               'geometry', 'business_status']
-                    )
-                    
-                    if place_details:
-                        results.append(place_details)
-                    
-                    time.sleep(0.2)  # Rate limiting
-                    
-                except Exception as e:
-                    logger.warning(f"Error getting details for {place.get('name')}: {e}")
+            for place in places_result.get('results', []):
+                # Filter out hospital systems
+                if self.is_hospital_system(place.get('name', '')):
+                    logger.info(f"Skipping hospital system: {place.get('name', '')}")
                     continue
+                
+                # Get full place details
+                place_details = self.get_place_details(place['place_id'])
+                
+                if not place_details or not place_details.get('name'):
+                    logger.debug(f"Skipping place with no details: {place.get('place_id', 'unknown')}")
+                    continue
+                
+                # CRITICAL: Apply strict medical business filtering
+                if not self.is_medical_business(place_details):
+                    continue
+                
+                results.append(place_details)
+                time.sleep(0.1)
             
-            logger.info(f"Successfully retrieved details for {len(results)} places")
+            logger.info(f"✅ {len(results)} medical businesses passed all filters")
             return results
-        
+            
         except Exception as e:
             logger.error(f"Error in Google Places search: {str(e)}")
-            logger.exception(e)  # Full traceback
-            return []
+            logger.info("Falling back to demo mode")
+            self.demo_mode = True
+            return self.get_mock_data(query, location)
     
     def get_place_details(self, place_id: str) -> Optional[Dict]:
         """Get detailed information for a specific place"""
@@ -582,11 +512,67 @@ class FathomProspector:
                        'website', 'rating', 'user_ratings_total', 'types']
             )
             
-            return details
-        
+            # place_details() already returns the result dict, not the full response
+            return details if details else None
+            
         except Exception as e:
             logger.error(f"Error getting place details: {str(e)}")
             return None
+    
+    def is_medical_business(self, place_data: Dict) -> bool:
+        """
+        Strict filtering: Check if a place is a legitimate medical/aesthetic business
+        using Google Places types
+        """
+        place_types = place_data.get('types', [])
+        name = place_data.get('name', '').lower()
+        
+        # REQUIRED: Must have at least ONE of these medical-related types
+        medical_types = {
+            'doctor', 'health', 'spa', 'beauty_salon', 'hair_care',
+            'physiotherapist', 'dentist', 'hospital'
+        }
+        
+        has_medical_type = any(ptype in place_types for ptype in medical_types)
+        
+        if not has_medical_type:
+            logger.info(f"❌ FILTERED OUT (no medical type): {name} - Types: {place_types}")
+            return False
+        
+        # EXCLUDE: General stores, restaurants, etc.
+        exclude_types = {
+            'store', 'food', 'restaurant', 'cafe', 'bar', 'grocery_or_supermarket',
+            'shopping_mall', 'clothing_store', 'jewelry_store', 'shoe_store',
+            'electronics_store', 'furniture_store', 'home_goods_store',
+            'hardware_store', 'car_dealer', 'car_repair', 'gas_station',
+            'gym', 'night_club', 'movie_theater', 'bowling_alley',
+            'amusement_park', 'aquarium', 'art_gallery', 'museum',
+            'library', 'school', 'university', 'real_estate_agency',
+            'travel_agency', 'insurance_agency', 'accounting', 'lawyer',
+            'general_contractor', 'electrician', 'plumber', 'roofing_contractor',
+            'locksmith', 'moving_company', 'storage', 'laundry', 'car_wash'
+        }
+        
+        has_exclude_type = any(ptype in place_types for ptype in exclude_types)
+        
+        if has_exclude_type:
+            logger.info(f"❌ FILTERED OUT (non-medical business): {name} - Types: {place_types}")
+            return False
+        
+        # EXCLUDE: Keywords indicating non-medical businesses
+        exclude_keywords = [
+            'pharmacy', 'drugstore', 'cvs', 'walgreens', 'walmart', 'target',
+            'urgent care', 'emergency room', 'laboratory', 'imaging center',
+            'physical therapy', 'chiropractor', 'massage', 'acupuncture',
+            'veterinary', 'pet', 'animal', 'dentist', 'orthodont'
+        ]
+        
+        if any(keyword in name for keyword in exclude_keywords):
+            logger.info(f"❌ FILTERED OUT (excluded keyword): {name}")
+            return False
+        
+        logger.info(f"✅ PASSED FILTER: {name} - Types: {place_types}")
+        return True
     
     def is_hospital_system(self, name: str) -> bool:
         """Check if a practice name indicates a hospital system"""
@@ -598,11 +584,11 @@ class FathomProspector:
         try:
             if not url:
                 return False
-            
+                
             parsed = urlparse(url)
             if not parsed.scheme or not parsed.netloc:
                 return False
-            
+                
             robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
             
             rp = RobotFileParser()
@@ -674,7 +660,7 @@ class FathomProspector:
                 'social_links': [],
                 'staff_count': 0
             }
-        
+            
         try:
             time.sleep(random.uniform(0.5, 1.0))
             
@@ -754,7 +740,7 @@ class FathomProspector:
             logger.info(f"Website scrape complete for {url}: {len(data['services'])} services found")
             
             return data
-        
+            
         except requests.exceptions.Timeout:
             logger.error(f"Timeout scraping website {url}")
             return {
@@ -774,119 +760,425 @@ class FathomProspector:
                 'staff_count': 0
             }
     
-    def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int]]:
-        """Calculate AI-powered scoring based on weighted criteria"""
+    def detect_specialty(self, practice_data: Dict) -> str:
+        """
+        Detect the primary specialty of a practice
+        Returns: 'dermatology', 'plastic_surgery', 'obgyn', 'medspa', 'familypractice', or 'general'
+        """
+        name = practice_data.get('name', '').lower()
+        desc = practice_data.get('description', '').lower()
+        services = ' '.join(practice_data.get('services', [])).lower()
+        all_text = f"{name} {desc} {services}"
+        
+        # Priority order (most specific first)
+        if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
+            return 'dermatology'
+        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
+            return 'plastic_surgery'
+        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
+            return 'obgyn'
+        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
+            return 'medspa'
+        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
+            return 'familypractice'
+        else:
+            return 'general'
+    
+    def discover_site_pages(self, base_url: str) -> List[str]:
+        """
+        Discover high-value pages on a practice website
+        Returns list of URLs to scrape
+        """
+        common_paths = [
+            '',  # Homepage
+            '/about', '/about-us', '/our-practice', '/who-we-are',
+            '/services', '/treatments', '/procedures', '/what-we-offer',
+            '/team', '/our-team', '/providers', '/doctors', '/staff', '/meet-the-team',
+            '/contact', '/locations', '/visit-us'
+        ]
+        
+        urls_to_scrape = []
+        
+        for path in common_paths:
+            url = urljoin(base_url, path)
+            # Add to list (we'll check if it exists when we try to scrape it)
+            if url not in urls_to_scrape:
+                urls_to_scrape.append(url)
+        
+        return urls_to_scrape[:7]  # Limit to 7 URLs max
+    
+    def scrape_single_page(self, url: str) -> Dict:
+        """
+        Scrape a single page and return extracted data
+        Returns dict with services, staff_mentions, text, social_links
+        """
+        try:
+            response = self.session.get(url, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Extract text content
+            text_content = soup.get_text().lower()
+            
+            # Find services
+            service_keywords = [
+                'laser hair removal', 'botox', 'fillers', 'coolsculpting',
+                'body contouring', 'skin tightening', 'photorejuvenation',
+                'cellulite treatment', 'weight loss', 'ems', 'muscle building',
+                'emsculpt', 'vaginal rejuvenation', 'hormone therapy',
+                'chemical peel', 'microneedling', 'hydrafacial'
+            ]
+            
+            services_found = [kw for kw in service_keywords if kw in text_content]
+            
+            # Find social links
+            social_platforms = {
+                'facebook.com': 'Facebook',
+                'instagram.com': 'Instagram',
+                'twitter.com': 'Twitter',
+                'linkedin.com': 'LinkedIn',
+                'youtube.com': 'YouTube'
+            }
+            
+            social_links = []
+            for link in soup.find_all('a', href=True):
+                href = link['href'].lower()
+                for domain, platform_name in social_platforms.items():
+                    if domain in href and platform_name not in social_links:
+                        social_links.append(platform_name)
+            
+            # Find staff mentions
+            staff_indicators = soup.find_all(text=re.compile(
+                r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
+            
+            return {
+                'services': services_found,
+                'staff_mentions': list(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5)),
+                'text': text_content,
+                'social_links': social_links
+            }
+            
+        except Exception as e:
+            logger.debug(f"Error scraping {url}: {str(e)}")
+            return {
+                'services': [],
+                'staff_mentions': [],
+                'text': '',
+                'social_links': []
+            }
+    
+    def scrape_website_deep(self, base_url: str, max_pages: int = 5) -> Dict[str, any]:
+        """
+        Intelligently scrape multiple pages from a medical practice website
+        Returns aggregated data from all pages
+        """
+        if self.demo_mode:
+            logger.info(f"DEMO MODE: Using mock website data for {base_url}")
+            return self.get_mock_website_data(base_url)
+        
+        if not base_url:
+            return {
+                'title': 'Not Available - No Website',
+                'description': 'Not Available - No Website',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0
+            }
+        
+        if not self.check_robots_txt(base_url):
+            logger.warning(f"Robots.txt disallows scraping: {base_url}")
+            # Fall back to single page
+            return self.scrape_website(base_url)
+        
+        try:
+            # First, get homepage for title and description
+            time.sleep(random.uniform(0.5, 1.0))
+            response = self.session.get(base_url, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.content, 'html.parser')
+            
+            # Get title
+            title = soup.title.string.strip() if soup.title and soup.title.string else 'Not Available'
+            
+            # Get description
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            description = 'Not Available'
+            if meta_desc and meta_desc.get('content'):
+                description = meta_desc.get('content', '').strip()
+            else:
+                og_desc = soup.find('meta', attrs={'property': 'og:description'})
+                if og_desc and og_desc.get('content'):
+                    description = og_desc.get('content', '').strip()
+            
+            # Discover pages to scrape
+            pages_to_scrape = self.discover_site_pages(base_url)[:max_pages]
+            
+            # Aggregate data from multiple pages
+            all_services = set()
+            all_social_links = set()
+            all_staff_mentions = []
+            all_text = []
+            pages_scraped = 0
+            
+            for page_url in pages_to_scrape:
+                if pages_scraped >= max_pages:
+                    break
+                
+                try:
+                    time.sleep(1.0)  # Respectful delay
+                    page_data = self.scrape_single_page(page_url)
+                    
+                    all_services.update(page_data['services'])
+                    all_social_links.update(page_data['social_links'])
+                    all_staff_mentions.extend(page_data['staff_mentions'])
+                    all_text.append(page_data['text'])
+                    pages_scraped += 1
+                    
+                except Exception as e:
+                    logger.debug(f"Skipping page {page_url}: {str(e)}")
+                    continue
+            
+            # Calculate staff count from all mentions
+            unique_staff = len(set(all_staff_mentions))
+            staff_count = min(unique_staff, 20)
+            
+            logger.info(f"Deep scrape complete for {base_url}: {pages_scraped} pages, {len(all_services)} services found")
+            
+            return {
+                'title': title,
+                'description': description,
+                'services': list(all_services),
+                'social_links': list(all_social_links),
+                'staff_count': staff_count
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in deep scrape for {base_url}: {str(e)}")
+            # Fall back to single-page scrape
+            return self.scrape_website(base_url)
+    
+    def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str]:
+        """
+        Calculate AI-powered scoring with specialty-specific weights
+        
+        CORRECTED LOGIC FOR VENUS DEVICE SALES:
+        - SOLO/SMALL practices score HIGHER (single decision maker)
+        - NO hospital affiliation scores HIGHER (purchasing freedom)
+        - OFFICE-BASED scores HIGHER (no permission needed)
+        - PRIVATE ownership scores HIGHER (financial autonomy)
+        
+        Returns:
+            (total_score, score_breakdown, detected_specialty)
+        """
+        
+        # STEP 1: Detect specialty
+        specialty = self.detect_specialty(practice_data)
+        
+        # STEP 2: Get specialty-specific config (or use default)
+        if specialty in self.specialty_scoring:
+            config = self.specialty_scoring[specialty]
+            logger.info(f"🎯 Using {specialty.upper()} scoring profile")
+        else:
+            # Default to dermatology weights for general practices
+            config = self.specialty_scoring['dermatology']
+            logger.info(f"Using DEFAULT scoring profile for {specialty}")
+        
+        weights = config['weights']
+        high_value_keywords = config['high_value_keywords']
         
         scores = {
             'specialty_match': 0,
+            'decision_autonomy': 0,
             'aesthetic_services': 0,
             'competing_devices': 0,
             'social_activity': 0,
-            'practice_size': 0,
             'reviews_rating': 0,
             'search_visibility': 0,
-            'geography_fit': 0,
+            'financial_indicators': 0,
             'weight_loss_services': 0
         }
         
         practice_name = practice_data.get('name', '').lower()
         practice_desc = practice_data.get('description', '').lower()
-        all_text = f"{practice_name} {practice_desc}"
+        address = practice_data.get('formatted_address', '').lower()
+        all_text = f"{practice_name} {practice_desc} {address}"
         
-        # Hospital exclusion
-        hospital_exclusions = [
-            'hospital', 'medical center', 'health system', 'healthcare system'
-        ]
-        is_hospital = any(exclusion in all_text for exclusion in hospital_exclusions)
-        
-        # 1. Specialty match (20 points)
+        # ═══════════════════════════════════════════════════════════
+        # 1. Specialty Match (20 points)
+        # ═══════════════════════════════════════════════════════════
         specialty_keywords = [
-            'dermatology', 'plastic surgery', 'cosmetic', 'aesthetic',
-            'med spa', 'medical spa', 'skin care', 'beauty'
+            'dermatology', 'dermatologist', 'plastic surgery', 'plastic surgeon',
+            'cosmetic', 'aesthetic', 'med spa', 'medical spa', 'medspa',
+            'skin care', 'skincare', 'beauty', 'obgyn', 'ob/gyn', 'gynecologist',
+            'women\'s health', 'family practice', 'family medicine'
         ]
         
-        specialty_matches = sum(1 for keyword in specialty_keywords 
-                               if keyword in all_text)
-        scores['specialty_match'] = min(specialty_matches * 5, 20)
+        specialty_matches = sum(1 for keyword in specialty_keywords if keyword in all_text)
+        scores['specialty_match'] = min(specialty_matches * 4, 20)
         
-        if is_hospital:
-            scores['specialty_match'] = max(0, scores['specialty_match'] - 15)
+        # ═══════════════════════════════════════════════════════════
+        # 2. Decision-Making Autonomy (20 points) 🔥 CRITICAL
+        # CORRECTED: Solo/small = HIGH score (single decision maker)
+        # ═══════════════════════════════════════════════════════════
+        staff_count = practice_data.get('staff_count', 0)
         
-        # 2. Aesthetic services (15 points)
+        # Check for hospital affiliation indicators
+        hospital_indicators = [
+            'hospital', 'medical center', 'health system', 'healthcare system',
+            'affiliated', 'network', 'regional medical', 'university medical'
+        ]
+        has_hospital_affiliation = any(indicator in all_text for indicator in hospital_indicators)
+        
+        # Check for corporate/chain indicators
+        corporate_indicators = [
+            'corporate', 'chain', 'franchise', 'national', 'locations',
+            'branches', 'group practice', 'associates'
+        ]
+        is_corporate = any(indicator in all_text for indicator in corporate_indicators)
+        
+        # Base score by staff size (REVERSED - smaller is better)
+        if staff_count == 0 or staff_count == 1:
+            autonomy_score = 20  # ✅ Solo practice - PERFECT
+        elif staff_count == 2:
+            autonomy_score = 18  # ✅ Very small - EXCELLENT
+        elif staff_count <= 4:
+            autonomy_score = 15  # ✅ Small - VERY GOOD
+        elif staff_count <= 6:
+            autonomy_score = 10  # 🟡 Medium - OK
+        elif staff_count <= 10:
+            autonomy_score = 5   # 🟠 Large - Harder
+        else:
+            autonomy_score = 2   # ❌ Very large - Avoid
+        
+        # Penalize hospital affiliation (no purchasing freedom)
+        if has_hospital_affiliation:
+            autonomy_score = max(0, autonomy_score - 10)
+        
+        # Penalize corporate/chain (centralized purchasing)
+        if is_corporate:
+            autonomy_score = max(0, autonomy_score - 8)
+        
+        scores['decision_autonomy'] = autonomy_score
+        
+        # ═══════════════════════════════════════════════════════════
+        # 3. Aesthetic Services (15 points)
+        # ═══════════════════════════════════════════════════════════
         services = practice_data.get('services', [])
         aesthetic_services = [
             'botox', 'fillers', 'laser', 'coolsculpting', 'body contouring',
-            'skin tightening', 'hair removal'
+            'skin tightening', 'hair removal', 'ipl', 'radiofrequency',
+            'body sculpting', 'cellulite', 'fat reduction'
         ]
         
         service_matches = sum(1 for service in aesthetic_services 
-                             if any(service in s.lower() for s in services))
+                            if any(service in s.lower() for s in services))
         scores['aesthetic_services'] = min(service_matches * 3, 15)
         
-        # 3. Competing devices (10 points)
+        # ═══════════════════════════════════════════════════════════
+        # 4. Competing Devices (10 points)
+        # ═══════════════════════════════════════════════════════════
         competing_devices = [
-            'coolsculpting', 'thermage', 'ultherapy', 'sculptra'
+            'coolsculpting', 'thermage', 'ultherapy', 'sculptra', 
+            'emsculpt', 'vanquish', 'exilis'
         ]
         
-        device_count = sum(1 for device in competing_devices 
-                          if device in practice_desc)
+        device_count = sum(1 for device in competing_devices if device in practice_desc)
         scores['competing_devices'] = min(device_count * 5, 10)
         
-        # 4. Social media activity (10 points)
+        # ═══════════════════════════════════════════════════════════
+        # 5. Social Media Activity (10 points)
+        # ═══════════════════════════════════════════════════════════
         social_links = practice_data.get('social_links', [])
         scores['social_activity'] = min(len(social_links) * 3, 10)
         
-        # 5. Practice size (15 points - prefer smaller)
-        staff_count = practice_data.get('staff_count', 0)
-        
-        if staff_count <= 2:
-            scores['practice_size'] = 15
-        elif staff_count <= 4:
-            scores['practice_size'] = 12
-        elif staff_count <= 8:
-            scores['practice_size'] = 8
-        else:
-            scores['practice_size'] = 3
-        
-        # 6. Reviews & rating (10 points)
+        # ═══════════════════════════════════════════════════════════
+        # 6. Reviews & Rating (10 points)
+        # ═══════════════════════════════════════════════════════════
         rating = practice_data.get('rating', 0)
         review_count = practice_data.get('user_ratings_total', 0)
         
         if rating >= 4.5 and review_count >= 50:
             scores['reviews_rating'] = 10
-        elif rating >= 4.0 and review_count >= 20:
-            scores['reviews_rating'] = 6
-        elif rating >= 3.5:
-            scores['reviews_rating'] = 3
-        
-        # 7. Search visibility (10 points)
-        website = practice_data.get('website', '')
-        if website:
-            scores['search_visibility'] = 10
-        elif practice_data.get('formatted_phone_number'):
-            scores['search_visibility'] = 5
-        
-        # 8. Geography fit (5 points)
-        address = practice_data.get('formatted_address', '').lower()
-        
-        small_city_indicators = ['rd', 'drive', 'country', 'rural']
-        
-        if any(indicator in address for indicator in small_city_indicators):
-            scores['geography_fit'] = 5
+        elif rating >= 4.0 and review_count >= 25:
+            scores['reviews_rating'] = 7
+        elif rating >= 3.5 and review_count >= 10:
+            scores['reviews_rating'] = 4
         else:
-            scores['geography_fit'] = 3
+            scores['reviews_rating'] = 1
         
-        # 9. Weight loss services (5 points)
+        # ═══════════════════════════════════════════════════════════
+        # 7. Search Visibility (10 points)
+        # ═══════════════════════════════════════════════════════════
+        website = practice_data.get('website', '')
+        if website and 'http' in website:
+            scores['search_visibility'] = 10
+        elif website:
+            scores['search_visibility'] = 7
+        elif practice_data.get('formatted_phone_number'):
+            scores['search_visibility'] = 4
+        else:
+            scores['search_visibility'] = 1
+        
+        # ═══════════════════════════════════════════════════════════
+        # 8. Financial Indicators (10 points)
+        # Affluent area + cash-pay readiness
+        # ═══════════════════════════════════════════════════════════
+        
+        # Check for affluent area indicators
+        affluent_indicators = [
+            'hills', 'park', 'lake', 'estates', 'plaza', 'center',
+            'avenue', 'boulevard', 'suite'
+        ]
+        is_affluent_area = any(indicator in address for indicator in affluent_indicators)
+        
+        # Check for cash-pay service keywords
+        cashpay_keywords = [
+            'aesthetic', 'cosmetic', 'elective', 'spa', 'beauty',
+            'anti-aging', 'wellness', 'rejuvenation'
+        ]
+        offers_cashpay = any(keyword in all_text for keyword in cashpay_keywords)
+        
+        financial_score = 0
+        if is_affluent_area:
+            financial_score += 5
+        if offers_cashpay:
+            financial_score += 5
+        
+        scores['financial_indicators'] = financial_score
+        
+        # ═══════════════════════════════════════════════════════════
+        # 9. Weight Loss Services (5 points)
+        # ═══════════════════════════════════════════════════════════
         weight_keywords = [
-            'weight loss', 'medical weight', 'hormone therapy', 'iv therapy'
+            'weight loss', 'medical weight', 'hormone therapy', 'iv therapy',
+            'body contouring', 'fat reduction', 'inch loss'
         ]
         
-        weight_matches = sum(1 for keyword in weight_keywords 
-                            if keyword in all_text)
+        weight_matches = sum(1 for keyword in weight_keywords if keyword in all_text)
         scores['weight_loss_services'] = min(weight_matches * 2, 5)
         
-        total_score = sum(scores.values())
-        return total_score, scores
+        # ═══════════════════════════════════════════════════════════
+        # 10. Specialty-Specific Keyword Bonus (up to +10 points)
+        # ═══════════════════════════════════════════════════════════
+        services = practice_data.get('services', [])
+        services_text = ' '.join(services).lower()
+        all_text_with_services = f"{practice_name} {practice_desc} {services_text}"
+        
+        keyword_bonus = 0
+        for keyword in high_value_keywords:
+            if keyword in all_text_with_services:
+                keyword_bonus += 2
+        keyword_bonus = min(keyword_bonus, 10)
+        
+        # ═══════════════════════════════════════════════════════════
+        # TOTAL SCORE (out of 110, normalized to 100)
+        # ═══════════════════════════════════════════════════════════
+        base_score = sum(scores.values())
+        total_score = min(base_score + keyword_bonus, 100)
+        
+        return total_score, scores, specialty
     
     def recommend_device(self, practice_data: Dict, ai_scores: Dict) -> Dict:
         """Recommend top device based on practice profile"""
@@ -918,7 +1210,7 @@ class FathomProspector:
             }
         
         sorted_devices = sorted(device_scores.items(), 
-                               key=lambda x: x[1]['score'], reverse=True)
+                              key=lambda x: x[1]['score'], reverse=True)
         
         recommendations = []
         for i, (device_name, data) in enumerate(sorted_devices[:3]):
@@ -935,7 +1227,7 @@ class FathomProspector:
         }
     
     def craft_outreach_opener(self, practice_data: Dict, ai_score: int, 
-                             device_rec: Dict) -> str:
+                            device_rec: Dict) -> str:
         """Generate personalized outreach opener"""
         
         if ai_score < 70:
@@ -975,14 +1267,14 @@ class FathomProspector:
             'title': 'Not Available'
         }
         
-        # Scrape website if available
+        # Scrape website if available (using deep multi-page scraping)
         if practice_record['website']:
-            logger.info(f"Scraping website: {practice_record['website']}")
-            website_data = self.scrape_website(practice_record['website'])
+            logger.info(f"Deep scraping website: {practice_record['website']}")
+            website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
             practice_record.update(website_data)
         
-        # Calculate AI score
-        ai_score, score_breakdown = self.calculate_ai_score(practice_record)
+        # Calculate AI score with specialty detection
+        ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
         
         # Get device recommendations
         device_recommendations = self.recommend_device(practice_record, score_breakdown)
@@ -994,7 +1286,7 @@ class FathomProspector:
         # Calculate data completeness
         required_fields = ['name', 'address', 'phone', 'website']
         completeness = sum(1 for field in required_fields 
-                          if practice_record.get(field)) / len(required_fields)
+                         if practice_record.get(field)) / len(required_fields)
         
         # Determine confidence level
         if ai_score >= 70 and completeness >= 0.75:
@@ -1007,6 +1299,7 @@ class FathomProspector:
         # Compile final record
         final_record = {
             **practice_record,
+            'specialty': specialty,
             'ai_score': ai_score,
             'score_breakdown': score_breakdown,
             'primary_device_rec': device_recommendations.get('primary_recommendation', {}).get('device', ''),
@@ -1027,12 +1320,12 @@ class FathomProspector:
             return
         
         csv_columns = [
-            'name', 'address', 'phone', 'website', 'rating', 'review_count',
+            'name', 'specialty', 'address', 'phone', 'website', 'rating', 'review_count',
             'ai_score', 'confidence_level', 'primary_device_rec', 'device_rationale',
             'outreach_opener', 'services', 'social_links', 'staff_count',
-            'specialty_match_score', 'aesthetic_services_score', 'competing_devices_score',
-            'social_activity_score', 'practice_size_score', 'reviews_rating_score',
-            'search_visibility_score', 'geography_fit_score', 'weight_loss_services_score',
+            'specialty_match_score', 'decision_autonomy_score', 'aesthetic_services_score', 
+            'competing_devices_score', 'social_activity_score', 'reviews_rating_score',
+            'search_visibility_score', 'financial_indicators_score', 'weight_loss_services_score',
             'data_completeness'
         ]
         
@@ -1078,7 +1371,7 @@ MEDICAL DEVICE PROSPECTING REPORT
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 EXECUTIVE SUMMARY
-====================
+================
 Total Prospects Analyzed: {total_prospects}
 Average AI Score: {avg_score:.1f}/100
 
@@ -1089,7 +1382,7 @@ Medium-Fit (50-69): {medium_fit} ({medium_fit/total_prospects*100:.1f}%)
 Low-Fit (0-49): {low_fit} ({low_fit/total_prospects*100:.1f}%)
 
 TOP 10 HIGH-PRIORITY PROSPECTS
-====================
+==============================
 """
         
         for i, prospect in enumerate(sorted_results[:10], 1):
@@ -1111,7 +1404,6 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         """Main prospecting workflow"""
         
         logger.info(f"Starting prospecting for {keywords} near {location}")
-        logger.info(f"Using ENHANCED TEXT SEARCH with keyword variations")
         
         all_results = []
         
@@ -1120,15 +1412,13 @@ TOP 10 HIGH-PRIORITY PROSPECTS
             
             places = self.google_places_search(keyword, location, radius * 1000)
             
-            logger.info(f"Found {len(places)} places for keyword '{keyword}'")
-            
             for place in places[:max_results]:
                 try:
                     processed_practice = self.process_practice(place)
                     if processed_practice:
                         all_results.append(processed_practice)
                         logger.info(f"Processed: {processed_practice.get('name', 'Unknown')} - Score: {processed_practice.get('ai_score', 0)}")
-                
+                    
                 except Exception as e:
                     logger.error(f"Error processing practice: {str(e)}")
                     continue
@@ -1142,7 +1432,7 @@ TOP 10 HIGH-PRIORITY PROSPECTS
                 seen.add(key)
                 unique_results.append(result)
         
-        logger.info(f"Found {len(unique_results)} unique prospects (removed {len(all_results) - len(unique_results)} duplicates)")
+        logger.info(f"Found {len(unique_results)} unique prospects")
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         csv_filename = f"prospects_{timestamp}.csv"
@@ -1199,7 +1489,7 @@ def main():
         
         radius = args.radius or int(input(f"Enter search radius in km (default: 25): ") or "25")
         max_results = args.max_results or int(input(f"Enter max results per keyword (default: 150): ") or "150")
-    
+        
     else:
         keywords = args.keywords
         city = args.city
@@ -1212,7 +1502,6 @@ def main():
     print(f"Radius: {radius} km")
     print(f"Max results per keyword: {max_results}")
     print(f"Google Places API: {'✓ Configured' if prospector.gmaps_key else '✗ Missing'}")
-    print(f"ENHANCED SEARCH: Using Text Search with keyword variations")
     sys.stdout.flush()
     
     try:
@@ -1229,7 +1518,7 @@ def main():
             print(f"\nTOP 5 PROSPECTS:")
             for i, prospect in enumerate(top_prospects, 1):
                 print(f"{i}. {prospect.get('name', 'Unknown')} - Score: {prospect.get('ai_score', 0)}/100")
-    
+        
     except Exception as e:
         logger.error(f"Error during prospecting: {str(e)}")
         print(f"Error: {str(e)}")
