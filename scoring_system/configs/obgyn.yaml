@@ -1,189 +1,111 @@
 
-# OB/GYN Scoring Configuration
-# Optimized for OB/GYN practices offering aesthetic/cosmetic services
-# Focus: Small independent practices, aesthetic services, cash-pay options
+# OB/GYN Specialty Scoring Configuration
+# Production Rebuild V4.0 - Optimized for Limited Data & Solo Practices
 
-weights:
-  independent_practice: 0.30        # Solo/small practices preferred
-  aesthetic_indicators: 0.25        # Aesthetic gynecology focus
-  digital_presence: 0.18            # Website and online presence
-  cash_pay_model: 0.15              # Cash-pay vs. insurance-only
-  location_quality: 0.07            # Affluent area indicators
-  practice_size: 0.05               # Smaller is better
-
-features:
-  independent_practice:
-    practice_types:
-      highly_preferred:
-        - solo practitioner
-        - single provider
-        - private practice
-        - independent obgyn
-        - boutique women's health
-      preferred:
-        - 2-physician practice
-        - small partnership
-        - women's health center
-      avoid:
-        - hospital-based
-        - large medical group
-        - health system
-        - corporate medicine
-        - 5+ physician group
-    scoring:
-      solo: 100
-      two_provider: 90
-      small_group_3_4: 70
-      medium_group_5plus: 35
-      hospital_affiliated: 15
-      corporate: 10
-    
-  aesthetic_indicators:
-    keywords:
-      high_value:
-        - vaginal rejuvenation
-        - laser vaginal therapy
-        - cosmetic gynecology
-        - aesthetic gynecology
-        - intimate wellness
-        - feminine rejuvenation
-        - labiaplasty
-        - vaginal tightening
-        - o-shot
-        - urinary incontinence treatment
-        - hormone pellets
-        - bioidentical hormones
-        - sexual wellness
-        - anti-aging
-        - aesthetic services
-        - medspa
-        - botox
-        - filler
-      medium_value:
-        - women's wellness
-        - menopause management
-        - hormone therapy
-        - wellness services
-      negative:
-        - delivery only
-        - hospital privileges only
-        - emergency obstetrics
-        - high-risk pregnancy only
-        - insurance only
-    weight_multiplier: 1.6
-    
-  digital_presence:
-    website_indicators:
-      strong_signals:
-        - aesthetic services page
-        - vaginal rejuvenation info
-        - online consultation
-        - online booking
-        - patient testimonials
-        - before/after (if applicable)
-        - educational content
-        - blog about aesthetic procedures
-        - social media presence
-      medium_signals:
-        - modern website design
-        - contact form
-        - service descriptions
-        - provider bio
-      quality_multipliers:
-        has_aesthetic_services: 1.4
-        has_online_booking: 1.2
-        has_testimonials: 1.15
-        
-  cash_pay_model:
-    indicators:
-      high_value:
-        - cash pay options
-        - self-pay pricing
-        - elective procedures
-        - cosmetic services
-        - membership program
-        - package pricing
-        - financing available
-      medium_value:
-        - accepts some insurance
-        - out-of-network options
-      negative:
-        - insurance only
-        - medicare/medicaid only
-        - no cash-pay services
-    scoring:
-      cash_pay_focus: 100
-      mixed_model: 75
-      insurance_primary: 40
-      insurance_only: 10
-    
-  location_quality:
-    affluent_indicators:
-      - upscale
-      - private
-      - boutique
-      - wellness center
-      - medical plaza
-    area_type_scores:
-      affluent_area: 100
-      medical_plaza: 85
-      suburban_upscale: 80
-      downtown: 70
-      suburban: 60
-      rural: 40
-      
-  practice_size:
-    optimal_indicators:
-      - solo
-      - single provider
-      - intimate care
-      - personalized
-      - boutique
-    size_scores:
-      solo: 100
-      two_providers: 85
-      three_to_four: 60
-      five_plus: 30
-
-penalties:
-  hospital_only_privileges: -40
-  large_group_5plus: -35
-  no_aesthetic_services: -50
-  insurance_only: -30
-  no_website: -35
-  delivery_only_focus: -40
-  emergency_focus: -45
-
-bonuses:
-  acog_member: 10              # American College of Obstetricians and Gynecologists
-  abog_certified: 15           # American Board of Obstetrics and Gynecology
-  aesthetic_training: 25
-  laser_certified: 20
-  offers_vaginal_rejuvenation: 30
-  medspa_integration: 20
-  hormone_therapy_specialist: 15
-  cash_pay_options: 20
-  membership_model: 15
-  boutique_practice: 20
-  solo_practitioner: 25
-
+# Score Thresholds (Adaptive - MORE AGGRESSIVE for OB/GYN)
 thresholds:
-  minimum_score: 35
-  good_prospect: 70
-  excellent_prospect: 85
+  standard:
+    high_fit: 65  # Lower than other specialties
+    medium_fit: 45  # Lower threshold
+    low_fit: 0
   
-notes: |
-  OB/GYN practices offering aesthetic services are excellent device prospects.
-  Key success factors:
-  - Small, independent practice (solo or 2-provider ideal)
-  - Offers vaginal rejuvenation or other aesthetic gynecology
-  - Cash-pay services available (not insurance-only)
-  - Decision-making autonomy (not hospital-controlled)
-  - Willing to invest in new technology
-  - Serves affluent patient population
+  limited_data:
+    high_fit: 45  # More forgiving for OB/GYN
+    medium_fit: 30  # Catch more practices
+    low_fit: 0
   
-  WARNING: Large hospital-based OB groups score very low due to:
-  - Complex buying committees
-  - Insurance-focused revenue model
-  - Limited autonomy for equipment purchases
-  - Focus on traditional obstetrics vs. elective procedures
+  minimum_data:
+    high_fit: 35  # Very forgiving
+    medium_fit: 20  # Catch nearly all valid OB/GYNs
+    low_fit: 0
+
+# Scoring Weights (Optimized for OB/GYN characteristics)
+weights:
+  # Core Specialty Match (25 points - BOOSTED)
+  specialty_match:
+    obgyn_practice: 25
+    womens_health: 20
+    gynecology_only: 18
+  
+  # Decision Autonomy (20 points - CRITICAL for OB/GYN)
+  decision_autonomy:
+    solo_practitioner: 15  # Heavily favor solo
+    independent_ownership: 15
+    small_practice: 10  # 1-5 providers
+    not_hospital_affiliated: 15
+  
+  # Aesthetic GYN Services (20 points)
+  aesthetic_services:
+    vaginal_rejuvenation: 10
+    hormone_therapy: 6
+    aesthetic_gynecology: 8
+    wellness_services: 4
+  
+  # Reviews & Rating (10 points - BOOSTED for limited data)
+  reviews_rating:
+    rating_4_5_plus: 6
+    rating_4_0_to_4_5: 4
+    review_count_50_plus: 4
+    review_count_20_to_50: 3
+  
+  # Digital Presence (8 points)
+  digital_presence:
+    has_website: 4
+    active_social_media: 4
+  
+  # Wellness Focus (12 points - NEW for OB/GYN)
+  wellness_focus:
+    functional_medicine: 6
+    integrative_health: 4
+    anti_aging: 4
+  
+  # Financial Model (5 points)
+  financial_indicators:
+    cashpay_services: 3
+    membership_model: 2
+
+# Data Quality Adjustments (AGGRESSIVE for OB/GYN)
+data_quality_multipliers:
+  # Heavily boost limited data scenarios
+  limited_data_boost:
+    specialty_match: 1.5  # 50% boost
+    reviews_rating: 1.6   # 60% boost
+    decision_autonomy: 1.4  # 40% boost
+  
+  # Even with rich data, keep scores high
+  rich_data_boost:
+    aesthetic_services: 1.2
+    wellness_focus: 1.1
+
+# High-Value Keywords (OB/GYN specific)
+high_value_keywords:
+  - "vaginal rejuvenation"
+  - "hormone therapy"
+  - "menopause management"
+  - "aesthetic gynecology"
+  - "functional medicine"
+  - "wellness"
+  - "anti-aging"
+  - "integrative"
+  
+  keyword_bonus: 3  # Higher bonus for OB/GYN
+  max_keyword_bonus: 15
+
+# Special Rules for OB/GYN
+special_rules:
+  # If practice name contains "OB" or "GYN", boost specialty match
+  name_based_boost:
+    enabled: true
+    boost_amount: 10
+  
+  # If solo/small practice + OB/GYN, boost autonomy
+  solo_obgyn_boost:
+    enabled: true
+    boost_amount: 8
+  
+  # If good reviews but limited services, still score medium
+  reviews_fallback:
+    enabled: true
+    min_rating: 4.0
+    min_review_count: 20
+    fallback_score: 40
