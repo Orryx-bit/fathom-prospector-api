@@ -1,0 +1,159 @@
+
+# Dermatology Scoring Configuration
+# Original baseline configuration for aesthetic dermatology practices
+# Focus: Cosmetic procedures, independent practices, strong digital presence
+
+weights:
+  aesthetic_indicators: 0.28        # Cosmetic vs. medical dermatology focus
+  independent_practice: 0.24        # Independent vs. hospital-affiliated
+  digital_presence: 0.20            # Website quality and online engagement
+  location_quality: 0.12            # Affluent area indicators
+  practice_size: 0.10               # Small-to-medium preferred
+  recency: 0.06                     # Recent activity signals
+
+features:
+  aesthetic_indicators:
+    keywords:
+      high_value:
+        - cosmetic dermatology
+        - aesthetic
+        - botox
+        - filler
+        - laser
+        - rejuvenation
+        - anti-aging
+        - skin rejuvenation
+        - chemical peel
+        - microneedling
+        - coolsculpting
+        - body contouring
+        - injectables
+        - medspa
+      medium_value:
+        - dermatology
+        - skin care
+        - acne treatment
+        - skin cancer screening
+      negative:
+        - insurance only
+        - medicaid
+        - medicare only
+        - emergency
+        - hospital
+    weight_multiplier: 1.4
+    
+  independent_practice:
+    practice_types:
+      highly_preferred:
+        - solo practitioner
+        - private practice
+        - independent
+        - boutique dermatology
+      preferred:
+        - small group
+        - partnership
+        - dermatology associates
+      avoid:
+        - hospital
+        - medical center
+        - health system
+        - corporate
+        - chain
+    scoring:
+      solo: 100
+      small_group: 85
+      medium_group: 65
+      hospital_affiliated: 25
+      corporate: 15
+      
+  digital_presence:
+    website_indicators:
+      strong_signals:
+        - before/after gallery
+        - patient reviews
+        - online booking
+        - treatment videos
+        - blog/education
+        - social media links
+        - virtual consultation
+        - product shop
+      medium_signals:
+        - contact form
+        - service descriptions
+        - doctor credentials
+        - office photos
+      quality_multipliers:
+        has_gallery: 1.25
+        has_booking: 1.2
+        has_reviews: 1.15
+        
+  location_quality:
+    affluent_indicators:
+      - upscale
+      - luxury
+      - boutique
+      - private
+      - exclusive
+    area_type_scores:
+      affluent_retail: 100
+      medical_plaza: 90
+      upscale_residential: 85
+      downtown: 75
+      suburban: 60
+      rural: 35
+      
+  practice_size:
+    optimal_indicators:
+      - 1-4 providers
+      - boutique
+      - intimate
+      - personalized
+    size_scores:
+      solo: 100
+      2-4_providers: 90
+      5-8_providers: 70
+      9plus_providers: 45
+      
+  recency:
+    activity_signals:
+      - recently updated
+      - new services
+      - latest technology
+      - recent reviews
+      - active social media
+    time_decay_months: 6
+
+penalties:
+  hospital_affiliation: -30
+  insurance_only_focus: -25
+  no_cosmetic_services: -40
+  no_website: -35
+  outdated_website: -20
+  generic_appearance: -15
+  no_online_presence: -25
+
+bonuses:
+  aad_member: 15               # American Academy of Dermatology
+  abod_certified: 20           # American Board of Dermatology
+  cosmetic_fellowship: 25
+  multiple_locations: 10
+  medspa_integration: 20
+  cash_pay_options: 20
+  membership_program: 15
+  skincare_line: 15
+  has_mobile_app: 10
+
+thresholds:
+  minimum_score: 30
+  good_prospect: 65
+  excellent_prospect: 80
+  
+notes: |
+  Dermatology is the baseline specialty for aesthetic device sales.
+  Key success factors:
+  - Strong cosmetic/aesthetic focus (vs. medical-only)
+  - Independent decision-making authority
+  - Affluent patient base
+  - Modern digital presence
+  - Small-to-medium practice size
+  - Not hospital-affiliated or insurance-dependent
