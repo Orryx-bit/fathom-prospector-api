@@ -43,7 +43,21 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Fathom Prospector API", version="2.0.0")
 
 # Rate limiter setup
-limiter = Limiter(key_func=get_remote_address)
+
+# Prefer user identity for rate limiting; fall back to X-Forwarded-For or remote addr
+from typing import Callable
+
+def _rate_key_func(request: Request) -> str:
+    uid = request.headers.get("X-User-ID")
+    if uid:
+        return f"user:{uid}"
+    xff = request.headers.get("X-Forwarded-For")
+    if xff:
+        return f"xff:{xff.split(',')[0].strip()}"
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=_rate_key_func)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -264,8 +278,15 @@ def estimate_result_count_for_search(request: SearchRequest) -> int:
         
     except Exception as e:
         logger.warning(f"Could not estimate result count: {str(e)}")
-        logger.info("Using default estimate of 50 results")
-        return 50  # Default safe estimate
+        # Heuristic fallback based on radius and keyword richness
+        kw = request.keywords or []
+        kw_factor = 1.0 + min(0.6, max(0.0, (len(' '.join(kw)) / 40.0)))  # up to +60%
+        radius = float(request.radius or 10)
+        radius_factor = 1 + min(4, max(0, radius // 5))  # 1..5
+        base = 12
+        estimated = int(base * radius_factor * kw_factor)
+        logger.info(f"Using heuristic estimate of {estimated} results (radius={radius}, kw_factor={kw_factor:.2f})")
+        return estimated
 
 @app.get("/")
 async def root():
@@ -273,7 +294,7 @@ async def root():
     return {
         "service": "Fathom Prospector API",
         "status": "operational",
-        "version": "1.0.0",
+        "version": app.version,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -436,7 +457,8 @@ async def start_search(
     update_metrics("search_started", concurrent=active_searches + 1)
     
     # Initialize job status
-    search_jobs[job_id] = {
+    with search_jobs_lock:
+        search_jobs[job_id] = {
         "status": "queued",
         "progress": 0,
         "message": "Search queued",
@@ -501,7 +523,7 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             bufsize=1,
             env={
                 **os.environ,
-                "FATHOM_API_KEY": os.getenv("GOOGLE_PLACES_API_KEY", ""),  # Map Railway env var to new name
+                "GOOGLE_PLACES_API_KEY": os.getenv("GOOGLE_PLACES_API_KEY", ""),  # Pass through for prospect.py
                 "PYTHONUNBUFFERED": "1"
             }
         )
@@ -773,16 +795,17 @@ if __name__ == "__main__":
     print("=" * 80)
     print("CONFIGURATION:")
     print(f"  • Workers: {workers}")
-    print(f"  • Max Concurrent Searches: {MAX_CONCURRENT_SEARCHES}")
+    print(f"  • Max Concurrent Searches (per worker): {MAX_CONCURRENT_SEARCHES}")
+    print(f"  • Effective Max Concurrency: {MAX_CONCURRENT_SEARCHES} x {workers} workers = {MAX_CONCURRENT_SEARCHES * workers}")
     print(f"  • Thread Pool Workers: 10")
     print(f"  • Daily Quota Per User: {PER_USER_DAILY_LIMIT} searches")
     print(f"  • Rate Limit: 10 searches/minute per IP")
     print(f"  • Progressive Timeout Strategy:")
-    print(f"      - Small searches (<20 results): 10 minutes")
-    print(f"      - Medium searches (20-50 results): 15 minutes")
-    print(f"      - Large searches (50-80 results): 20 minutes")
-    print(f"      - Very large (80-120 results): 30 minutes")
-    print(f"      - Extremely large (120+ results): 40 minutes")
+    print(f"      - Small searches (<20 results): 20 minutes")
+    print(f"      - Medium searches (20-50 results): 30 minutes")
+    print(f"      - Large searches (50-80 results): 60 minutes")
+    print(f"      - Very large (80-120 results): 90 minutes")
+    print(f"      - Extremely large (120+ results): 120 minutes")
     print(f"  • API Key: {API_KEY[:20]}...")
     print("=" * 80)
     print("PHASE 1 FIXES (Applied):")
@@ -804,7 +827,7 @@ if __name__ == "__main__":
     
     # Production configuration - no reload, proper timeouts
     uvicorn.run(
-        "api_server:app",
+        app=app,
         host="0.0.0.0",
         port=port,
         workers=workers,  # Multiple worker processes
