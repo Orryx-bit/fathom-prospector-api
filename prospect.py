@@ -221,10 +221,14 @@ class FathomProspector:
         
         self.demo_mode = demo_mode
         self.existing_customers = set()
+        self.excluded_systems = set()
         
         # Load existing customers for exclusion
         if existing_customers_csv and os.path.exists(existing_customers_csv):
             self.load_existing_customers(existing_customers_csv)
+        
+        # Load healthcare system exclusion list
+        self.load_exclusion_list('exclusion_list.txt')
         
         # Initialize session for web scraping
         self.session = requests.Session()
@@ -396,6 +400,40 @@ class FathomProspector:
             
         except Exception as e:
             logger.error(f"Failed to load existing customers CSV: {str(e)}")
+    
+    def load_exclusion_list(self, exclusion_file: str):
+        """Load healthcare system exclusion list from file"""
+        try:
+            # Try to find the file in current directory or parent directories
+            search_paths = [
+                exclusion_file,
+                os.path.join(os.path.dirname(__file__), exclusion_file),
+                os.path.join(os.path.dirname(__file__), '..', exclusion_file),
+            ]
+            
+            file_path = None
+            for path in search_paths:
+                if os.path.exists(path):
+                    file_path = path
+                    break
+            
+            if not file_path:
+                logger.warning(f"Exclusion list file not found: {exclusion_file}")
+                logger.info("Continuing without specific exclusion list (will use pattern matching only)")
+                return
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if line and not line.startswith('#'):
+                        self.excluded_systems.add(line.lower())
+            
+            logger.info(f"✅ Loaded {len(self.excluded_systems)} excluded healthcare systems from {file_path}")
+            
+        except Exception as e:
+            logger.warning(f"Error loading exclusion list: {str(e)}")
+            logger.info("Continuing without specific exclusion list")
     
     def is_existing_customer(self, practice_name: str) -> bool:
         """Check if practice is an existing customer"""
@@ -575,9 +613,36 @@ class FathomProspector:
         return True
     
     def is_hospital_system(self, name: str) -> bool:
-        """Check if a practice name indicates a hospital system"""
+        """Check if a practice name indicates a hospital system or is on the exclusion list"""
         name_lower = name.lower()
-        return any(re.search(pattern, name_lower, re.IGNORECASE) for pattern in self.hospital_patterns)
+        
+        # First, check against pattern-based filtering (generic hospital indicators)
+        if any(re.search(pattern, name_lower, re.IGNORECASE) for pattern in self.hospital_patterns):
+            return True
+        
+        # Then, check against specific exclusion list with fuzzy matching
+        if self.excluded_systems:
+            for excluded_system in self.excluded_systems:
+                # Method 1: Direct substring match
+                if excluded_system in name_lower or name_lower in excluded_system:
+                    logger.info(f"🚫 Matched exclusion list: '{name}' contains '{excluded_system}'")
+                    return True
+                
+                # Method 2: Word-based matching (check if key words match)
+                # Split both names into words and check for significant overlap
+                excluded_words = set(excluded_system.split())
+                name_words = set(name_lower.split())
+                
+                # If at least 60% of the excluded system's words appear in the business name, it's a match
+                if len(excluded_words) > 0:
+                    overlap = len(excluded_words.intersection(name_words))
+                    match_ratio = overlap / len(excluded_words)
+                    
+                    if match_ratio >= 0.6:  # 60% word match threshold
+                        logger.info(f"🚫 Fuzzy matched exclusion list: '{name}' ~= '{excluded_system}' ({match_ratio:.0%} match)")
+                        return True
+        
+        return False
     
     def check_robots_txt(self, url: str) -> bool:
         """Check if scraping is allowed by robots.txt"""
@@ -732,7 +797,7 @@ class FathomProspector:
             data['social_links'] = social_links
             
             # Estimate staff count
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
             data['staff_count'] = min(unique_staff, 20)
@@ -849,7 +914,7 @@ class FathomProspector:
                         social_links.append(platform_name)
             
             # Find staff mentions
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             
             return {
