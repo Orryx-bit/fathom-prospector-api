@@ -23,6 +23,55 @@ from urllib.robotparser import RobotFileParser
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+# === Non-breaking enrichment helpers (booking/financing/devices/social/gallery/careers, JSON-LD) ===
+BOOKING_HINTS = [
+    "vagaro.com","clients.mindbodyonline.com","boulevard.io","booksy.com",
+    "schedulicity.com","square.site","janeapp.com","acuityscheduling.com","calendly.com"
+]
+FINANCE_HINTS = ["carecredit","patientfi","ally lending","cherry","united medical credit","sunbit"]
+VENUS_HINTS = ["venus viva","venus legacy","venus versa","tribella","diamondpolar","mp2","venus concept","venus glow","venus bliss"]
+COMP_HINTS = ["inmode","cynosure","cutera","sciton","lutronic","alma","btl","emsculpt","candela","deka"]
+WEIGHT_LOSS_HINTS = ["semaglutide","tirzepatide","glp-1","medical weight","weight management","lipo-b","lipotropic","b12 injections","peptides"]
+GALLERY_HINTS = ["before and after","results","gallery","case photos","patient results"]
+CAREER_HINTS = ["careers","we’re hiring","we're hiring","join our team","apply now","open roles","job openings"]
+
+def _extract_jsonld(soup):
+    nodes = []
+    for s in soup.find_all("script", type="application/ld+json"):
+        try:
+            blob = json.loads(s.string or "{}")
+            if isinstance(blob, dict): nodes.append(blob)
+            elif isinstance(blob, list): nodes.extend([b for b in blob if isinstance(b, dict)])
+        except Exception:
+            continue
+    return nodes
+
+def _detect_booking_stack(soup):
+    urls = set()
+    for tag in soup.find_all(["a","script","iframe","link"]):
+        u = (tag.get("href") or tag.get("src") or "") or ""
+        u = u.lower()
+        if any(k in u for k in BOOKING_HINTS):
+            urls.add(u)
+    return list(urls)
+
+def _text_has_any(text, keys):
+    s = (text or "").lower()
+    return any(k in s for k in keys)
+
+def _social_from_jsonld(nodes):
+    links = []
+    for n in nodes:
+        same_as = n.get("sameAs")
+        if isinstance(same_as, str): links.append(same_as)
+        elif isinstance(same_as, list): links.extend([x for x in same_as if isinstance(x, str)])
+    # dedupe preserve order
+    seen=set(); out=[]
+    for l in links:
+        if l not in seen:
+            seen.add(l); out.append(l)
+    return out
+
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
@@ -658,7 +707,6 @@ class FathomProspector:
         if not self.check_robots_txt(url):
             logger.warning(f"Robots.txt disallows scraping: {url}")
             return {
-                'source_mode': 'api_only',
                 'title': 'Not Available - Restricted',
                 'description': 'Not Available - Restricted',
                 'services': [],
@@ -846,8 +894,16 @@ class FathomProspector:
             
             soup = BeautifulSoup(response.content, 'html.parser')
             
+            # JSON-LD extraction
+            try:
+                jsonld_nodes = _extract_jsonld(soup)
+            except Exception:
+                jsonld_nodes = []
+            social_links_jsonld = _social_from_jsonld(jsonld_nodes)
+
+            
             # Extract text content
-            text_content = soup.get_text().lower()
+            text_content = soup.get_text(" ", strip=True).lower()
             
             # Find services
             service_keywords = [
@@ -880,15 +936,95 @@ class FathomProspector:
             staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             
+            # Merge JSON-LD social links
+            try:
+                for l in social_links_jsonld:
+                    if l not in social_links:
+                        social_links.append(l)
+            except Exception:
+                pass
+
+            # Lightweight detectors
+            booking_platforms = _detect_booking_stack(soup)
+            financing_present = _text_has_any(text_content, FINANCE_HINTS)
+            venus_present = _text_has_any(text_content, VENUS_HINTS)
+            competitor_present = _text_has_any(text_content, COMP_HINTS)
+            weight_loss_present = _text_has_any(text_content, WEIGHT_LOSS_HINTS)
+            gallery_present = _text_has_any(text_content, GALLERY_HINTS)
+            hiring_present = _text_has_any(text_content, CAREER_HINTS)
+            # Merge JSON-LD social links
+            try:
+                for l in social_links_jsonld:
+                    if l not in social_links:
+                        social_links.append(l)
+            except Exception:
+                pass
+
+            # Lightweight detectors
+            booking_platforms = _detect_booking_stack(soup)
+            financing_present = _text_has_any(text_content, FINANCE_HINTS)
+            venus_present = _text_has_any(text_content, VENUS_HINTS)
+            competitor_present = _text_has_any(text_content, COMP_HINTS)
+            weight_loss_present = _text_has_any(text_content, WEIGHT_LOSS_HINTS)
+            gallery_present = _text_has_any(text_content, GALLERY_HINTS)
+            hiring_present = _text_has_any(text_content, CAREER_HINTS)
+
             return {
                 'services': services_found,
                 'staff_mentions': list(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5)),
                 'text': text_content,
-                'social_links': social_links
+                'social_links': social_links,
+                'booking_platforms': booking_platforms,
+                'financing_present': financing_present,
+                'venus_present': venus_present,
+                'competitor_present': competitor_present,
+                'weight_loss_present': weight_loss_present,
+                'gallery_present': gallery_present,
+                'hiring_present': hiring_present,
+                'booking_platforms': booking_platforms,
+                'financing_present': financing_present,
+                'venus_present': venus_present,
+                'competitor_present': competitor_present,
+                'weight_loss_present': weight_loss_present,
+                'gallery_present': gallery_present,
+                'hiring_present': hiring_present
             }
             
         except Exception as e:
             logger.debug(f"Error scraping {url}: {str(e)}")
+            # Merge JSON-LD social links
+            try:
+                for l in social_links_jsonld:
+                    if l not in social_links:
+                        social_links.append(l)
+            except Exception:
+                pass
+
+            # Lightweight detectors
+            booking_platforms = _detect_booking_stack(soup)
+            financing_present = _text_has_any(text_content, FINANCE_HINTS)
+            venus_present = _text_has_any(text_content, VENUS_HINTS)
+            competitor_present = _text_has_any(text_content, COMP_HINTS)
+            weight_loss_present = _text_has_any(text_content, WEIGHT_LOSS_HINTS)
+            gallery_present = _text_has_any(text_content, GALLERY_HINTS)
+            hiring_present = _text_has_any(text_content, CAREER_HINTS)
+            # Merge JSON-LD social links
+            try:
+                for l in social_links_jsonld:
+                    if l not in social_links:
+                        social_links.append(l)
+            except Exception:
+                pass
+
+            # Lightweight detectors
+            booking_platforms = _detect_booking_stack(soup)
+            financing_present = _text_has_any(text_content, FINANCE_HINTS)
+            venus_present = _text_has_any(text_content, VENUS_HINTS)
+            competitor_present = _text_has_any(text_content, COMP_HINTS)
+            weight_loss_present = _text_has_any(text_content, WEIGHT_LOSS_HINTS)
+            gallery_present = _text_has_any(text_content, GALLERY_HINTS)
+            hiring_present = _text_has_any(text_content, CAREER_HINTS)
+
             return {
                 'services': [],
                 'staff_mentions': [],
@@ -955,6 +1091,13 @@ class FathomProspector:
             all_staff_mentions = []
             all_text = []
             pages_scraped = 0
+            any_financing=False
+            any_venus=False
+            any_competitor=False
+            any_weight_loss=False
+            any_gallery=False
+            any_hiring=False
+            all_booking=set()
             
             for page_url in pages_to_scrape:
                 if pages_scraped >= max_pages:
@@ -985,7 +1128,14 @@ class FathomProspector:
                 'description': description,
                 'services': list(all_services),
                 'social_links': list(all_social_links),
-                'staff_count': staff_count
+                'staff_count': staff_count,
+                'booking_platforms': list(all_booking),
+                'financing_present': any_financing,
+                'venus_present': any_venus,
+                'competitor_present': any_competitor,
+                'weight_loss_present': any_weight_loss,
+                'gallery_present': any_gallery,
+                'hiring_present': any_hiring
             }
             
         except Exception as e:
@@ -1126,6 +1276,23 @@ class FathomProspector:
         # ═══════════════════════════════════════════════════════════
         social_links = practice_data.get('social_links', [])
         scores['social_activity'] = min(len(social_links) * 3, 10)
+        # Breadth/video-forward bonus (non-breaking)
+        platforms = {
+            'instagram': any('instagram.com' in u for u in social_links),
+            'tiktok': any('tiktok.com' in u for u in social_links),
+            'youtube': any(('youtube.com' in u) or ('youtu.be' in u) for u in social_links),
+            'facebook': any('facebook.com' in u for u in social_links),
+            'pinterest': any('pinterest.' in u for u in social_links),
+            'linkedin': any('linkedin.com' in u for u in social_links),
+            'x': any(('twitter.com' in u) or ('x.com' in u) for u in social_links),
+        }
+        bonus = 0
+        if sum(platforms.values()) >= 2:
+            bonus += 1
+        if platforms.get('tiktok') or platforms.get('youtube'):
+            bonus += 1
+        scores['social_activity'] = min(10, scores['social_activity'] + bonus)
+
         
         # ═══════════════════════════════════════════════════════════
         # 6. Reviews & Rating (10 points)
@@ -1206,7 +1373,32 @@ class FathomProspector:
                 keyword_bonus += 2
         keyword_bonus = min(keyword_bonus, 10)
         
-        # ═══════════════════════════════════════════════════════════
+        
+        # === Non-breaking detector boosts ===
+        if practice_data.get('booking_platforms'):
+            scores['decision_autonomy'] = min(10, scores['decision_autonomy'] + 1)
+            scores['search_visibility'] = min(10, scores['search_visibility'] + 1)
+        if practice_data.get('financing_present'):
+            scores['financial_indicators'] = min(10, scores['financial_indicators'] + 1)
+        if practice_data.get('gallery_present'):
+            scores['aesthetic_services'] = min(10, scores['aesthetic_services'] + 1)
+            scores['search_visibility'] = min(10, scores['search_visibility'] + 1)
+        if practice_data.get('weight_loss_present'):
+            scores['weight_loss_services'] = min(5, scores['weight_loss_services'] + 1)
+        if practice_data.get('hiring_present'):
+            scores['financial_indicators'] = min(10, scores['financial_indicators'] + 1)
+        # Device brand signals
+        combined_text = (practice_data.get('description', '') or '').lower()
+        try:
+            combined_text += ' ' + ' '.join(practice_data.get('services', []))
+        except Exception:
+            pass
+        if any(k in combined_text for k in VENUS_HINTS) or practice_data.get('venus_present'):
+            scores['aesthetic_services'] = min(10, scores['aesthetic_services'] + 1)
+        if any(k in combined_text for k in COMP_HINTS) or practice_data.get('competitor_present'):
+            scores['competing_devices'] = min(10, scores['competing_devices'] + 1)
+
+# ═══════════════════════════════════════════════════════════
         # TOTAL SCORE (out of 110, normalized to 100)
         # ═══════════════════════════════════════════════════════════
         base_score = sum(scores.values())
@@ -1303,20 +1495,9 @@ class FathomProspector:
         
         # Scrape website if available (using deep multi-page scraping)
         if practice_record['website']:
-            if not self.check_robots_txt(practice_record['website']):
-                logger.warning(f"Robots.txt disallows scraping: {practice_record['website']} — switching to API-only enrichment")
-                practice_record.update({
-                    'source_mode': 'api_only',
-                    'title': 'Not Available - Restricted',
-                    'description': 'Not Available - Restricted',
-                    'services': [],
-                    'social_links': [],
-                    'staff_count': 0
-                })
-            else:
-                logger.info(f"Deep scraping website: {practice_record['website']}")
-                website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
-                practice_record.update(website_data)
+            logger.info(f"Deep scraping website: {practice_record['website']}")
+            website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
+            practice_record.update(website_data)
         
         # Calculate AI score with specialty detection
         ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
@@ -1444,6 +1625,17 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         
         logger.info(f"Summary report generated: {filename}")
     
+    
+    def estimate_result_count(self, keywords: str, location: str, radius_km: float) -> int:
+        """Heuristic estimator for result count used by API server timeouts (non-breaking)."""
+        base = 15
+        radius_factor = max(1, min(5, (radius_km or 5) / 5.0))
+        kw = (keywords or "").lower()
+        richness = 1.0 + 0.3*sum(int(t in kw) for t in ["medspa","clinic","laser","ob/gyn","wellness","derm","spa","aesthetic"])
+        try:
+            return int(base * radius_factor * max(1.0, richness))
+        except Exception:
+            return 50
     def run_prospecting(self, keywords: List[str], location: str, 
                        radius: int, max_results: int):
         """Main prospecting workflow"""
