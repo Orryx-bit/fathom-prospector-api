@@ -658,6 +658,7 @@ class FathomProspector:
         if not self.check_robots_txt(url):
             logger.warning(f"Robots.txt disallows scraping: {url}")
             return {
+                'source_mode': 'api_only',
                 'title': 'Not Available - Restricted',
                 'description': 'Not Available - Restricted',
                 'services': [],
@@ -759,7 +760,7 @@ class FathomProspector:
             data['social_links'] = social_links
             
             # Estimate staff count
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
             data['staff_count'] = min(unique_staff, 20)
@@ -876,7 +877,7 @@ class FathomProspector:
                         social_links.append(platform_name)
             
             # Find staff mentions
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             
             return {
@@ -915,8 +916,14 @@ class FathomProspector:
         
         if not self.check_robots_txt(base_url):
             logger.warning(f"Robots.txt disallows scraping: {base_url}")
-            # Fall back to single page
-            return self.scrape_website(base_url)
+            return {
+                'source_mode': 'api_only',
+                'title': 'Not Available - Restricted',
+                'description': 'Not Available - Restricted',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0
+            }
         
         try:
             # First, get homepage for title and description
@@ -1296,9 +1303,20 @@ class FathomProspector:
         
         # Scrape website if available (using deep multi-page scraping)
         if practice_record['website']:
-            logger.info(f"Deep scraping website: {practice_record['website']}")
-            website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
-            practice_record.update(website_data)
+            if not self.check_robots_txt(practice_record['website']):
+                logger.warning(f"Robots.txt disallows scraping: {practice_record['website']} — switching to API-only enrichment")
+                practice_record.update({
+                    'source_mode': 'api_only',
+                    'title': 'Not Available - Restricted',
+                    'description': 'Not Available - Restricted',
+                    'services': [],
+                    'social_links': [],
+                    'staff_count': 0
+                })
+            else:
+                logger.info(f"Deep scraping website: {practice_record['website']}")
+                website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
+                practice_record.update(website_data)
         
         # Calculate AI score with specialty detection
         ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
