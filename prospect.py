@@ -262,19 +262,23 @@ class FathomProspector:
             r'\bhealthcare system\b', r'\bregional medical\b', r'\buniversity medical\b'
         ]
         
-        # Device catalog
+        # Device catalog - Venus product line
         self.device_catalog = {
-            'Device A': {
-                'specialties': ['hair removal', 'photorejuvenation', 'skin resurfacing'],
-                'keywords': ['laser hair removal', 'ipl', 'photo facial']
+            'Venus Versa': {
+                'specialties': ['hair removal', 'photorejuvenation', 'skin resurfacing', 'acne treatment', 'vascular lesions'],
+                'keywords': ['laser hair removal', 'ipl', 'photo facial', 'photofacial', 'skin rejuvenation', 'pigmentation']
             },
-            'Device B': {
-                'specialties': ['body contouring', 'cellulite reduction', 'skin tightening'],
-                'keywords': ['body sculpting', 'cellulite', 'radiofrequency']
+            'Venus Legacy': {
+                'specialties': ['body contouring', 'cellulite reduction', 'skin tightening', 'wrinkle reduction'],
+                'keywords': ['body sculpting', 'cellulite', 'radiofrequency', 'rf', 'skin tightening', 'body shaping']
             },
-            'Device C': {
-                'specialties': ['weight loss', 'muscle stimulation', 'body contouring'],
-                'keywords': ['weight loss', 'ems', 'muscle building', 'fat reduction']
+            'Venus Bliss MAX': {
+                'specialties': ['weight loss', 'muscle stimulation', 'body contouring', 'fat reduction'],
+                'keywords': ['weight loss', 'ems', 'muscle building', 'fat reduction', 'body sculpting', 'lipolysis']
+            },
+            'Venus Viva': {
+                'specialties': ['skin resurfacing', 'scar treatment', 'texture improvement', 'wrinkle reduction'],
+                'keywords': ['skin resurfacing', 'nano fractional', 'scar reduction', 'texture', 'fine lines']
             }
         }
         
@@ -709,24 +713,47 @@ class FathomProspector:
             
             data['services'] = services_found
             
-            # Find social media links
+            # Find social media links - capture full URLs
             social_platforms = {
                 'facebook.com': 'Facebook',
+                'fb.com': 'Facebook',
                 'instagram.com': 'Instagram',
                 'twitter.com': 'Twitter',
+                'x.com': 'Twitter',
                 'linkedin.com': 'LinkedIn',
-                'youtube.com': 'YouTube'
+                'youtube.com': 'YouTube',
+                'youtu.be': 'YouTube',
+                'tiktok.com': 'TikTok',
+                'pinterest.com': 'Pinterest'
             }
             
             social_links = []
             seen_platforms = set()
             
+            # Look for social media links in all anchor tags
             for link in soup.find_all('a', href=True):
-                href = link['href'].lower()
+                href = link.get('href', '').strip()
+                href_lower = href.lower()
+                
+                # Skip empty or invalid hrefs
+                if not href or href.startswith('#') or href.startswith('javascript:'):
+                    continue
+                
+                # Check each social platform
                 for domain, platform_name in social_platforms.items():
-                    if domain in href and platform_name not in seen_platforms:
-                        social_links.append(platform_name)
+                    if domain in href_lower and platform_name not in seen_platforms:
+                        # Clean up the URL
+                        full_url = href
+                        if href.startswith('//'):
+                            full_url = 'https:' + href
+                        elif href.startswith('/') or not href.startswith('http'):
+                            # Relative URL - skip it as it's not a social link
+                            continue
+                        
+                        # Add the full URL to the list
+                        social_links.append(full_url)
                         seen_platforms.add(platform_name)
+                        logger.info(f"Found {platform_name} link: {full_url}")
                         break
             
             data['social_links'] = social_links
