@@ -1,102 +1,99 @@
+# Scoring Config Schema v4.1
+# - version: numeric config version
+# - specialty: slug for the vertical
+# - thresholds: {standard|limited_data|min_data} -> {high_fit, medium_fit, low_fit}
+# - weights: top-level categories with per-signal weights (positive or negative)
+# - keyword_bonus: flat bonus per matched high-value keyword (capped by max_keyword_bonus)
+# - data_completeness: fields that determine limited_data/min_data mode
+# - special_rules: optional rules (boosts/penalties) with enable flags
+# Notes:
+# * All weights are additive; suggested sum of absolute values ~100.
+# * No '...' end-of-document markers (they break YAML parsing).
+# * Keep key names consistent across specialties.
 
-# MedSpa Specialty Scoring Configuration
-# Production Rebuild V4.0 - Optimized for Independent Ownership
-
-# Score Thresholds
+version: 4.1
+specialty: medspa
 thresholds:
   standard:
     high_fit: 70
     medium_fit: 50
     low_fit: 0
-  
   limited_data:
     high_fit: 50
     medium_fit: 35
     low_fit: 0
-  
   minimum_data:
     high_fit: 40
     medium_fit: 25
     low_fit: 0
-
-# Scoring Weights
+data_completeness:
+  required_fields:
+  - name
+  - address
+  - phone
+  nice_to_have:
+  - website
+  - domain
+  - google_place_id
+  - reviews_count
+  - avg_rating
+  - categories
+  - services
+  limited_threshold: 3
+  minimum_threshold: 1
 weights:
-  # Core Specialty Match (20 points)
   specialty_match:
-    medspa_practice: 20
-    medical_spa: 18
-    aesthetic_center: 15
-  
-  # Independent Ownership (20 points - CRITICAL)
-  decision_autonomy:
-    physician_owned: 15
-    independent_ownership: 15
-    medical_director: 10
-    not_franchise: 10
-  
-  # Service Offerings (25 points)
-  aesthetic_services:
-    injectables: 8
-    laser_treatments: 7
-    body_contouring: 7
-    advanced_technology: 3
-  
-  # Reviews & Rating (10 points)
+    category_contains:
+      medical_spa: 18
+      spa_medical: 16
+      aesthetics_clinic: 10
+    name_contains:
+      medspa: 6
+      aesthetics: 4
+      wellness: 3
+  ownership_model:
+    physician_owned: 12
+    injector_led: 8
+    franchise: -12
+    chain: -10
+  services_offered:
+    laser_hair_removal: 6
+    ipl: 5
+    skin_tightening: 6
+    body_contouring: 6
+    botox: 6
+    fillers: 5
+    hydrafacial: 4
+    microneedling_rf: 7
+  credibility_indicators:
+    has_md_supervision: 8
+    medical_director_listed: 6
+    before_after_gallery: 4
   reviews_rating:
-    rating_4_5_plus: 5
-    rating_4_0_to_4_5: 3
-    review_count_50_plus: 5
-    review_count_20_to_50: 3
-  
-  # Digital Presence (10 points)
+    avg_rating_gt_4_5: 8
+    reviews_count_gt_120: 6
+    recent_reviews_90d: 3
   digital_presence:
-    has_website: 4
-    active_instagram: 4
-    online_booking: 2
-  
-  # Service Variety (10 points)
-  service_variety:
-    per_service: 2
-    max_points: 10
-  
-  # Business Model (5 points)
-  financial_indicators:
-    membership_model: 3
-    package_deals: 2
-
-# Data Quality Adjustments
-data_quality_multipliers:
-  limited_data_boost:
-    specialty_match: 1.3
-    decision_autonomy: 1.5
-    reviews_rating: 1.4
-  
-  rich_data_boost:
-    aesthetic_services: 1.0
-    service_variety: 1.0
-
-# High-Value Keywords
+    has_website: 5
+    online_booking: 6
+    instagram_found: 4
+    tiktok_found: 3
 high_value_keywords:
-  - "medical spa"
-  - "physician-owned"
-  - "medical director"
-  - "botox"
-  - "coolsculpting"
-  - "laser"
-  - "body contouring"
-  
-  keyword_bonus: 2
-  max_keyword_bonus: 10
-
-# Special Rules
+- medical spa
+- injectables
+- RF microneedling
+- skin tightening
+- laser hair removal
+keyword_bonus: 2
+max_keyword_bonus: 10
 special_rules:
-  # Penalize franchise indicators
   franchise_penalty:
     enabled: true
-    keywords: ["franchise", "chain", "corporate"]
+    keywords:
+    - franchise
+    - corporate
+    - chain
     penalty_amount: -15
-  
-  # Boost physician-owned medspas
   physician_owned_boost:
     enabled: true
     boost_amount: 10
