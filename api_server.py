@@ -108,11 +108,21 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
         with search_jobs_lock:
             search_jobs[job_id].update({"status": "running", "progress": 5, "message": "Initializing search..."})
 
+        # Create progress callback to update job status
+        def progress_callback(progress: int, message: str):
+            """Update job progress in real-time"""
+            with search_jobs_lock:
+                search_jobs[job_id].update({
+                    "progress": progress,
+                    "message": message
+                })
+            logger.info(f"Job {job_id}: {progress}% - {message}")
+
         logger.info(f"Job {job_id}: Instantiating FathomProspector.")
-        prospector = FathomProspector()
+        prospector = FathomProspector(progress_callback=progress_callback)
 
         with search_jobs_lock:
-            search_jobs[job_id].update({"progress": 10, "message": "Starting prospecting analysis..."})
+            search_jobs[job_id].update({"progress": 10, "message": "Configuring search parameters..."})
         
         start_time = time.time()
         
