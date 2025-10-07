@@ -1,58 +1,91 @@
-# Anti-Aging Medicine Specialty Scoring Configuration
-# Production Rebuild V4.0 - Optimized for Membership Models
+# Scoring Config Schema v4.1
+# - version: numeric config version
+# - specialty: slug for the vertical
+# - thresholds: {standard|limited_data|min_data} -> {high_fit, medium_fit, low_fit}
+# - weights: top-level categories with per-signal weights (positive or negative)
+# - keyword_bonus: flat bonus per matched high-value keyword (capped by max_keyword_bonus)
+# - data_completeness: fields that determine limited_data/min_data mode
+# - special_rules: optional rules (boosts/penalties) with enable flags
+# Notes:
+# * All weights are additive; suggested sum of absolute values ~100.
+# * No '...' end-of-document markers (they break YAML parsing).
+# * Keep key names consistent across specialties.
 
-# Score Thresholds
+version: 4.1
+specialty: anti_aging_medicine
 thresholds:
   standard:
     high_fit: 70
     medium_fit: 50
     low_fit: 0
-  
   limited_data:
     high_fit: 50
     medium_fit: 35
     low_fit: 0
-  
   minimum_data:
     high_fit: 40
     medium_fit: 25
     low_fit: 0
-
-# Scoring Weights
+data_completeness:
+  required_fields:
+  - name
+  - address
+  - phone
+  nice_to_have:
+  - website
+  - domain
+  - google_place_id
+  - reviews_count
+  - avg_rating
+  - categories
+  - services
+  limited_threshold: 3
+  minimum_threshold: 1
 weights:
   specialty_match:
-    anti_aging_practice: 20
-    longevity_medicine: 18
-    age_management: 15
-
+    category_contains:
+      anti_aging: 18
+      age_management: 14
+      longevity_clinic: 12
+      wellness_center: 8
+    name_contains:
+      age: 2
+      longevity: 2
+      hormone: 4
   services_offered:
-    hormone_therapy: 5
-    peptides: 5
-    regenerative_therapies: 5
+    hormone_replacement: 8
+    peptide_therapy: 7
+    weight_loss: 7
+    semaglutide: 6
     iv_therapy: 5
-    stem_cell: 5
-
+    prp: 5
+    aesthetic_services: 6
   legitimacy_indicators:
-    board_certified: 10
-    fellowship_trained: 8
-    years_experience_10_plus: 5
-
+    medical_director_listed: 6
+    md_on_staff: 6
+    labs_on_site: 4
+    protocols_published: 4
   reviews_rating:
-    rating_4_5_plus: 5
-    review_count_50_plus: 5
-
+    avg_rating_gt_4_5: 8
+    reviews_count_gt_80: 5
+    recent_reviews_90d: 3
   digital_presence:
     has_website: 5
-    instagram_found: 4
-    patient_testimonials: 3
-
-  high_value_keywords:
-    - "hormone replacement therapy"
-    - "peptides"
-    - "anti-aging medicine"
-    - "stem cells"
-    - "age reversal"
-    - "longevity clinic"
-
+    online_booking: 5
+    instagram_found: 3
+    tiktok_found: 2
+high_value_keywords:
+- HRT
+- BHRT
+- semaglutide
+- peptides
+- longevity
 keyword_bonus: 2
 max_keyword_bonus: 10
+special_rules:
+  claims_skepticism:
+    enabled: true
+    red_flags:
+    - miracle
+    - guaranteed results
+    penalty_amount: -8
