@@ -268,7 +268,6 @@ class FathomProspector:
         csv_filename = f"prospects_{timestamp}.csv"
         
         if all_results:
-            # Dynamically create headers from the first result to be safe
             headers = list(all_results[0].keys())
             if 'ai_summary' not in headers: headers.extend(['ai_summary', 'ai_score_breakdown'])
             
