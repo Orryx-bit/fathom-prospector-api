@@ -1,57 +1,91 @@
-# Dermatology Specialty Scoring Configuration
-# Production Rebuild V4.0 - Adjusted for Limited Data Scenarios
+# Scoring Config Schema v4.1
+# - version: numeric config version
+# - specialty: slug for the vertical
+# - thresholds: {standard|limited_data|min_data} -> {high_fit, medium_fit, low_fit}
+# - weights: top-level categories with per-signal weights (positive or negative)
+# - keyword_bonus: flat bonus per matched high-value keyword (capped by max_keyword_bonus)
+# - data_completeness: fields that determine limited_data/min_data mode
+# - special_rules: optional rules (boosts/penalties) with enable flags
+# Notes:
+# * All weights are additive; suggested sum of absolute values ~100.
+# * No '...' end-of-document markers (they break YAML parsing).
+# * Keep key names consistent across specialties.
 
-# Score Thresholds (Adaptive based on data completeness)
+version: 4.1
+specialty: dermatology
 thresholds:
   standard:
     high_fit: 70
     medium_fit: 50
     low_fit: 0
-  
   limited_data:
     high_fit: 50
     medium_fit: 35
     low_fit: 0
-  
   minimum_data:
     high_fit: 40
     medium_fit: 25
     low_fit: 0
-
-# Scoring Weights
+data_completeness:
+  required_fields:
+  - name
+  - address
+  - phone
+  nice_to_have:
+  - website
+  - domain
+  - google_place_id
+  - reviews_count
+  - avg_rating
+  - categories
+  - services
+  limited_threshold: 3
+  minimum_threshold: 1
 weights:
   specialty_match:
-    dermatologist: 20
-    skin_specialist: 15
-    acne_clinic: 10
-
-  services:
+    category_contains:
+      dermatologist: 18
+      dermatology: 16
+      skin_care: 6
+      cosmetic_dermatology: 10
+    name_contains:
+      dermatology: 6
+      skin: 4
+  services_offered:
+    botox: 6
+    fillers: 5
+    laser_hair_removal: 6
+    laser_resurfacing: 7
     acne_treatment: 5
-    skin_cancer_screening: 5
-    mole_removal: 5
-    cosmetic_derm: 5
-
-  indicators_of_legitimacy:
-    board_certified: 10
-    years_experience_10_plus: 8
-    clinical_trials: 5
-
+    mohs_surgery: 10
+    skin_cancer_screening: 8
+    psoriasis_treatment: 4
+    eczema_treatment: 3
+  credibility_indicators:
+    has_md_do: 8
+    board_certified: 8
+    fellowship_trained: 4
+    accepts_insurance: 3
   reviews_rating:
-    rating_4_5_plus: 5
-    review_count_50_plus: 5
-
+    avg_rating_gt_4_4: 8
+    reviews_count_gt_100: 6
+    recent_reviews_90d: 3
   digital_presence:
     has_website: 5
-    instagram_found: 4
-    blog_or_skin_tips: 3
-
-  high_value_keywords:
-    - "board certified"
-    - "acne specialist"
-    - "rosacea"
-    - "skin cancer screening"
-    - "dermatopathology"
-    - "cosmetic dermatology"
-
+    has_booking: 5
+    instagram_found: 3
+    facebook_found: 2
+    tiktok_found: 2
+high_value_keywords:
+- dermatologist
+- cosmetic dermatologist
+- mohs
+- skin cancer
+- laser resurfacing
 keyword_bonus: 2
 max_keyword_bonus: 10
+special_rules:
+  medical_vs_cosmetic_balance:
+    enabled: true
+    medical_dominant_bonus: 6
+    cosmetic_only_penalty: -6
