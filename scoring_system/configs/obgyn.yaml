@@ -1,59 +1,90 @@
-# OB/GYN Specialty Scoring Configuration
-# Production Rebuild V4.0 - Optimized for Limited Data & Solo Practices
+# Scoring Config Schema v4.1
+# - version: numeric config version
+# - specialty: slug for the vertical
+# - thresholds: {standard|limited_data|min_data} -> {high_fit, medium_fit, low_fit}
+# - weights: top-level categories with per-signal weights (positive or negative)
+# - keyword_bonus: flat bonus per matched high-value keyword (capped by max_keyword_bonus)
+# - data_completeness: fields that determine limited_data/min_data mode
+# - special_rules: optional rules (boosts/penalties) with enable flags
+# Notes:
+# * All weights are additive; suggested sum of absolute values ~100.
+# * No '...' end-of-document markers (they break YAML parsing).
+# * Keep key names consistent across specialties.
 
-# Score Thresholds (Adaptive - MORE AGGRESSIVE for OB/GYN)
+version: 4.1
+specialty: obgyn
 thresholds:
   standard:
-    high_fit: 65  # Lower than other specialties
-    medium_fit: 45  # Lower threshold
+    high_fit: 65
+    medium_fit: 45
     low_fit: 0
-  
   limited_data:
-    high_fit: 45  # More forgiving for OB/GYN
-    medium_fit: 30  # Catch more practices
+    high_fit: 45
+    medium_fit: 30
     low_fit: 0
-  
   minimum_data:
-    high_fit: 35  # Very forgiving
-    medium_fit: 20  # Capture solo or new OBs
+    high_fit: 35
+    medium_fit: 20
     low_fit: 0
-
-# Scoring Weights
+data_completeness:
+  required_fields:
+  - name
+  - address
+  - phone
+  nice_to_have:
+  - website
+  - domain
+  - google_place_id
+  - reviews_count
+  - avg_rating
+  - categories
+  - services
+  limited_threshold: 3
+  minimum_threshold: 1
 weights:
   specialty_match:
-    obgyn: 20
-    women's_health: 18
-    prenatal_care: 10
-
+    category_contains:
+      obgyn: 20
+      obstetrician: 14
+      gynecologist: 16
+      women_health: 10
+    name_contains:
+      obgyn: 8
+      women: 4
   services_offered:
+    pregnancy_care: 6
+    prenatal_care: 6
     birth_control: 5
-    hormone_therapy: 5
     menopause_support: 4
-    pelvic_ultrasound: 3
-    robotic_surgery: 3
-
+    pelvic_ultrasound: 4
+    urogynecology: 5
+    robotic_surgery: 5
+    aesthetic_services: 6
   ownership_model:
     independent: 10
-    solo_practice: 8
-    not_affiliated: 6
-
+    small_group: 6
+    hospital_owned: -6
+  credibility_indicators:
+    has_md_do: 8
+    board_certified: 8
+    accepts_insurance: 4
   reviews_rating:
-    rating_4_5_plus: 5
-    review_count_50_plus: 4
-
+    avg_rating_gt_4_5: 7
+    reviews_count_gt_80: 5
+    recent_reviews_90d: 3
   digital_presence:
-    has_website: 5
-    has_portal: 4
-    instagram_found: 3
-    facebook_found: 2
-
-  high_value_keywords:
-    - "gynecologist"
-    - "obstetrician"
-    - "pap smear"
-    - "annual exam"
-    - "pregnancy care"
-    - "female doctor"
-
+    has_website: 4
+    patient_portal: 5
+    online_booking: 4
+    instagram_found: 2
+high_value_keywords:
+- annual exam
+- pap smear
+- pregnancy care
+- women's health
 keyword_bonus: 2
-max_keyword_bonus: 8
+max_keyword_bonus: 10
+special_rules:
+  aesthetics_cross_sell:
+    enabled: true
+    has_aesthetics_page_bonus: 8
