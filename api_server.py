@@ -211,11 +211,12 @@ async def get_search_status(job_id: str, api_key: str = Header(..., alias="X-API
     verify_api_key(api_key)
     with search_jobs_lock:
         job = search_jobs.get(job_id)
-    
+
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    
-    return SearchStatus(**job)
+
+    # This corrected line adds the job_id to the response
+    return SearchStatus(job_id=job_id, **job)
 
 if __name__ == "__main__":
     import uvicorn
