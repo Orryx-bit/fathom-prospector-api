@@ -230,7 +230,7 @@ class FathomProspector:
         if self.gemini_key and GEMINI_AVAILABLE:
             try:
                 genai.configure(api_key=self.gemini_key)
-                self.gemini_model = genai.GenerativeModel('gemini-1.5-pro')
+                self.gemini_model = genai.GenerativeModel('gemini-1.5-pro-latest')
                 self.ai_enabled = True
                 logger.info('✨ GEMINI AI ENABLED - Full AI analysis active')
             except Exception as e:
