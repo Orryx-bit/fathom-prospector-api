@@ -2,7 +2,7 @@
 """
 Fathom Medical Device Prospecting System
 Comprehensive tool for finding and scoring medical practices
-Production-Hardened Version 3.4 (Final Logic Fix)
+Production-Hardened Version 3.5 (Definitive Fix)
 """
 
 import argparse
@@ -141,6 +141,22 @@ class FathomProspector:
         cleaned_name = practice_name.lower().strip()
         return any(customer_name in cleaned_name for customer_name in self.existing_customers)
 
+    # --- THIS FUNCTION WAS MISSING - IT IS NOW RESTORED ---
+    def google_places_search(self, query: str, location: str, radius: int) -> List[Dict]:
+        if self.demo_mode:
+            logger.info("DEMO MODE: Generating mock data.")
+            return [{'name': 'Austin Demo MedSpa', 'place_id': 'demo1'}]
+
+        geocode_result = self.gmaps_api.geocode(location)
+        if not geocode_result:
+            logger.error(f"Could not geocode location: {location}")
+            return []
+        
+        lat_lng = geocode_result[0]['geometry']['location']
+        places_result = self.gmaps_api.places_nearby(location=lat_lng, radius=radius, keyword=query)
+        return places_result.get('results', [])
+    # --- END OF RESTORED FUNCTION ---
+
     def scrape_website_deep(self, base_url: str) -> Dict[str, any]:
         if not base_url: return {}
         try:
@@ -159,23 +175,22 @@ class FathomProspector:
             return {}
             
     def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict, str]:
-        # This function remains the same as the last version
         specialty = self.detect_specialty(practice_data)
         if not self.gemini_model:
             return 50, {"summary": "Gemini not available. Basic score used."}, specialty
 
         logger.info(f"Performing Gemini AI analysis for: {practice_data.get('name')}")
         prompt_data = {key: practice_data.get(key) for key in ['name', 'title', 'description', 'rating', 'review_count']}
-        prompt_data['website_content_summary'] = practice_data.get('services_text', '')[:2000] # Limit context size
+        prompt_data['website_content_summary'] = practice_data.get('services_text', '')[:2000]
         prompt_data['detected_specialty'] = specialty
 
-        prompt = f"""You are a sales analyst for Venus Concepts, an aesthetic device company. Evaluate this lead based on the data provided. Respond ONLY with a valid JSON object.
+        prompt = f"""You are a sales analyst for Venus Concepts. Evaluate this lead based on the data provided. Respond ONLY with a valid JSON object.
         DATA: {json.dumps(prompt_data, indent=2)}
         CRITERIA:
-        1. Decision Maker Autonomy (1-10): Is this a small, independent practice (high score) or a large hospital/chain (low score)?
-        2. Aesthetic Focus (1-10): Are they a dedicated medspa/cosmetic clinic (high score)?
+        1. Decision Maker Autonomy (1-10): Is this an independent practice (high score) or a hospital/chain (low score)?
+        2. Aesthetic Focus (1-10): Are they a dedicated medspa (high score) or general practice (low score)?
         3. Financial Readiness (1-10): Do they seem like a premium business that can afford a $100k device?
-        4. Growth Potential (1-10): Do they seem to be growing or marketing heavily?
+        4. Growth Potential (1-10): Are they hiring or marketing heavily?
         RESPONSE FORMAT: {{"scores": {{"decision_maker_autonomy": 0, "aesthetic_focus": 0, "financial_readiness": 0, "growth_potential": 0}}, "final_summary": "<Your 2-sentence analysis here.>"}}
         """
         try:
@@ -198,8 +213,11 @@ class FathomProspector:
 
     def process_practice(self, place_data: Dict) -> Optional[Dict]:
         practice_name = place_data.get('name')
-        if not practice_name or self.is_existing_customer(practice_name):
-            logger.warning(f"⏭️ Skipping: {practice_name} (Excluded or no name)")
+        if not practice_name:
+            return None
+        
+        if self.is_existing_customer(practice_name):
+            logger.warning(f"⏭️ Skipping excluded: {practice_name}")
             return None
 
         logger.info(f"Processing: {practice_name}")
@@ -220,6 +238,7 @@ class FathomProspector:
         practice_record.update({'ai_score': ai_score, 'score_breakdown': score_breakdown, 'specialty': specialty})
         return practice_record
 
+    # --- THIS FUNCTION IS NOW CORRECTED TO CALL THE RIGHT METHODS ---
     def run_prospecting(self, keywords: List[str], location: str, radius: int, max_results: int):
         logger.info(f"Starting prospecting for '{', '.join(keywords)}' near '{location}'")
         
@@ -228,7 +247,8 @@ class FathomProspector:
         for keyword in keywords:
             if len(all_results) >= max_results: break
             
-            places = self.google_places_search(keyword, location, radius * 1000).get('results', [])
+            # Corrected to call the restored function
+            places = self.google_places_search(keyword, location, radius * 1000)
             
             for place in places:
                 if len(all_results) >= max_results: break
@@ -238,7 +258,7 @@ class FathomProspector:
                     continue
                 seen_ids.add(place_id)
                 
-                # Fetch full details for the unique place
+                # Fetch full details for each unique place
                 details = self.gmaps_api.place_details(place_id, ['name', 'formatted_address', 'formatted_phone_number', 'website', 'rating', 'user_ratings_total', 'types'])
                 
                 if details:
@@ -251,12 +271,10 @@ class FathomProspector:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         csv_filename = f"prospects_{timestamp}.csv"
         
-        # Exporting results
         if all_results:
             headers = list(all_results[0].keys())
-            for key in ['ai_summary', 'ai_score_breakdown']: # Add AI headers if not present
-                if key not in headers: headers.append(key)
-
+            if 'ai_summary' not in headers: headers.extend(['ai_summary', 'ai_score_breakdown'])
+            
             with open(csv_filename, 'w', newline='', encoding='utf-8') as f:
                 writer = csv.DictWriter(f, fieldnames=headers, extrasaction='ignore')
                 writer.writeheader()
@@ -264,7 +282,7 @@ class FathomProspector:
                     analysis = row.get('score_breakdown', {})
                     row['ai_summary'] = analysis.get('final_summary', '')
                     row['ai_score_breakdown'] = json.dumps(analysis.get('scores', {}))
-                    for k, v in row.items(): # Sanitize complex types
+                    for k, v in row.items():
                         if isinstance(v, (dict, list)): row[k] = json.dumps(v)
                     writer.writerow(row)
             logger.info(f"Results exported to {csv_filename}")
