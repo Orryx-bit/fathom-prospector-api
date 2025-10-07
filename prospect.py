@@ -26,11 +26,29 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
-# Gemini AI removed - using rule-based logic only
-GEMINI_AVAILABLE = False
+
 
 # Load environment variables
 load_dotenv()
+
+# Modern Gemini AI SDK (Client-centric architecture)
+try:
+    from google import genai
+    gemini_client = genai.Client()  # Automatically finds GEMINI_API_KEY env var
+    GEMINI_AVAILABLE = True
+    logger.info('✅ Gemini AI initialized successfully with modern SDK')
+except ImportError:
+    gemini_client = None
+    GEMINI_AVAILABLE = False
+    logger.warning('⚠️  google-genai package not installed. Run: pip install google-genai')
+except Exception as e:
+    gemini_client = None
+    GEMINI_AVAILABLE = False
+    logger.warning(f'⚠️  Gemini AI not available: {e}. Using enhanced rule-based fallback.')
+
+# YAML support for keyword library
+import yaml
+
 
 # Configure logging
 handlers = [logging.StreamHandler(sys.stdout)]
@@ -224,6 +242,13 @@ class FathomProspector:
         
         self.demo_mode = demo_mode
         self.existing_customers = set()
+        
+        # Load keyword library for enhanced scoring
+        self.keyword_library = self.load_keyword_library()
+        
+        # Store Gemini client
+        self.gemini_client = gemini_client
+        self.gemini_available = GEMINI_AVAILABLE
         
         # Load existing customers for exclusion
         if existing_customers_csv and os.path.exists(existing_customers_csv):
@@ -790,6 +815,342 @@ class FathomProspector:
                 'staff_count': 0
             }
     
+    
+    
+    def load_keyword_library(self) -> Dict:
+        """
+        Load comprehensive keyword library from YAML config
+        Falls back to basic keywords if file not found
+        """
+        yaml_path = 'config/keyword_library.yaml'
+        
+        if not os.path.exists(yaml_path):
+            logger.warning(f'Keyword library not found at {yaml_path}, using basic keywords')
+            return self._get_default_keywords()
+        
+        try:
+            with open(yaml_path, 'r') as f:
+                keywords = yaml.safe_load(f)
+                keyword_count = sum(len(v) for v in keywords.get('aesthetic_services', {}).values() if isinstance(v, dict))
+                logger.info(f'✅ Loaded keyword library: ~{keyword_count} keywords across all categories')
+                return keywords
+        except Exception as e:
+            logger.error(f'Error loading keyword library: {e}')
+            return self._get_default_keywords()
+    
+    def _get_default_keywords(self) -> Dict:
+        """Fallback keywords if YAML not available"""
+        return {
+            'aesthetic_services': {
+                'body_contouring': {
+                    'high_confidence': {
+                        'body contouring': 1.0,
+                        'fat reduction': 0.95,
+                        'coolsculpting': 0.9
+                    }
+                },
+                'injectables': {
+                    'high_confidence': {
+                        'botox': 1.0,
+                        'fillers': 0.9,
+                        'neurotoxin': 0.95
+                    }
+                }
+            }
+        }
+    
+    def match_keywords_with_confidence(self, text: str, keyword_dict: Dict) -> Tuple[float, List[str]]:
+        """
+        Match keywords with confidence scoring
+        
+        Args:
+            text: Text to search (will be lowercased)
+            keyword_dict: Dictionary with high/medium/clinical confidence keywords
+        
+        Returns:
+            (confidence_score, matched_keywords)
+        """
+        score = 0.0
+        matches = []
+        text_lower = text.lower()
+        
+        # Check high confidence keywords (0.9-1.0)
+        if 'high_confidence' in keyword_dict:
+            for keyword, confidence in keyword_dict['high_confidence'].items():
+                if keyword.lower() in text_lower:
+                    if confidence > score:
+                        score = confidence
+                    matches.append(f"{keyword} (high:{confidence})")
+        
+        # Check medium confidence keywords (0.6-0.8)
+        if score < 0.7 and 'medium_confidence' in keyword_dict:
+            for keyword, confidence in keyword_dict['medium_confidence'].items():
+                if keyword.lower() in text_lower:
+                    if confidence > score:
+                        score = confidence
+                    matches.append(f"{keyword} (med:{confidence})")
+        
+        # Check clinical terminology (often 0.9-1.0)
+        if 'clinical_terminology' in keyword_dict:
+            for keyword, confidence in keyword_dict['clinical_terminology'].items():
+                if keyword.lower() in text_lower:
+                    if confidence > score:
+                        score = confidence
+                    matches.append(f"{keyword} (clinical:{confidence})")
+        
+        return score, matches
+    
+    def detect_specialty_with_ai(self, practice_data: Dict) -> str:
+        """
+        Use Gemini AI to intelligently detect practice specialty
+        Falls back to rule-based detection if AI unavailable
+        
+        Returns:
+            Specialty string (e.g., 'dermatology', 'plastic_surgery', 'medspa')
+        """
+        if not self.gemini_available:
+            return self.detect_specialty(practice_data)
+        
+        try:
+            # Prepare context for AI
+            context = f"""Analyze this medical practice and determine its PRIMARY specialty.
+
+Practice Name: {practice_data.get('name', '')}
+Description: {practice_data.get('description', '')}
+Services: {', '.join(practice_data.get('services', [])[:10])}
+Address: {practice_data.get('formatted_address', '')}
+
+Return ONLY ONE of these exact values:
+- dermatology
+- plastic_surgery
+- medspa
+- obgyn
+- family_practice
+- anti_aging_medicine
+
+Return only the specialty name, nothing else."""
+            
+            # Call Gemini with modern SDK
+            response = self.gemini_client.generate_content(
+                model='gemini-2.5-flash',
+                contents=context
+            )
+            
+            detected = response.text.strip().lower().replace('_', ' ').replace('-', ' ')
+            
+            # Map variations to standard names
+            specialty_map = {
+                'dermatology': 'dermatology',
+                'plastic surgery': 'plastic_surgery',
+                'plastic_surgery': 'plastic_surgery',
+                'medspa': 'medspa',
+                'med spa': 'medspa',
+                'obgyn': 'obgyn',
+                'ob/gyn': 'obgyn',
+                'family practice': 'family_practice',
+                'family_practice': 'family_practice',
+                'family medicine': 'family_practice',
+                'anti aging medicine': 'anti_aging_medicine',
+                'anti_aging_medicine': 'anti_aging_medicine'
+            }
+            
+            for key, value in specialty_map.items():
+                if key in detected:
+                    logger.info(f'🤖 AI detected specialty: {value}')
+                    return value
+            
+            # If AI returned invalid, fall back to rules
+            logger.warning(f'AI returned invalid specialty: {detected}. Using rule-based fallback.')
+            return self.detect_specialty(practice_data)
+            
+        except Exception as e:
+            logger.error(f'Gemini API error: {e}. Using rule-based fallback.')
+            return self.detect_specialty(practice_data)
+    
+    def analyze_pain_points_with_ai(self, practice_data: Dict, specialty: str) -> Dict:
+        """
+        Use Gemini AI to analyze practice pain points and opportunities
+        Falls back to rule-based analysis if AI unavailable
+        
+        Returns:
+            {
+                'pain_points': [list of strings],
+                'readiness_score': int (0-100),
+                'key_triggers': [list of opportunity triggers],
+                'outreach_angle': str
+            }
+        """
+        if not self.gemini_available:
+            return self.analyze_pain_points_rule_based(practice_data, specialty)
+        
+        try:
+            context = f"""Analyze this {specialty} practice for Venus medical device sales readiness.
+
+Practice Profile:
+- Name: {practice_data.get('name', '')}
+- Staff Size: {practice_data.get('staff_count', 'Unknown')}
+- Current Services: {', '.join(practice_data.get('services', [])[:10])}
+- Has Competing Devices: {bool(practice_data.get('competing_devices', []))}
+- Social Media Active: {bool(practice_data.get('social_links', []))}
+- Rating: {practice_data.get('rating', 'N/A')} ({practice_data.get('user_ratings_total', 0)} reviews)
+
+Analyze and provide:
+1. Top 3 pain points this practice likely faces
+2. Readiness score for purchasing Venus devices (0-100)
+3. Key opportunity triggers for outreach
+4. Best outreach angle
+
+Format your response EXACTLY like this:
+PAIN_POINTS:
+- [specific pain point 1]
+- [specific pain point 2]
+- [specific pain point 3]
+
+READINESS_SCORE: [number 0-100]
+
+KEY_TRIGGERS:
+- [trigger 1]
+- [trigger 2]
+
+OUTREACH_ANGLE: [one sentence describing best approach]"""
+            
+            response = self.gemini_client.generate_content(
+                model='gemini-2.5-flash',
+                contents=context
+            )
+            
+            # Parse the structured response
+            analysis = self._parse_ai_analysis(response.text)
+            
+            logger.info(f'🤖 AI pain point analysis complete. Readiness: {analysis["readiness_score"]}/100')
+            return analysis
+            
+        except Exception as e:
+            logger.error(f'Gemini API error in pain point analysis: {e}')
+            return self.analyze_pain_points_rule_based(practice_data, specialty)
+    
+    def _parse_ai_analysis(self, ai_response: str) -> Dict:
+        """Parse structured AI response into usable data"""
+        result = {
+            'pain_points': [],
+            'readiness_score': 50,
+            'key_triggers': [],
+            'outreach_angle': 'Venus devices can help your practice grow revenue with proven body contouring technology'
+        }
+        
+        try:
+            lines = ai_response.split('\n')
+            current_section = None
+            
+            for line in lines:
+                line = line.strip()
+                
+                if 'PAIN_POINTS:' in line:
+                    current_section = 'pain_points'
+                elif 'READINESS_SCORE:' in line:
+                    current_section = 'readiness_score'
+                    # Extract number
+                    import re
+                    score_match = re.search(r'\d+', line)
+                    if score_match:
+                        result['readiness_score'] = int(score_match.group())
+                elif 'KEY_TRIGGERS:' in line:
+                    current_section = 'key_triggers'
+                elif 'OUTREACH_ANGLE:' in line:
+                    current_section = 'outreach_angle'
+                    # Extract the angle text
+                    angle_text = line.replace('OUTREACH_ANGLE:', '').strip()
+                    if angle_text:
+                        result['outreach_angle'] = angle_text
+                elif line.startswith('-') and current_section in ['pain_points', 'key_triggers']:
+                    item = line.lstrip('- ').strip()
+                    if item:
+                        result[current_section].append(item)
+                elif current_section == 'outreach_angle' and line:
+                    # Multi-line outreach angle
+                    if result['outreach_angle'] == result['outreach_angle']:  # Still default
+                        result['outreach_angle'] = line
+                    else:
+                        result['outreach_angle'] += ' ' + line
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f'Error parsing AI response: {e}')
+            return result
+    
+    def generate_outreach_with_ai(self, practice_data: Dict, pain_analysis: Dict) -> str:
+        """
+        Use Gemini AI to generate personalized outreach message
+        Falls back to template-based generation if AI unavailable
+        
+        Returns:
+            Personalized outreach email/message text
+        """
+        if not self.gemini_available:
+            return self._generate_outreach_fallback(practice_data, pain_analysis)
+        
+        try:
+            context = f"""Generate a personalized outreach message for this medical practice.
+
+Practice: {practice_data.get('name', '')}
+Specialty: {practice_data.get('specialty', '')}
+Staff Size: {practice_data.get('staff_count', 'Unknown')}
+Pain Points: {', '.join(pain_analysis.get('pain_points', [])[:2])}
+Readiness Score: {pain_analysis.get('readiness_score', 50)}/100
+Outreach Angle: {pain_analysis.get('outreach_angle', '')}
+
+Write a SHORT (3-4 sentences) personalized email opener that:
+1. References a specific pain point or opportunity
+2. Mentions Venus device benefits naturally
+3. Suggests a brief exploratory call
+4. Sounds conversational and human (NOT salesy or generic)
+5. Does NOT use phrases like "I hope this email finds you well"
+
+Do NOT include:
+- Subject line
+- Signature
+- Formal greetings
+- Generic platitudes
+
+Just write the body text (3-4 sentences max)."""
+            
+            response = self.gemini_client.generate_content(
+                model='gemini-2.5-flash',
+                contents=context
+            )
+            
+            outreach = response.text.strip()
+            
+            # Clean up any remaining formalities
+            outreach = outreach.replace('Dear', '').replace('Hi,', '').replace('Hello,', '')
+            outreach = outreach.replace('Best regards,', '').replace('Sincerely,', '')
+            outreach = outreach.strip()
+            
+            logger.info(f'🤖 AI generated personalized outreach ({len(outreach)} chars)')
+            return outreach
+            
+        except Exception as e:
+            logger.error(f'Gemini API error in outreach generation: {e}')
+            return self._generate_outreach_fallback(practice_data, pain_analysis)
+    
+    def _generate_outreach_fallback(self, practice_data: Dict, pain_analysis: Dict) -> str:
+        """Generate outreach using templates when AI unavailable"""
+        specialty = practice_data.get('specialty', 'aesthetic')
+        name = practice_data.get('name', 'your practice')
+        
+        templates = [
+            f"I noticed {name} offers aesthetic services but may not have the latest body contouring technology. Venus devices have helped similar {specialty} practices increase revenue by 30-40% in the first year. Would you be open to a quick 15-minute call to discuss how this might fit your practice?",
+            
+            f"Many {specialty} practices we work with struggle to differentiate their body contouring services. Venus Legacy and Bliss have proven ROI models. Would love to share some case studies from practices similar to {name}. Available for a brief call this week?",
+            
+            f"{name} has a strong online presence, which suggests your patients are engaged. Venus devices could complement your current services and create new revenue streams. Quick question: are you currently looking to add or upgrade body contouring technology?"
+        ]
+        
+        import random
+        return random.choice(templates)
+
+
     def detect_specialty(self, practice_data: Dict) -> str:
         """
         Detect the primary specialty of a practice (keyword-based)
