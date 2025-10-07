@@ -218,6 +218,34 @@ async def get_search_status(job_id: str, api_key: str = Header(..., alias="X-API
     # This corrected line adds the job_id to the response
     return SearchStatus(job_id=job_id, **job)
 
+@app.get("/api/prospect/results/{job_id}")
+async def get_search_results(job_id: str, api_key: str = Header(..., alias="X-API-Key")):
+    """
+    Get the detailed results of a completed search job.
+    This endpoint is called by the Next.js frontend to fetch prospects.
+    """
+    verify_api_key(api_key)
+    with search_jobs_lock:
+        job = search_jobs.get(job_id)
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    if job["status"] != "completed":
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Job is not completed yet. Current status: {job['status']}"
+        )
+
+    return {
+        "job_id": job_id,
+        "status": "completed",
+        "results": job.get("results", []),
+        "csv_file": job.get("csv_file"),
+        "report_file": job.get("report_file"),
+        "duration": job.get("duration", 0)
+    }
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.getenv("PORT", "8000"))
