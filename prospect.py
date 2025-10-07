@@ -19,30 +19,6 @@ from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
-# === Gemini optional enrichment (feature-flagged) ===
-import os, time, json, urllib.request
-USE_GEMINI = os.getenv("FEATURE_GEMINI", "false").lower() == "true"
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-pro")
-_GEM_CACHE = {}
-_GEM_TTL = 24 * 3600
-FEATURE_GEMINI_SALES_ASSIST = os.getenv("FEATURE_GEMINI_SALES_ASSIST", "false").lower() == "true"
-FEATURE_GEMINI_RERANK = os.getenv("FEATURE_GEMINI_RERANK", "false").lower() == "true"
-GEMINI_CACHE_TTL_S = int(os.getenv("GEMINI_CACHE_TTL_S", str(_GEM_TTL)))
-GEMINI_MAX_CALLS_PER_RUN = int(os.getenv("GEMINI_MAX_CALLS_PER_RUN", "200"))
-GEMINI_MAX_QPS = int(os.getenv("GEMINI_MAX_QPS", "2"))
-_GEM_CALLS_THIS_RUN = 0
-_GEM_LAST_CALL_TS = 0.0
-def _gem_can_call_now():
-    global _GEM_CALLS_THIS_RUN, _GEM_LAST_CALL_TS
-    if _GEM_CALLS_THIS_RUN >= GEMINI_MAX_CALLS_PER_RUN:
-        return False
-    now = time.time()
-    gap = 1.0 / max(1, GEMINI_MAX_QPS)
-    if now - _GEM_LAST_CALL_TS < gap:
-        time.sleep(gap - (now - _GEM_LAST_CALL_TS))
-    _GEM_LAST_CALL_TS = time.time()
-    return True
-
 
 import pandas as pd
 import requests
@@ -125,7 +101,7 @@ logger = logging.getLogger(__name__)
 class GooglePlacesAPI:
     """Direct Google Places API wrapper with guaranteed timeouts"""
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, api_key: str):
         self.api_key = api_key
         self.base_url = "https://maps.googleapis.com/maps/api"
         # Connection timeout, Read timeout
@@ -281,9 +257,20 @@ class GooglePlacesAPI:
 class FathomProspector:
     """Main prospecting system for medical devices"""
     
-    def __init__(self, demo_mode=False, existing_customers_csv=None):
-        self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
-        self.gemini_key = os.getenv('GEMINI_API_KEY')
+    def __init__(self, *args, api_key=None, **kwargs):
+        self.gmaps_key = (
+
+        # Determine demo mode only if no Google Places key is available
+        self.DEMO_MODE = False
+        if not self.gmaps_key:
+            logger.warning("Google Places API key missing; running in DEMO MODE.")
+            self.DEMO_MODE = True
+        else:
+            logger.info("Google Places API: ✓ Configured")
+            os.getenv("GOOGLE_PLACES_API_KEY")
+            or os.getenv("FATHOM_API_KEY")
+            or api_key
+        )self.gemini_key = os.getenv('GEMINI_API_KEY')
         
         if not self.gmaps_key:
             logger.warning('GOOGLE_PLACES_API_KEY not found - switching to demo mode')
@@ -1794,132 +1781,3 @@ if __name__ == "__main__":
 
 # Backward-compatibility alias for API server imports
 MedicalProspector = FathomProspector
-
-
-def gemini_classify_and_extract(domain: str, page_text: str) -> dict:
-    if not USE_GEMINI or not os.getenv("GEMINI_API_KEY") or not _gem_can_call_now():
-        return {}
-    try:
-        key = f"cls:{domain}:{hash(page_text) & 0xffffffff:x}"
-        hit = _GEM_CACHE.get(key)
-        if hit and time.time() - hit['ts'] < GEMINI_CACHE_TTL_S:
-            return hit['data']
-        body = {
-          "contents": [{"parts": [{"text": (
-            "You classify a medical/wellness clinic context and extract signals.\n"
-            "SEGMENTS:\n- AESTHETIC_CORE\n- PROTO_AESTHETIC\n- PRIMARY_CARE_NO_CASHPAY\n- SYSTEM\n\n"
-            "Return STRICT JSON with keys: segment, has_injectables, has_weight_loss, autonomy_hint, self_pay_terms, notes.\n\n"
-            f"TEXT:\n{(page_text or '')[:7000]}"
-          )}]}],
-          "generationConfig": {"temperature": 0.2, "maxOutputTokens": 128},
-          "safetySettings": []
-        }
-        req = urllib.request.Request(
-          f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={os.getenv('GEMINI_API_KEY')}",
-          data=json.dumps(body).encode('utf-8'),
-          headers={'Content-Type':'application/json'},
-          method='POST',
-        )
-        timeout_s = max(1.0, float(os.getenv('GEMINI_TIMEOUT_MS', '4000'))/1000.0)
-        global _GEM_CALLS_THIS_RUN
-        _GEM_CALLS_THIS_RUN += 1
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            raw = json.loads(resp.read().decode('utf-8'))
-        text_out = raw.get('candidates',[{}])[0].get('content',{}).get('parts',[{}])[0].get('text','').strip().strip('`')
-        data = {}
-        if text_out.startswith('{'):
-            data = json.loads(text_out)
-        else:
-            i, j = text_out.find('{'), text_out.rfind('}')
-            if i != -1 and j != -1:
-                data = json.loads(text_out[i:j+1])
-        if not isinstance(data, dict) or 'segment' not in data:
-            data = {}
-        _GEM_CACHE[key] = {'ts': time.time(), 'data': data}
-        return data
-    except Exception:
-        return {}
-
-
-def gemini_sales_assist(domain: str, signals: dict) -> dict:
-    if not FEATURE_GEMINI_SALES_ASSIST or not USE_GEMINI or not os.getenv('GEMINI_API_KEY') or not _gem_can_call_now():
-        return {}
-    try:
-        key = f"assist:{domain}:{hash(json.dumps(signals, sort_keys=True)) & 0xffffffff:x}"
-        hit = _GEM_CACHE.get(key)
-        if hit and time.time() - hit['ts'] < GEMINI_CACHE_TTL_S:
-            return hit['data']
-        body = {"contents":[{"parts":[{"text":(
-            "Given clinic signals, create: reason, device_hint (one Venus device), objection, counter.\n"
-            "Return STRICT JSON with keys: reason, device_hint, objection, counter.\n\n"
-            f"SIGNALS:\n{json.dumps(signals)[:7500]}"
-        )}]}],"generationConfig":{"temperature":0.2,"maxOutputTokens":160},"safetySettings":[]}
-        req = urllib.request.Request(
-          f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={os.getenv('GEMINI_API_KEY')}",
-          data=json.dumps(body).encode('utf-8'),
-          headers={'Content-Type':'application/json'}, method='POST')
-        timeout_s = max(1.0, float(os.getenv('GEMINI_TIMEOUT_MS','4000'))/1000.0)
-        global _GEM_CALLS_THIS_RUN
-        _GEM_CALLS_THIS_RUN += 1
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            raw = json.loads(resp.read().decode('utf-8'))
-        text_out = raw.get('candidates',[{}])[0].get('content',{}).get('parts',[{}])[0].get('text','').strip().strip('`')
-        data = {}
-        if text_out.startswith('{'):
-            data = json.loads(text_out)
-        else:
-            i, j = text_out.find('{'), text_out.rfind('}')
-            if i != -1 and j != -1:
-                data = json.loads(text_out[i:j+1])
-        if not isinstance(data, dict) or 'reason' not in data:
-            data = {}
-        _GEM_CACHE[key] = {'ts': time.time(), 'data': data}
-        return data
-    except Exception:
-        return {}
-
-
-def gemini_rerank(candidates: list) -> list:
-    if not FEATURE_GEMINI_RERANK or not USE_GEMINI or not os.getenv('GEMINI_API_KEY') or not _gem_can_call_now():
-        return candidates
-    try:
-        lite = []
-        for c in candidates[:30]:
-            lite.append({
-                'name': c.get('name'),
-                'segment': c.get('segment') or c.get('category') or '',
-                'services': (c.get('services') or [])[:12],
-                'scores': {k:v for k,v in (c.get('score_breakdown') or {}).items() if isinstance(v,(int,float))},
-                'social': (c.get('social_links') or [])[:6],
-                'types': (c.get('types') or [])[:6],
-                'reviews': {'count': c.get('review_count',0), 'rating': c.get('rating',0)},
-            })
-        body = {"contents":[{"parts":[{"text":(
-            "Rerank these prospects by likelihood to adopt a Venus platform in 6–12 months.\n"
-            "Return STRICT JSON as an array of indices (0-based) indicating the new order.\n\n"
-            f"CANDIDATES:\n{json.dumps(lite)[:12000]}"
-        )}]}],"generationConfig":{"temperature":0.1,"maxOutputTokens":200},"safetySettings":[]}
-        req = urllib.request.Request(
-          f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent?key={os.getenv('GEMINI_API_KEY')}",
-          data=json.dumps(body).encode('utf-8'),
-          headers={'Content-Type':'application/json'}, method='POST')
-        timeout_s = max(1.0, float(os.getenv('GEMINI_TIMEOUT_MS','4000'))/1000.0)
-        global _GEM_CALLS_THIS_RUN
-        _GEM_CALLS_THIS_RUN += 1
-        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            raw = json.loads(resp.read().decode('utf-8'))
-        text_out = raw.get('candidates',[{}])[0].get('content',{}).get('parts',[{}])[0].get('text','').strip().strip('`')
-        order = []
-        if text_out.startswith('['):
-            order = json.loads(text_out)
-        else:
-            i, j = text_out.find('['), text_out.rfind(']')
-            if i != -1 and j != -1:
-                order = json.loads(text_out[i:j+1])
-        if not isinstance(order, list) or not all(isinstance(x,int) for x in order):
-            return candidates
-        order = [i for i in order if 0 <= i < len(candidates[:30])]
-        first = [candidates[:30][i] for i in order] + [c for i,c in enumerate(candidates[:30]) if i not in order]
-        return first + candidates[30:]
-    except Exception:
-        return candidates
