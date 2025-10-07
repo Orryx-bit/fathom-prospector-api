@@ -31,25 +31,6 @@ from ratelimit import limits, sleep_and_retry
 # Load environment variables
 load_dotenv()
 
-# Modern Gemini AI SDK (Client-centric architecture)
-try:
-    from google import genai
-    gemini_client = genai.Client()  # Automatically finds GEMINI_API_KEY env var
-    GEMINI_AVAILABLE = True
-    logger.info('✅ Gemini AI initialized successfully with modern SDK')
-except ImportError:
-    gemini_client = None
-    GEMINI_AVAILABLE = False
-    logger.warning('⚠️  google-genai package not installed. Run: pip install google-genai')
-except Exception as e:
-    gemini_client = None
-    GEMINI_AVAILABLE = False
-    logger.warning(f'⚠️  Gemini AI not available: {e}. Using enhanced rule-based fallback.')
-
-# YAML support for keyword library
-import yaml
-
-
 # Configure logging
 handlers = [logging.StreamHandler(sys.stdout)]
 
@@ -68,6 +49,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Modern Gemini AI SDK (Client-centric architecture)
+try:
+    from google import genai
+    gemini_client = genai.Client()  # Automatically finds GEMINI_API_KEY env var
+    GEMINI_AVAILABLE = True
+    logger.info('✅ Gemini AI initialized successfully with modern SDK')
+except ImportError:
+    gemini_client = None
+    GEMINI_AVAILABLE = False
+    logger.warning('⚠️  google-genai package not installed. Run: pip install google-genai')
+except Exception as e:
+    gemini_client = None
+    GEMINI_AVAILABLE = False
+    logger.warning(f'⚠️  Gemini AI not available: {e}. Using enhanced rule-based fallback.')
+
+# YAML support for keyword library
+import yaml
 
 
 class GooglePlacesAPI:
