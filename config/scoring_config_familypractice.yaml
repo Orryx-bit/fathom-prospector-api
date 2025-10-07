@@ -1,0 +1,182 @@
+
+# Venus Medical Device Lead Scoring System Configuration
+# Version: 2.0 - Family Practice Specialty
+# Purpose: AI-powered scoring optimized for Family Practice prospecting
+# Focus: Weight loss, wellness programs, aesthetic add-ons
+
+# =============================================================================
+# FEATURE CATEGORY WEIGHTS (must sum to 1.0)
+# =============================================================================
+# Optimized weights for Family Practice adding aesthetics
+
+category_weights:
+  weight_loss_glp1: 0.20         # Weight management (HIGHEST - key entry point)
+  specialty_match: 0.18          # Family practice with aesthetic focus
+  wellness_programs: 0.15        # Preventive care, longevity (NEW CATEGORY)
+  aesthetic_services: 0.12       # Growing but not primary
+  practice_size: 0.15            # Prefer smaller independent practices
+  competing_devices: 0.08        # Lower priority (not equipment-heavy)
+  social_activity: 0.05          # Less critical for family practice
+  reviews_rating: 0.05           # Reputation matters
+  search_visibility: 0.02        # Basic online presence
+
+# =============================================================================
+# FEATURE-LEVEL WEIGHTS (within each category)
+# =============================================================================
+
+feature_weights:
+  # WEIGHT LOSS / GLP-1 (20% total) - CRITICAL entry point
+  weight_loss_glp1:
+    glp1_services: 0.45            # Semaglutide, tirzepatide (HIGHEST)
+    weight_management: 0.30        # General weight loss programs
+    nutrition_counseling: 0.15     # Wellness focus
+    hormone_therapy: 0.10          # Some FP offer this
+  
+  # SPECIALTY MATCH (18% total)
+  specialty_match:
+    family_practice_aesthetic: 0.35  # FP with aesthetic services
+    integrative_medicine: 0.25       # Holistic approach
+    functional_medicine: 0.20        # Wellness-focused
+    internal_medicine: 0.15          # Similar to FP
+    general_practice: 0.05           # Traditional (harder sell)
+  
+  # WELLNESS PROGRAMS (15% total) - NEW CATEGORY
+  wellness_programs:
+    longevity_programs: 0.35         # Anti-aging focus
+    preventive_care_focus: 0.30      # Wellness emphasis
+    concierge_medicine: 0.20         # High-touch service model
+    iv_therapy: 0.15                 # Common add-on
+  
+  # AESTHETIC SERVICES (12% total) - Growing segment
+  aesthetic_services:
+    body_contouring: 0.30            # Venus primary use case
+    weight_loss_aesthetics: 0.25     # Post-weight loss skin tightening
+    injectables: 0.20                # Common starter service
+    laser_hair_removal: 0.15         # Easy add-on
+    skin_tightening: 0.10            # Additional service
+  
+  # PRACTICE SIZE (15% total) - INVERTED: smaller = higher score
+  practice_size:
+    startup_very_small: 0.40         # Solo practitioner (decision-maker)
+    small_practice: 0.35             # 3-4 providers
+    medium_practice: 0.20            # 5-8 providers
+    large_practice: 0.05             # Hospital-affiliated (hard sell)
+  
+  # COMPETING DEVICES (8% total) - Lower priority
+  competing_devices:
+    no_devices: 0.50                 # Clean slate (best)
+    single_device_present: 0.30      # Open to adding
+    multi_platform_present: 0.20     # Already invested (unusual for FP)
+  
+  # SOCIAL ACTIVITY (5% total) - Less critical
+  social_activity:
+    facebook_present: 0.40           # More common than Instagram
+    instagram_present: 0.30          # Growing
+    social_engagement: 0.20
+    linkedin_present: 0.10
+  
+  # REVIEWS & RATING (5% total)
+  reviews_rating:
+    high_rating_high_volume: 0.40    # 4.5+ with 50+ reviews
+    high_rating_medium_volume: 0.30  # 4.0+ with 20+ reviews
+    medium_rating: 0.20              # 3.5+ rating
+    low_rating: 0.10                 # Below 3.5
+  
+  # SEARCH VISIBILITY (2% total) - Basic presence
+  search_visibility:
+    has_website: 0.60
+    has_phone: 0.30
+    has_email: 0.10
+
+# =============================================================================
+# NORMALIZATION PARAMETERS
+# =============================================================================
+
+normalization:
+  robust_scaling:
+    lower_percentile: 5
+    upper_percentile: 95
+  
+  log_transform_features:
+    - instagram_followers
+    - google_reviews_count
+    - competitors_5mi_radius
+  
+  expected_ranges:
+    instagram_followers: [0, 30000]    # FP typically lower
+    posts_90d: [0, 40]                 # Less frequent
+    google_reviews_count: [0, 2000]
+    google_rating: [0, 5]
+    staff_count_est: [1, 30]           # Smaller practices
+    treatment_rooms: [1, 8]
+    job_postings_90d: [0, 5]
+    competitors_5mi_radius: [0, 20]
+    engagement_rate: [0, 1]
+
+# =============================================================================
+# CATEGORICAL FEATURE MAPPINGS
+# =============================================================================
+
+categorical_mappings:
+  service_match_scores:
+    exact_match: 1.0
+    partial_match: 0.6
+    no_match: 0.0
+  
+  device_brand_scores:
+    coolsculpting: 1.0
+    emsculpt: 1.0                  # Body contouring
+    sculptsure: 0.9
+    cynosure: 0.8
+    generic: 0.5
+    none: 0.0
+
+# =============================================================================
+# CONFIDENCE SCORING PARAMETERS
+# =============================================================================
+
+confidence_thresholds:
+  high_confidence_threshold: 0.75    # Lower threshold (less data available)
+  medium_confidence_threshold: 0.55
+  
+  critical_features:
+    - name
+    - address
+    - city
+    - main_services
+  
+  imputation:
+    numeric_default: 0.0
+    categorical_default: "unknown"
+    boolean_default: false
+
+# =============================================================================
+# COMPETITIVE CONTEXT PARAMETERS
+# =============================================================================
+
+competitive_density:
+  ideal_competitor_count: 1           # FP adding aesthetics - less competition
+  overcrowded_threshold: 5
+  undercrowded_threshold: 0
+  apply_penalty_above: 3
+
+# =============================================================================
+# SCORING OUTPUT PARAMETERS
+# =============================================================================
+
+output:
+  min_score: 0.0
+  max_score: 100.0
+  top_contributors_count: 3
+  min_contribution_percentage: 5.0
+
+# =============================================================================
+# VALIDATION RULES
+# =============================================================================
+
+validation:
+  category_weights_must_sum_to: 1.0
+  tolerance: 0.001
+  feature_weights_must_sum_to: 1.0
+  min_valid_score: 0.0
+  max_valid_score: 100.0

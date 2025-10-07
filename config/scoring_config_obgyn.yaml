@@ -1,0 +1,192 @@
+
+# Venus Medical Device Lead Scoring System Configuration
+# Version: 2.0 - OB/GYN Specialty
+# Purpose: AI-powered scoring optimized for OB/GYN practice prospecting
+# Focus: Postpartum services, weight management, aesthetic add-ons
+
+# =============================================================================
+# FEATURE CATEGORY WEIGHTS (must sum to 1.0)
+# =============================================================================
+# Optimized weights for OB/GYN practices selling Venus devices
+
+category_weights:
+  specialty_match: 0.22          # OB/GYN specialty alignment (HIGHER)
+  postpartum_services: 0.15      # Mommy makeover, post-pregnancy (NEW CATEGORY)
+  weight_loss_glp1: 0.12         # GLP-1, weight management (HIGHER - critical for OB/GYN)
+  aesthetic_services: 0.10       # Current aesthetic offerings (LOWER - not primary)
+  competing_devices: 0.10        # Existing equipment context
+  practice_size: 0.15            # Team size (prefer smaller)
+  social_activity: 0.06          # Social media engagement (LOWER - less critical)
+  reviews_rating: 0.05           # Reputation indicators
+  search_visibility: 0.03        # Online presence
+  geography_fit: 0.02            # Market density (LOWER - OB/GYN practices everywhere)
+
+# =============================================================================
+# FEATURE-LEVEL WEIGHTS (within each category)
+# =============================================================================
+
+feature_weights:
+  # SPECIALTY MATCH (22% total) - OB/GYN focused
+  specialty_match:
+    obgyn_practice: 0.35           # Primary target
+    womens_health_clinic: 0.25     # Related specialty
+    cosmetic_gynecology: 0.20      # Aesthetic focus
+    aesthetic_clinic: 0.10         # General aesthetic
+    med_spa: 0.10                  # MedSpa secondary
+
+  # POSTPARTUM SERVICES (15% total) - NEW CATEGORY
+  postpartum_services:
+    mommy_makeover: 0.35           # Primary service
+    postpartum_body_contouring: 0.30  # Body sculpting post-pregnancy
+    diastasis_recti_treatment: 0.20   # Abdominal separation treatment
+    postpartum_skin_tightening: 0.15  # Skin laxity treatment
+  
+  # WEIGHT LOSS / GLP-1 (12% total) - CRITICAL for OB/GYN
+  weight_loss_glp1:
+    glp1_services: 0.40            # Semaglutide, tirzepatide
+    weight_management: 0.30        # General weight loss programs
+    hormone_therapy: 0.20          # Biote, pellets (common in OB/GYN)
+    nutrition_counseling: 0.10     # Wellness programs
+  
+  # AESTHETIC SERVICES (10% total) - Lower priority than derm
+  aesthetic_services:
+    body_contouring: 0.35          # Core Venus device use case
+    skin_tightening: 0.25          # Post-pregnancy demand
+    laser_hair_removal: 0.20       # Common add-on
+    injectables: 0.15              # Growing in OB/GYN
+    photorejuvenation: 0.05        # Less common
+  
+  # COMPETING DEVICES (10% total)
+  competing_devices:
+    no_devices: 0.40               # Clean slate - best opportunity
+    single_device_present: 0.35    # Open to adding
+    multi_platform_present: 0.25   # Already invested
+  
+  # PRACTICE SIZE (15% total) - INVERTED: smaller = higher score
+  practice_size:
+    startup_very_small: 0.40       # 1-2 providers (solo OB/GYN)
+    small_practice: 0.35           # 3-4 providers
+    medium_practice: 0.20          # 5-8 providers
+    large_practice: 0.05           # 9+ providers (hospital-affiliated)
+  
+  # SOCIAL ACTIVITY (6% total) - Lower weight for OB/GYN
+  social_activity:
+    instagram_present: 0.35
+    facebook_present: 0.35         # More common for OB/GYN
+    linkedin_present: 0.15
+    social_engagement: 0.15
+  
+  # REVIEWS & RATING (5% total)
+  reviews_rating:
+    high_rating_high_volume: 0.40  # 4.5+ with 50+ reviews
+    high_rating_medium_volume: 0.30  # 4.0+ with 20+ reviews
+    medium_rating: 0.20            # 3.5+ rating
+    low_rating: 0.10               # Below 3.5
+  
+  # SEARCH VISIBILITY (3% total) - Lower priority
+  search_visibility:
+    has_website: 0.60
+    has_phone: 0.30
+    has_email: 0.10
+  
+  # GEOGRAPHY FIT (2% total) - OB/GYN practices are everywhere
+  geography_fit:
+    small_market: 0.40             # Less competitive
+    suburban: 0.35                 # Standard markets
+    urban: 0.15                    # Competitive
+    over_serviced: 0.10            # Very competitive
+
+# =============================================================================
+# NORMALIZATION PARAMETERS
+# =============================================================================
+
+normalization:
+  robust_scaling:
+    lower_percentile: 5
+    upper_percentile: 95
+  
+  log_transform_features:
+    - instagram_followers
+    - google_reviews_count
+    - competitors_5mi_radius
+  
+  expected_ranges:
+    instagram_followers: [0, 50000]    # OB/GYN typically lower
+    posts_90d: [0, 60]                 # Less frequent posting
+    google_reviews_count: [0, 3000]
+    google_rating: [0, 5]
+    staff_count_est: [1, 50]           # Smaller practices
+    treatment_rooms: [1, 10]
+    job_postings_90d: [0, 10]
+    competitors_5mi_radius: [0, 30]
+    engagement_rate: [0, 1]
+
+# =============================================================================
+# CATEGORICAL FEATURE MAPPINGS
+# =============================================================================
+
+categorical_mappings:
+  service_match_scores:
+    exact_match: 1.0
+    partial_match: 0.6
+    no_match: 0.0
+  
+  device_brand_scores:
+    coolsculpting: 1.0
+    sculptsure: 1.0
+    emsculpt: 1.0              # Popular in OB/GYN
+    cynosure: 0.9
+    candela: 0.9
+    syneron: 0.8
+    generic: 0.5
+    none: 0.0
+
+# =============================================================================
+# CONFIDENCE SCORING PARAMETERS
+# =============================================================================
+
+confidence_thresholds:
+  high_confidence_threshold: 0.80
+  medium_confidence_threshold: 0.60
+  
+  critical_features:
+    - name
+    - address
+    - city
+    - main_services
+  
+  imputation:
+    numeric_default: 0.0
+    categorical_default: "unknown"
+    boolean_default: false
+
+# =============================================================================
+# COMPETITIVE CONTEXT PARAMETERS
+# =============================================================================
+
+competitive_density:
+  ideal_competitor_count: 2           # OB/GYN markets less crowded
+  overcrowded_threshold: 8
+  undercrowded_threshold: 1
+  apply_penalty_above: 4
+
+# =============================================================================
+# SCORING OUTPUT PARAMETERS
+# =============================================================================
+
+output:
+  min_score: 0.0
+  max_score: 100.0
+  top_contributors_count: 3
+  min_contribution_percentage: 5.0
+
+# =============================================================================
+# VALIDATION RULES
+# =============================================================================
+
+validation:
+  category_weights_must_sum_to: 1.0
+  tolerance: 0.001
+  feature_weights_must_sum_to: 1.0
+  min_valid_score: 0.0
+  max_valid_score: 100.0

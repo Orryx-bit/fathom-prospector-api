@@ -39,11 +39,24 @@ class VenusScoringAdapter:
         service_text = ' '.join([s.lower() for s in services])
         
         # SPECIALTY MATCH FEATURES
+        # Dermatology & Plastic Surgery (original)
         features['dermatology'] = 1.0 if any(term in all_text for term in ['dermatology', 'dermatologist', 'skin care', 'skin clinic']) else 0.0
         features['plastic_surgery'] = 1.0 if any(term in all_text for term in ['plastic surgery', 'plastic surgeon', 'cosmetic surgery']) else 0.0
         features['cosmetic_clinic'] = 1.0 if any(term in all_text for term in ['cosmetic clinic', 'cosmetic center']) else 0.0
         features['med_spa'] = 1.0 if any(term in all_text for term in ['med spa', 'medical spa', 'medspa']) else 0.0
         features['aesthetic_clinic'] = 1.0 if any(term in all_text for term in ['aesthetic', 'beauty', 'rejuvenation']) else 0.0
+        
+        # OB/GYN Specialty Features
+        features['obgyn_practice'] = 1.0 if any(term in all_text for term in ['obgyn', 'ob-gyn', 'ob/gyn', 'obstetrics', 'gynecology']) else 0.0
+        features['womens_health_clinic'] = 1.0 if any(term in all_text for term in ["women's health", 'womens health', 'female health']) else 0.0
+        features['cosmetic_gynecology'] = 1.0 if any(term in all_text for term in ['cosmetic gynecology', 'aesthetic gynecology', 'vaginal rejuvenation']) else 0.0
+        
+        # Family Practice Specialty Features
+        features['family_practice_aesthetic'] = 1.0 if any(term in all_text for term in ['family medicine', 'family practice']) and any(term in all_text for term in ['aesthetic', 'cosmetic', 'beauty']) else 0.0
+        features['integrative_medicine'] = 1.0 if any(term in all_text for term in ['integrative medicine', 'holistic medicine', 'functional medicine']) else 0.0
+        features['functional_medicine'] = 1.0 if any(term in all_text for term in ['functional medicine', 'anti-aging', 'longevity', 'regenerative medicine']) else 0.0
+        features['internal_medicine'] = 1.0 if any(term in all_text for term in ['internal medicine', 'internist']) else 0.0
+        features['general_practice'] = 1.0 if any(term in all_text for term in ['general practice', 'general practitioner', 'primary care']) else 0.0
         
         # AESTHETIC SERVICES FEATURES
         features['body_contouring'] = 1.0 if any(term in service_text for term in ['body contouring', 'body sculpting', 'coolsculpting', 'fat reduction']) else 0.0
@@ -160,11 +173,34 @@ class VenusScoringAdapter:
         weight_keywords = ['weight loss', 'weight management', 'medical weight', 'metabolic medicine']
         hormone_keywords = ['biote', 'hormone pellets', 'hormone optimization', 'hormone therapy']
         iv_keywords = ['iv therapy', 'iv drip', 'vitamin infusion']
+        nutrition_keywords = ['nutrition', 'nutritional counseling', 'dietitian', 'diet program']
         
         features['glp1_services'] = 1.0 if any(kw in all_text for kw in glp1_keywords) else 0.0
         features['weight_management'] = 1.0 if any(kw in all_text for kw in weight_keywords) else 0.0
         features['hormone_therapy'] = 1.0 if any(kw in all_text for kw in hormone_keywords) else 0.0
         features['iv_therapy'] = 1.0 if any(kw in all_text for kw in iv_keywords) else 0.0
+        features['nutrition_counseling'] = 1.0 if any(kw in all_text for kw in nutrition_keywords) else 0.0
+        features['weight_loss_aesthetics'] = 1.0 if any(kw in all_text for kw in weight_keywords) and any(kw in all_text for kw in ['body contouring', 'skin tightening', 'aesthetic']) else 0.0
+        
+        # POSTPARTUM SERVICES FEATURES (for OB/GYN)
+        mommy_makeover_keywords = ['mommy makeover', 'post-pregnancy', 'postpartum body', 'after baby']
+        postpartum_contouring_keywords = ['postpartum body contouring', 'post-pregnancy body sculpting', 'after pregnancy body']
+        diastasis_keywords = ['diastasis recti', 'abdominal separation', 'post-pregnancy core']
+        postpartum_tightening_keywords = ['postpartum skin tightening', 'post-pregnancy skin', 'after baby skin']
+        
+        features['mommy_makeover'] = 1.0 if any(kw in all_text for kw in mommy_makeover_keywords) else 0.0
+        features['postpartum_body_contouring'] = 1.0 if any(kw in all_text for kw in postpartum_contouring_keywords) or (features['body_contouring'] and features['obgyn_practice']) else 0.0
+        features['diastasis_recti_treatment'] = 1.0 if any(kw in all_text for kw in diastasis_keywords) else 0.0
+        features['postpartum_skin_tightening'] = 1.0 if any(kw in all_text for kw in postpartum_tightening_keywords) or (features['skin_tightening'] and features['obgyn_practice']) else 0.0
+        
+        # WELLNESS PROGRAMS FEATURES (for Family Practice)
+        longevity_keywords = ['longevity', 'healthspan', 'lifespan optimization', 'age management']
+        preventive_keywords = ['preventive care', 'preventative medicine', 'wellness program', 'health optimization']
+        concierge_keywords = ['concierge', 'membership medicine', 'direct primary care', 'dpc']
+        
+        features['longevity_programs'] = 1.0 if any(kw in all_text for kw in longevity_keywords) else 0.0
+        features['preventive_care_focus'] = 1.0 if any(kw in all_text for kw in preventive_keywords) else 0.0
+        features['concierge_medicine'] = 1.0 if any(kw in all_text for kw in concierge_keywords) else 0.0
         
         # SKIN LAXITY TRIGGERS FEATURES
         post_surgical_keywords = ['post-surgical', 'facelift', 'body contouring surgery', 'blepharoplasty', 'mommy makeover', 'post-cosmetic surgery']

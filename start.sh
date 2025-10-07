@@ -1,12 +1,14 @@
 #!/bin/bash
 set -e
 
+echo "🚀 Starting Fathom API with dependency verification..."
+
 echo "Checking Python version..."
 python --version
 
-# Set PYTHONPATH to include current directory
+# CRITICAL: Set PYTHONPATH to include current directory for scoring_system module
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
-echo "PYTHONPATH set to: $PYTHONPATH"
+echo "✅ PYTHONPATH set to: $PYTHONPATH"
 
 # Activate virtual environment if it exists
 if [ -d ".venv" ]; then
@@ -14,16 +16,28 @@ if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi
 
-echo "Upgrading pip..."
-pip install --upgrade pip
+# Upgrade pip
+echo "📦 Upgrading pip..."
+python -m pip install --upgrade pip
 
-echo "Installing dependencies..."
+# Install requirements
+echo "📦 Installing requirements..."
 pip install -r requirements.txt
 
-echo "Verifying installations..."
-python -c "import pandas; print(f'Pandas {pandas.__version__} installed successfully')"
-python -c "import scoring_system; print('scoring_system module found!')"
+# Verify critical packages
+echo "🔍 Verifying pandas installation..."
+python -c "import pandas; print(f'✅ pandas {pandas.__version__} installed')"
 
-echo "Starting server on port $PORT..."
+echo "🔍 Verifying google.generativeai installation..."
+python -c "import google.generativeai; print('✅ google.generativeai installed')"
+
+echo "🔍 Verifying requests installation..."
+python -c "import requests; print(f'✅ requests installed')"
+
+echo "🔍 Verifying scoring_system module..."
+python -c "import scoring_system; print('✅ scoring_system module found!')"
+
+# Start the server with uvicorn (required by Railway)
+echo "🎯 Starting API server on port $PORT..."
 cd /app || cd "$(pwd)"
 exec python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 300

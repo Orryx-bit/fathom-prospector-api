@@ -26,14 +26,6 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
-# Gemini AI imports
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-    logger.warning("google-generativeai not installed - AI features disabled")
-
 # Load environment variables
 load_dotenv()
 
@@ -224,22 +216,8 @@ class FathomProspector:
             logger.warning('GOOGLE_PLACES_API_KEY not found - switching to demo mode')
             demo_mode = True
         
-        # Initialize Gemini AI (Option B: Full AI by default)
-        self.ai_enabled = False
-        self.gemini_model = None
-        if self.gemini_key and GEMINI_AVAILABLE:
-            try:
-                genai.configure(api_key=self.gemini_key)
-                self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-                self.ai_enabled = True
-                logger.info('✨ GEMINI AI ENABLED - Full AI analysis active')
-            except Exception as e:
-                logger.warning(f'Failed to initialize Gemini AI: {str(e)}')
-        else:
-            if not self.gemini_key:
-                logger.warning('GEMINI_API_KEY not found - AI features disabled')
-            if not GEMINI_AVAILABLE:
-                logger.warning('google-generativeai library not available - AI features disabled')
+        if not self.gemini_key:
+            logger.warning('GEMINI_API_KEY not found - AI features disabled')
         
         self.demo_mode = demo_mode
         self.existing_customers = set()
@@ -284,114 +262,19 @@ class FathomProspector:
             r'\bhealthcare system\b', r'\bregional medical\b', r'\buniversity medical\b'
         ]
         
-        # Device catalog - Venus product line
+        # Device catalog
         self.device_catalog = {
-            'Venus Versa': {
-                'specialties': ['hair removal', 'photorejuvenation', 'skin resurfacing', 'acne treatment', 'vascular lesions'],
-                'keywords': ['laser hair removal', 'ipl', 'photo facial', 'photofacial', 'skin rejuvenation', 'pigmentation']
+            'Device A': {
+                'specialties': ['hair removal', 'photorejuvenation', 'skin resurfacing'],
+                'keywords': ['laser hair removal', 'ipl', 'photo facial']
             },
-            'Venus Legacy': {
-                'specialties': ['body contouring', 'cellulite reduction', 'skin tightening', 'wrinkle reduction'],
-                'keywords': ['body sculpting', 'cellulite', 'radiofrequency', 'rf', 'skin tightening', 'body shaping']
+            'Device B': {
+                'specialties': ['body contouring', 'cellulite reduction', 'skin tightening'],
+                'keywords': ['body sculpting', 'cellulite', 'radiofrequency']
             },
-            'Venus Bliss MAX': {
-                'specialties': ['weight loss', 'muscle stimulation', 'body contouring', 'fat reduction'],
-                'keywords': ['weight loss', 'ems', 'muscle building', 'fat reduction', 'body sculpting', 'lipolysis']
-            },
-            'Venus Viva': {
-                'specialties': ['skin resurfacing', 'scar treatment', 'texture improvement', 'wrinkle reduction'],
-                'keywords': ['skin resurfacing', 'nano fractional', 'scar reduction', 'texture', 'fine lines']
-            }
-        }
-        
-        # Specialty-specific scoring configurations
-        self.specialty_scoring = {
-            'dermatology': {
-                'weights': {
-                    'specialty_match': 20,
-                    'decision_autonomy': 20,
-                    'aesthetic_services': 15,
-                    'competing_devices': 10,
-                    'social_activity': 10,
-                    'reviews_rating': 10,
-                    'search_visibility': 10,
-                    'financial_indicators': 10,
-                    'weight_loss_services': 5
-                },
-                'high_value_keywords': [
-                    'laser', 'ipl', 'photorejuvenation', 'hair removal',
-                    'botox', 'fillers', 'skin tightening', 'acne treatment'
-                ]
-            },
-            'plastic_surgery': {
-                'weights': {
-                    'specialty_match': 20,
-                    'decision_autonomy': 20,
-                    'aesthetic_services': 18,
-                    'competing_devices': 12,
-                    'social_activity': 10,
-                    'reviews_rating': 8,
-                    'search_visibility': 7,
-                    'financial_indicators': 10,
-                    'weight_loss_services': 5
-                },
-                'high_value_keywords': [
-                    'body contouring', 'liposuction', 'coolsculpting',
-                    'breast augmentation', 'tummy tuck', 'fat reduction'
-                ]
-            },
-            'obgyn': {
-                'weights': {
-                    'specialty_match': 20,
-                    'decision_autonomy': 25,
-                    'aesthetic_services': 12,
-                    'competing_devices': 8,
-                    'social_activity': 8,
-                    'reviews_rating': 12,
-                    'search_visibility': 10,
-                    'financial_indicators': 10,
-                    'weight_loss_services': 8
-                },
-                'high_value_keywords': [
-                    'women\'s wellness', 'aesthetic gynecology', 'vaginal rejuvenation',
-                    'hormone therapy', 'postpartum', 'wellness', 'cosmetic gynecology'
-                ]
-            },
-            'medspa': {
-                'weights': {
-                    'specialty_match': 18,
-                    'decision_autonomy': 22,
-                    'aesthetic_services': 20,
-                    'competing_devices': 15,
-                    'social_activity': 12,
-                    'reviews_rating': 8,
-                    'search_visibility': 8,
-                    'financial_indicators': 12,
-                    'weight_loss_services': 10
-                },
-                'high_value_keywords': [
-                    'body sculpting', 'coolsculpting', 'emsculpt', 'laser',
-                    'botox', 'fillers', 'skin tightening', 'cellulite',
-                    'inch loss', 'fat reduction'
-                ]
-            },
-            'familypractice': {
-                'weights': {
-                    'specialty_match': 18,
-                    'decision_autonomy': 25,
-                    'aesthetic_services': 12,
-                    'competing_devices': 8,
-                    'social_activity': 5,
-                    'reviews_rating': 8,
-                    'search_visibility': 5,
-                    'financial_indicators': 12,
-                    'weight_loss_services': 20  # HIGHEST - key entry point
-                },
-                'high_value_keywords': [
-                    'weight loss', 'glp-1', 'semaglutide', 'tirzepatide',
-                    'wellness', 'longevity', 'preventive care', 'functional medicine',
-                    'integrative medicine', 'anti-aging', 'hormone therapy'
-                ]
+            'Device C': {
+                'specialties': ['weight loss', 'muscle stimulation', 'body contouring'],
+                'keywords': ['weight loss', 'ems', 'muscle building', 'fat reduction']
             }
         }
     
@@ -735,47 +618,24 @@ class FathomProspector:
             
             data['services'] = services_found
             
-            # Find social media links - capture full URLs
+            # Find social media links
             social_platforms = {
                 'facebook.com': 'Facebook',
-                'fb.com': 'Facebook',
                 'instagram.com': 'Instagram',
                 'twitter.com': 'Twitter',
-                'x.com': 'Twitter',
                 'linkedin.com': 'LinkedIn',
-                'youtube.com': 'YouTube',
-                'youtu.be': 'YouTube',
-                'tiktok.com': 'TikTok',
-                'pinterest.com': 'Pinterest'
+                'youtube.com': 'YouTube'
             }
             
             social_links = []
             seen_platforms = set()
             
-            # Look for social media links in all anchor tags
             for link in soup.find_all('a', href=True):
-                href = link.get('href', '').strip()
-                href_lower = href.lower()
-                
-                # Skip empty or invalid hrefs
-                if not href or href.startswith('#') or href.startswith('javascript:'):
-                    continue
-                
-                # Check each social platform
+                href = link['href'].lower()
                 for domain, platform_name in social_platforms.items():
-                    if domain in href_lower and platform_name not in seen_platforms:
-                        # Clean up the URL
-                        full_url = href
-                        if href.startswith('//'):
-                            full_url = 'https:' + href
-                        elif href.startswith('/') or not href.startswith('http'):
-                            # Relative URL - skip it as it's not a social link
-                            continue
-                        
-                        # Add the full URL to the list
-                        social_links.append(full_url)
+                    if domain in href and platform_name not in seen_platforms:
+                        social_links.append(platform_name)
                         seen_platforms.add(platform_name)
-                        logger.info(f"Found {platform_name} link: {full_url}")
                         break
             
             data['social_links'] = social_links
@@ -809,393 +669,26 @@ class FathomProspector:
                 'staff_count': 0
             }
     
-    def detect_specialty(self, practice_data: Dict) -> str:
+    def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int]]:
         """
-        Detect the primary specialty of a practice (AI-enhanced when available)
-        Returns: 'dermatology', 'plastic_surgery', 'obgyn', 'medspa', 'familypractice', or 'general'
-        """
-        # Try AI-powered detection first
-        if self.ai_enabled:
-            ai_specialty = self.ai_detect_specialty(practice_data)
-            if ai_specialty:
-                return ai_specialty
-        
-        # Fallback to keyword-based detection
-        name = practice_data.get('name', '').lower()
-        desc = practice_data.get('description', '').lower()
-        services = ' '.join(practice_data.get('services', [])).lower()
-        all_text = f"{name} {desc} {services}"
-        
-        # Priority order (most specific first)
-        if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
-            return 'dermatology'
-        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
-            return 'plastic_surgery'
-        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
-            return 'obgyn'
-        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
-            return 'medspa'
-        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
-            return 'familypractice'
-        else:
-            return 'general'
-    
-    def ai_detect_specialty(self, practice_data: Dict) -> Optional[str]:
-        """
-        AI-powered specialty detection using Gemini
-        """
-        if not self.ai_enabled or not self.gemini_model:
-            return None
-        
-        try:
-            name = practice_data.get('name', '')
-            desc = practice_data.get('description', '')
-            services = practice_data.get('services', [])
-            website_text = practice_data.get('website_text', '')[:1000]  # First 1000 chars
-            
-            prompt = f"""Analyze this medical practice and identify its PRIMARY specialty.
-
-Practice Name: {name}
-Description: {desc}
-Services: {', '.join(services)}
-Website Content: {website_text}
-
-Respond with ONLY ONE of these exact values:
-- dermatology
-- plastic_surgery
-- obgyn
-- medspa
-- familypractice
-- general
-
-Choose the MOST SPECIFIC category. If they offer aesthetic services but are primarily family/primary care, choose 'familypractice'.
-If unclear, choose 'general'.
-
-Specialty:"""
-
-            response = self.gemini_model.generate_content(prompt)
-            specialty = response.text.strip().lower()
-            
-            # Validate response
-            valid_specialties = ['dermatology', 'plastic_surgery', 'obgyn', 'medspa', 'familypractice', 'general']
-            if specialty in valid_specialties:
-                logger.info(f"🤖 AI detected specialty: {specialty}")
-                return specialty
-            else:
-                logger.warning(f"AI returned invalid specialty: {specialty}")
-                return None
-                
-        except Exception as e:
-            logger.warning(f"AI specialty detection failed: {str(e)}")
-            return None
-    
-    def ai_analyze_pain_points(self, practice_data: Dict, specialty: str) -> Dict:
-        """
-        AI-powered pain point analysis
-        Returns detailed pain points specific to Venus device sales
-        """
-        if not self.ai_enabled or not self.gemini_model:
-            return {'pain_points': [], 'readiness_score': 0, 'summary': 'AI analysis not available'}
-        
-        try:
-            name = practice_data.get('name', '')
-            desc = practice_data.get('description', '')
-            services = practice_data.get('services', [])
-            website_text = practice_data.get('website_text', '')[:2000]
-            existing_devices = practice_data.get('devices_found', [])
-            
-            prompt = f"""Analyze this {specialty} practice for Venus aesthetic device sales opportunities.
-
-Practice: {name}
-Description: {desc}
-Current Services: {', '.join(services)}
-Existing Equipment: {', '.join(existing_devices) if existing_devices else 'None detected'}
-Website Content: {website_text}
-
-Venus devices treat: body contouring, cellulite reduction, skin tightening, wrinkle reduction, and hair removal.
-
-Analyze and respond in JSON format:
-{{
-    "pain_points": ["list of 3-5 specific pain points this practice likely faces"],
-    "revenue_opportunity": "brief description of revenue potential",
-    "readiness_score": <0-100 integer>,
-    "competing_services": ["list of competing services they currently offer"],
-    "gap_analysis": "what aesthetic services are they missing",
-    "decision_maker_profile": "who likely makes purchasing decisions",
-    "best_approach": "recommended sales approach for this specific practice"
-}}
-
-Respond ONLY with valid JSON, no other text."""
-
-            response = self.gemini_model.generate_content(prompt)
-            result = json.loads(response.text.strip())
-            logger.info(f"🧠 AI pain point analysis complete - readiness: {result.get('readiness_score', 0)}")
-            return result
-            
-        except Exception as e:
-            logger.warning(f"AI pain point analysis failed: {str(e)}")
-            return {'pain_points': [], 'readiness_score': 0, 'summary': 'Analysis failed', 'error': str(e)}
-    
-    def ai_generate_outreach(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
-        """
-        AI-powered personalized outreach generation
-        """
-        if not self.ai_enabled or not self.gemini_model:
-            return {'subject': '', 'email': '', 'talking_points': []}
-        
-        try:
-            name = practice_data.get('name', '')
-            contact = practice_data.get('contact_name', 'Doctor')
-            
-            prompt = f"""Generate personalized outreach for Venus device sales.
-
-Practice: {name}
-Contact: {contact}
-Specialty: {specialty}
-Pain Points: {', '.join(pain_analysis.get('pain_points', []))}
-Readiness Score: {pain_analysis.get('readiness_score', 0)}
-Best Approach: {pain_analysis.get('best_approach', 'standard')}
-
-Generate:
-1. Email subject line (compelling, personalized)
-2. Email body (3-4 paragraphs, conversational, addresses their specific pain points)
-3. 5 key talking points for a phone call
-4. Recommended follow-up timeline
-
-Respond in JSON format:
-{{
-    "subject": "email subject",
-    "email_body": "full email text",
-    "talking_points": ["point 1", "point 2", "point 3", "point 4", "point 5"],
-    "follow_up_days": <integer>,
-    "call_to_action": "specific next step"
-}}
-
-Be specific, professional, and focus on THEIR revenue growth and patient satisfaction.
-Respond ONLY with valid JSON."""
-
-            response = self.gemini_model.generate_content(prompt)
-            result = json.loads(response.text.strip())
-            logger.info(f"✉️ AI outreach generated for {name}")
-            return result
-            
-        except Exception as e:
-            logger.warning(f"AI outreach generation failed: {str(e)}")
-            return {'subject': '', 'email_body': '', 'talking_points': [], 'error': str(e)}
-    
-    def discover_site_pages(self, base_url: str) -> List[str]:
-        """
-        Discover high-value pages on a practice website
-        Returns list of URLs to scrape
-        """
-        common_paths = [
-            '',  # Homepage
-            '/about', '/about-us', '/our-practice', '/who-we-are',
-            '/services', '/treatments', '/procedures', '/what-we-offer',
-            '/team', '/our-team', '/providers', '/doctors', '/staff', '/meet-the-team',
-            '/contact', '/locations', '/visit-us'
-        ]
-        
-        urls_to_scrape = []
-        
-        for path in common_paths:
-            url = urljoin(base_url, path)
-            # Add to list (we'll check if it exists when we try to scrape it)
-            if url not in urls_to_scrape:
-                urls_to_scrape.append(url)
-        
-        return urls_to_scrape[:7]  # Limit to 7 URLs max
-    
-    def scrape_single_page(self, url: str) -> Dict:
-        """
-        Scrape a single page and return extracted data
-        Returns dict with services, staff_mentions, text, social_links
-        """
-        try:
-            response = self.session.get(url, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Extract text content
-            text_content = soup.get_text().lower()
-            
-            # Find services
-            service_keywords = [
-                'laser hair removal', 'botox', 'fillers', 'coolsculpting',
-                'body contouring', 'skin tightening', 'photorejuvenation',
-                'cellulite treatment', 'weight loss', 'ems', 'muscle building',
-                'emsculpt', 'vaginal rejuvenation', 'hormone therapy',
-                'chemical peel', 'microneedling', 'hydrafacial'
-            ]
-            
-            services_found = [kw for kw in service_keywords if kw in text_content]
-            
-            # Find social links
-            social_platforms = {
-                'facebook.com': 'Facebook',
-                'instagram.com': 'Instagram',
-                'twitter.com': 'Twitter',
-                'linkedin.com': 'LinkedIn',
-                'youtube.com': 'YouTube'
-            }
-            
-            social_links = []
-            for link in soup.find_all('a', href=True):
-                href = link['href'].lower()
-                for domain, platform_name in social_platforms.items():
-                    if domain in href and platform_name not in social_links:
-                        social_links.append(platform_name)
-            
-            # Find staff mentions
-            staff_indicators = soup.find_all(text=re.compile(
-                r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
-            
-            return {
-                'services': services_found,
-                'staff_mentions': list(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5)),
-                'text': text_content,
-                'social_links': social_links
-            }
-            
-        except Exception as e:
-            logger.debug(f"Error scraping {url}: {str(e)}")
-            return {
-                'services': [],
-                'staff_mentions': [],
-                'text': '',
-                'social_links': []
-            }
-    
-    def scrape_website_deep(self, base_url: str, max_pages: int = 5) -> Dict[str, any]:
-        """
-        Intelligently scrape multiple pages from a medical practice website
-        Returns aggregated data from all pages
-        """
-        if self.demo_mode:
-            logger.info(f"DEMO MODE: Using mock website data for {base_url}")
-            return self.get_mock_website_data(base_url)
-        
-        if not base_url:
-            return {
-                'title': 'Not Available - No Website',
-                'description': 'Not Available - No Website',
-                'services': [],
-                'social_links': [],
-                'staff_count': 0
-            }
-        
-        if not self.check_robots_txt(base_url):
-            logger.warning(f"Robots.txt disallows scraping: {base_url}")
-            # Fall back to single page
-            return self.scrape_website(base_url)
-        
-        try:
-            # First, get homepage for title and description
-            time.sleep(random.uniform(0.5, 1.0))
-            response = self.session.get(base_url, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Get title
-            title = soup.title.string.strip() if soup.title and soup.title.string else 'Not Available'
-            
-            # Get description
-            meta_desc = soup.find('meta', attrs={'name': 'description'})
-            description = 'Not Available'
-            if meta_desc and meta_desc.get('content'):
-                description = meta_desc.get('content', '').strip()
-            else:
-                og_desc = soup.find('meta', attrs={'property': 'og:description'})
-                if og_desc and og_desc.get('content'):
-                    description = og_desc.get('content', '').strip()
-            
-            # Discover pages to scrape
-            pages_to_scrape = self.discover_site_pages(base_url)[:max_pages]
-            
-            # Aggregate data from multiple pages
-            all_services = set()
-            all_social_links = set()
-            all_staff_mentions = []
-            all_text = []
-            pages_scraped = 0
-            
-            for page_url in pages_to_scrape:
-                if pages_scraped >= max_pages:
-                    break
-                
-                try:
-                    time.sleep(1.0)  # Respectful delay
-                    page_data = self.scrape_single_page(page_url)
-                    
-                    all_services.update(page_data['services'])
-                    all_social_links.update(page_data['social_links'])
-                    all_staff_mentions.extend(page_data['staff_mentions'])
-                    all_text.append(page_data['text'])
-                    pages_scraped += 1
-                    
-                except Exception as e:
-                    logger.debug(f"Skipping page {page_url}: {str(e)}")
-                    continue
-            
-            # Calculate staff count from all mentions
-            unique_staff = len(set(all_staff_mentions))
-            staff_count = min(unique_staff, 20)
-            
-            logger.info(f"Deep scrape complete for {base_url}: {pages_scraped} pages, {len(all_services)} services found")
-            
-            return {
-                'title': title,
-                'description': description,
-                'services': list(all_services),
-                'social_links': list(all_social_links),
-                'staff_count': staff_count
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in deep scrape for {base_url}: {str(e)}")
-            # Fall back to single-page scrape
-            return self.scrape_website(base_url)
-    
-    def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str]:
-        """
-        Calculate AI-powered scoring with specialty-specific weights
+        Calculate AI-powered scoring based on weighted criteria
         
         CORRECTED LOGIC FOR VENUS DEVICE SALES:
         - SOLO/SMALL practices score HIGHER (single decision maker)
         - NO hospital affiliation scores HIGHER (purchasing freedom)
         - OFFICE-BASED scores HIGHER (no permission needed)
         - PRIVATE ownership scores HIGHER (financial autonomy)
-        
-        Returns:
-            (total_score, score_breakdown, detected_specialty)
         """
-        
-        # STEP 1: Detect specialty
-        specialty = self.detect_specialty(practice_data)
-        
-        # STEP 2: Get specialty-specific config (or use default)
-        if specialty in self.specialty_scoring:
-            config = self.specialty_scoring[specialty]
-            logger.info(f"🎯 Using {specialty.upper()} scoring profile")
-        else:
-            # Default to dermatology weights for general practices
-            config = self.specialty_scoring['dermatology']
-            logger.info(f"Using DEFAULT scoring profile for {specialty}")
-        
-        weights = config['weights']
-        high_value_keywords = config['high_value_keywords']
         
         scores = {
             'specialty_match': 0,
-            'decision_autonomy': 0,
+            'decision_autonomy': 0,  # NEW: Replaces old practice_size
             'aesthetic_services': 0,
             'competing_devices': 0,
             'social_activity': 0,
             'reviews_rating': 0,
             'search_visibility': 0,
-            'financial_indicators': 0,
+            'financial_indicators': 0,  # NEW: Replaces geography_fit
             'weight_loss_services': 0
         }
         
@@ -1359,25 +852,11 @@ Respond ONLY with valid JSON."""
         scores['weight_loss_services'] = min(weight_matches * 2, 5)
         
         # ═══════════════════════════════════════════════════════════
-        # 10. Specialty-Specific Keyword Bonus (up to +10 points)
+        # TOTAL SCORE (out of 100)
         # ═══════════════════════════════════════════════════════════
-        services = practice_data.get('services', [])
-        services_text = ' '.join(services).lower()
-        all_text_with_services = f"{practice_name} {practice_desc} {services_text}"
+        total_score = sum(scores.values())
         
-        keyword_bonus = 0
-        for keyword in high_value_keywords:
-            if keyword in all_text_with_services:
-                keyword_bonus += 2
-        keyword_bonus = min(keyword_bonus, 10)
-        
-        # ═══════════════════════════════════════════════════════════
-        # TOTAL SCORE (out of 110, normalized to 100)
-        # ═══════════════════════════════════════════════════════════
-        base_score = sum(scores.values())
-        total_score = min(base_score + keyword_bonus, 100)
-        
-        return total_score, scores, specialty
+        return total_score, scores
     
     def recommend_device(self, practice_data: Dict, ai_scores: Dict) -> Dict:
         """Recommend top device based on practice profile"""
@@ -1466,49 +945,14 @@ Respond ONLY with valid JSON."""
             'title': 'Not Available'
         }
         
-        # Scrape website if available (using deep multi-page scraping)
+        # Scrape website if available
         if practice_record['website']:
-            logger.info(f"Deep scraping website: {practice_record['website']}")
-            website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
+            logger.info(f"Scraping website: {practice_record['website']}")
+            website_data = self.scrape_website(practice_record['website'])
             practice_record.update(website_data)
         
-        # Calculate AI score with specialty detection
-        ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
-        
-        # 🚀 AI ENRICHMENT (Option B: Enabled by default when API key present)
-        ai_insights = {}
-        if self.ai_enabled:
-            logger.info(f"🤖 Running full AI analysis for {practice_name}")
-            
-            # Get pain point analysis
-            pain_analysis = self.ai_analyze_pain_points(practice_record, specialty)
-            
-            # Generate personalized outreach
-            outreach_content = self.ai_generate_outreach(practice_record, specialty, pain_analysis)
-            
-            # Store AI insights
-            ai_insights = {
-                'pain_points': pain_analysis.get('pain_points', []),
-                'revenue_opportunity': pain_analysis.get('revenue_opportunity', ''),
-                'ai_readiness_score': pain_analysis.get('readiness_score', 0),
-                'competing_services': pain_analysis.get('competing_services', []),
-                'gap_analysis': pain_analysis.get('gap_analysis', ''),
-                'decision_maker_profile': pain_analysis.get('decision_maker_profile', ''),
-                'best_approach': pain_analysis.get('best_approach', ''),
-                'email_subject': outreach_content.get('subject', ''),
-                'email_body': outreach_content.get('email_body', ''),
-                'talking_points': outreach_content.get('talking_points', []),
-                'follow_up_days': outreach_content.get('follow_up_days', 7),
-                'call_to_action': outreach_content.get('call_to_action', '')
-            }
-            
-            # Boost score if AI readiness is high
-            ai_boost = pain_analysis.get('readiness_score', 0) * 0.2  # Up to 20 point boost
-            ai_score = min(100, ai_score + int(ai_boost))
-            
-            logger.info(f"✨ AI analysis complete - Readiness: {pain_analysis.get('readiness_score', 0)}, Boosted Score: {ai_score}")
-        else:
-            logger.debug(f"AI analysis skipped (AI disabled) for {practice_name}")
+        # Calculate AI score
+        ai_score, score_breakdown = self.calculate_ai_score(practice_record)
         
         # Get device recommendations
         device_recommendations = self.recommend_device(practice_record, score_breakdown)
@@ -1533,7 +977,6 @@ Respond ONLY with valid JSON."""
         # Compile final record
         final_record = {
             **practice_record,
-            'specialty': specialty,
             'ai_score': ai_score,
             'score_breakdown': score_breakdown,
             'primary_device_rec': device_recommendations.get('primary_recommendation', {}).get('device', ''),
@@ -1541,8 +984,7 @@ Respond ONLY with valid JSON."""
             'all_device_recs': device_recommendations.get('all_recommendations', []),
             'outreach_opener': outreach_opener,
             'confidence_level': confidence,
-            'data_completeness': completeness,
-            **ai_insights  # Merge AI insights into final record
+            'data_completeness': completeness
         }
         
         return final_record
@@ -1555,29 +997,26 @@ Respond ONLY with valid JSON."""
             return
         
         csv_columns = [
-            'name', 'specialty', 'address', 'phone', 'website', 'rating', 'review_count',
+            'name', 'address', 'phone', 'website', 'rating', 'review_count',
             'ai_score', 'confidence_level', 'primary_device_rec', 'device_rationale',
             'outreach_opener', 'services', 'social_links', 'staff_count',
             'specialty_match_score', 'decision_autonomy_score', 'aesthetic_services_score', 
             'competing_devices_score', 'social_activity_score', 'reviews_rating_score',
             'search_visibility_score', 'financial_indicators_score', 'weight_loss_services_score',
-            'data_completeness',
-            # AI-enhanced fields (Option B: Full AI integration)
-            'ai_readiness_score', 'revenue_opportunity', 'gap_analysis', 'best_approach',
-            'decision_maker_profile', 'email_subject', 'email_body', 'pain_points',
-            'competing_services', 'talking_points', 'follow_up_days', 'call_to_action'
+            'data_completeness'
         ]
         
         csv_data = []
         for result in results:
             row = {}
             for col in csv_columns:
-                if col.endswith('_score') and col != 'ai_score' and col != 'ai_readiness_score':
+                if col.endswith('_score') and col != 'ai_score':
                     score_key = col.replace('_score', '')
                     row[col] = result.get('score_breakdown', {}).get(score_key, 0)
-                elif col in ['services', 'social_links', 'pain_points', 'competing_services', 'talking_points']:
-                    # Join list fields with semicolons
-                    row[col] = '; '.join(str(x) for x in result.get(col, []))
+                elif col == 'services':
+                    row[col] = '; '.join(result.get('services', []))
+                elif col == 'social_links':
+                    row[col] = '; '.join(result.get('social_links', []))
                 else:
                     row[col] = result.get(col, '')
             csv_data.append(row)

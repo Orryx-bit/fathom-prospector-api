@@ -1,0 +1,185 @@
+
+# Venus Medical Device Lead Scoring System Configuration
+# Version: 2.0 - MedSpa Specialty
+# Purpose: AI-powered scoring optimized for MedSpa prospecting
+# Focus: Aesthetic services, social presence, equipment investment mindset
+
+# =============================================================================
+# FEATURE CATEGORY WEIGHTS (must sum to 1.0)
+# =============================================================================
+# Optimized weights for MedSpa practices selling Venus devices
+
+category_weights:
+  aesthetic_services: 0.22       # Core business (HIGHEST)
+  competing_devices: 0.16        # Equipment investment mindset (HIGHER)
+  social_activity: 0.14          # Social media heavy (HIGHER)
+  specialty_match: 0.15          # MedSpa/aesthetic focus
+  practice_size: 0.10            # Size less critical (MedSpas vary)
+  reviews_rating: 0.08           # Reputation critical for consumer biz
+  search_visibility: 0.06        # Online presence important
+  weight_loss_glp1: 0.05         # Some MedSpas offer this
+  geography_fit: 0.04            # Location matters but less critical
+
+# =============================================================================
+# FEATURE-LEVEL WEIGHTS (within each category)
+# =============================================================================
+
+feature_weights:
+  # AESTHETIC SERVICES (22% total) - HIGHEST priority
+  aesthetic_services:
+    body_contouring: 0.30          # Primary Venus use case
+    laser_hair_removal: 0.25       # Core service
+    skin_tightening: 0.20          # High demand
+    injectables: 0.15              # Common offering
+    photorejuvenation: 0.10        # Additional service
+  
+  # COMPETING DEVICES (16% total) - Equipment mindset
+  competing_devices:
+    multi_platform_present: 0.45   # Already investing in equipment (GOOD sign)
+    single_device_present: 0.35    # Open to adding
+    no_devices: 0.20               # May lack capital (LOWER for MedSpas)
+  
+  # SOCIAL ACTIVITY (14% total) - CRITICAL for MedSpas
+  social_activity:
+    instagram_present: 0.45        # Primary marketing channel
+    social_engagement: 0.25        # Active posting/engagement
+    facebook_present: 0.20         # Secondary channel
+    linkedin_present: 0.10         # Less relevant
+  
+  # SPECIALTY MATCH (15% total)
+  specialty_match:
+    med_spa: 0.35                  # Primary target
+    aesthetic_clinic: 0.30         # Close match
+    cosmetic_clinic: 0.20          # Related
+    dermatology: 0.10              # Medical spas in derm offices
+    plastic_surgery: 0.05          # Some overlap
+  
+  # PRACTICE SIZE (10% total) - Less critical, MedSpas vary
+  practice_size:
+    small_practice: 0.35           # 3-4 staff (typical)
+    startup_very_small: 0.30       # New MedSpas
+    medium_practice: 0.25          # 5-8 staff (growing)
+    large_practice: 0.10           # Chains (harder to sell)
+  
+  # REVIEWS & RATING (8% total) - Consumer-facing business
+  reviews_rating:
+    high_rating_high_volume: 0.45  # 4.5+ with 50+ reviews (CRITICAL)
+    high_rating_medium_volume: 0.30  # 4.0+ with 20+ reviews
+    medium_rating: 0.15            # 3.5+ rating
+    low_rating: 0.10               # Below 3.5 (risk)
+  
+  # SEARCH VISIBILITY (6% total)
+  search_visibility:
+    has_website: 0.60              # Must have for MedSpas
+    has_phone: 0.25
+    has_email: 0.15
+  
+  # WEIGHT LOSS / GLP-1 (5% total) - Growing trend
+  weight_loss_glp1:
+    glp1_services: 0.40            # Some MedSpas adding this
+    weight_management: 0.30        # Wellness programs
+    iv_therapy: 0.20               # Common add-on
+    hormone_therapy: 0.10          # Less common
+  
+  # GEOGRAPHY FIT (4% total)
+  geography_fit:
+    suburban: 0.40                 # Prime MedSpa territory
+    urban: 0.30                    # High traffic areas
+    small_market: 0.20             # Growing markets
+    over_serviced: 0.10            # Very competitive
+
+# =============================================================================
+# NORMALIZATION PARAMETERS
+# =============================================================================
+
+normalization:
+  robust_scaling:
+    lower_percentile: 5
+    upper_percentile: 95
+  
+  log_transform_features:
+    - instagram_followers
+    - google_reviews_count
+    - competitors_5mi_radius
+  
+  expected_ranges:
+    instagram_followers: [0, 150000]   # MedSpas typically higher
+    posts_90d: [0, 150]                # Very active posting
+    google_reviews_count: [0, 5000]
+    google_rating: [0, 5]
+    staff_count_est: [1, 100]
+    treatment_rooms: [1, 20]
+    job_postings_90d: [0, 20]
+    competitors_5mi_radius: [0, 50]
+    engagement_rate: [0, 1]
+
+# =============================================================================
+# CATEGORICAL FEATURE MAPPINGS
+# =============================================================================
+
+categorical_mappings:
+  service_match_scores:
+    exact_match: 1.0
+    partial_match: 0.6
+    no_match: 0.0
+  
+  device_brand_scores:
+    coolsculpting: 1.0
+    sculptsure: 1.0
+    cynosure: 1.0                  # Popular in MedSpas
+    candela: 1.0
+    alma: 0.9
+    syneron: 0.9
+    lumenis: 0.9
+    generic: 0.5
+    none: 0.0
+
+# =============================================================================
+# CONFIDENCE SCORING PARAMETERS
+# =============================================================================
+
+confidence_thresholds:
+  high_confidence_threshold: 0.80
+  medium_confidence_threshold: 0.60
+  
+  critical_features:
+    - name
+    - address
+    - city
+    - main_services
+  
+  imputation:
+    numeric_default: 0.0
+    categorical_default: "unknown"
+    boolean_default: false
+
+# =============================================================================
+# COMPETITIVE CONTEXT PARAMETERS
+# =============================================================================
+
+competitive_density:
+  ideal_competitor_count: 4           # MedSpas cluster in good markets
+  overcrowded_threshold: 15
+  undercrowded_threshold: 1
+  apply_penalty_above: 8
+
+# =============================================================================
+# SCORING OUTPUT PARAMETERS
+# =============================================================================
+
+output:
+  min_score: 0.0
+  max_score: 100.0
+  top_contributors_count: 3
+  min_contribution_percentage: 5.0
+
+# =============================================================================
+# VALIDATION RULES
+# =============================================================================
+
+validation:
+  category_weights_must_sum_to: 1.0
+  tolerance: 0.001
+  feature_weights_must_sum_to: 1.0
+  min_valid_score: 0.0
+  max_valid_score: 100.0
