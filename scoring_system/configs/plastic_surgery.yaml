@@ -1,58 +1,92 @@
-# Plastic Surgery Specialty Scoring Configuration
-# Production Rebuild V4.0 - Adjusted for Limited Data Scenarios
+# Scoring Config Schema v4.1
+# - version: numeric config version
+# - specialty: slug for the vertical
+# - thresholds: {standard|limited_data|min_data} -> {high_fit, medium_fit, low_fit}
+# - weights: top-level categories with per-signal weights (positive or negative)
+# - keyword_bonus: flat bonus per matched high-value keyword (capped by max_keyword_bonus)
+# - data_completeness: fields that determine limited_data/min_data mode
+# - special_rules: optional rules (boosts/penalties) with enable flags
+# Notes:
+# * All weights are additive; suggested sum of absolute values ~100.
+# * No '...' end-of-document markers (they break YAML parsing).
+# * Keep key names consistent across specialties.
 
-# Score Thresholds (Adaptive based on data completeness)
+version: 4.1
+specialty: plastic_surgery
 thresholds:
   standard:
     high_fit: 70
     medium_fit: 50
     low_fit: 0
-  
   limited_data:
     high_fit: 50
     medium_fit: 35
     low_fit: 0
-  
   minimum_data:
     high_fit: 40
     medium_fit: 25
     low_fit: 0
-
-# Scoring Weights
+data_completeness:
+  required_fields:
+  - name
+  - address
+  - phone
+  nice_to_have:
+  - website
+  - domain
+  - google_place_id
+  - reviews_count
+  - avg_rating
+  - categories
+  - services
+  limited_threshold: 3
+  minimum_threshold: 1
 weights:
   specialty_match:
-    plastic_surgery_practice: 20
-    cosmetic_surgeon: 18
-    reconstructive: 10
-
+    category_contains:
+      plastic_surgeon: 20
+      cosmetic_surgery: 14
+    name_contains:
+      plastic: 6
+      cosmetic: 4
   services_offered:
-    rhinoplasty: 5
-    breast_augmentation: 5
-    tummy_tuck: 5
-    lipo: 5
-    facial_rejuvenation: 5
-
+    breast_augmentation: 8
+    tummy_tuck: 7
+    liposuction: 7
+    rhinoplasty: 8
+    facelift: 8
+    blepharoplasty: 5
+    brazilian_butt_lift: 6
+    reconstructive_surgery: 8
   credibility_indicators:
+    asps_member: 8
     board_certified: 10
-    years_experience_10_plus: 8
-    before_after_gallery: 5
-
+    before_after_gallery: 6
+    accreditation_asc: 6
   reviews_rating:
-    rating_4_5_plus: 5
-    review_count_50_plus: 5
-
+    avg_rating_gt_4_6: 8
+    reviews_count_gt_150: 6
+    recent_reviews_90d: 3
   digital_presence:
     has_website: 5
-    instagram_found: 4
-    youtube_channel: 3
-
-  high_value_keywords:
-    - "board certified"
-    - "rhinoplasty"
-    - "augmentation"
-    - "cosmetic procedure"
-    - "before and after photos"
-    - "facial plastic surgery"
-
+    has_booking: 4
+    instagram_found: 3
+    tiktok_found: 3
+    youtube_found: 3
+high_value_keywords:
+- board-certified
+- ABPS
+- ASPS
+- rhinoplasty
+- facelift
+- tummy tuck
+- liposuction
 keyword_bonus: 2
-max_keyword_bonus: 12
+max_keyword_bonus: 10
+special_rules:
+  safety_first:
+    enabled: true
+    penalize_complication_news: -15
+  multi_location:
+    enabled: true
+    locations_gt_3_penalty: -5
