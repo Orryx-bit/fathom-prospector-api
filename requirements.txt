@@ -13,6 +13,7 @@ lxml==4.9.3
 python-dotenv==1.0.0
 ratelimit==2.2.1
 tldextract==5.1.1
+aiohttp==3.9.1
 
 # Google APIs - MODERN GEMINI SDK
 googlemaps==4.10.0
