@@ -7,6 +7,7 @@ Production-Hardened Version 3.0
 """
 
 import argparse
+import asyncio
 import csv
 import json
 import logging
@@ -15,11 +16,13 @@ import random
 import re
 import sys
 import time
+from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
+import aiohttp
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
@@ -587,7 +590,7 @@ class FathomProspector:
         return any(re.search(pattern, name_lower, re.IGNORECASE) for pattern in self.hospital_patterns)
     
     def check_robots_txt(self, url: str) -> bool:
-        """Check if scraping is allowed by robots.txt"""
+        """Check if scraping is allowed by robots.txt with caching"""
         try:
             if not url:
                 return False
@@ -595,16 +598,32 @@ class FathomProspector:
             parsed = urlparse(url)
             if not parsed.scheme or not parsed.netloc:
                 return False
-                
-            robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
             
-            rp = RobotFileParser()
-            rp.set_url(robots_url)
-            rp.read()
+            domain = f"{parsed.scheme}://{parsed.netloc}"
+            
+            # Check cache first
+            if not hasattr(self, '_robots_cache'):
+                self._robots_cache = {}
+            
+            if domain in self._robots_cache:
+                rp = self._robots_cache[domain]
+            else:
+                # Fetch and cache robots.txt
+                robots_url = f"{domain}/robots.txt"
+                rp = RobotFileParser()
+                rp.set_url(robots_url)
+                try:
+                    rp.read()
+                    self._robots_cache[domain] = rp
+                except Exception as e:
+                    logger.warning(f"Could not fetch robots.txt for {domain}: {e}")
+                    # Deny by default on error (conservative approach)
+                    return False
             
             return rp.can_fetch('*', url)
-        except Exception:
-            return True
+        except Exception as e:
+            logger.warning(f"Error checking robots.txt: {e}")
+            return False  # Deny by default
     
     def get_mock_website_data(self, url: str) -> Dict[str, any]:
         """Generate mock website data for demo purposes"""
@@ -701,20 +720,24 @@ class FathomProspector:
                 else:
                     data['description'] = 'Not Available'
             
-            # Extract services mentioned
+            # Extract services mentioned - dynamically from device catalog
             text_content = soup.get_text().lower()
-            service_keywords = [
-                'laser hair removal', 'botox', 'fillers', 'coolsculpting',
-                'body contouring', 'skin tightening', 'photorejuvenation',
-                'cellulite treatment', 'weight loss', 'ems', 'muscle building'
-            ]
+            
+            # Build keyword list from device_catalog
+            service_keywords = set()
+            for device_name, device_info in self.device_catalog.items():
+                service_keywords.update(device_info.get('keywords', []))
+                service_keywords.update(device_info.get('specialties', []))
+            
+            service_keywords = list(service_keywords)
             
             services_found = []
             for keyword in service_keywords:
-                if keyword in text_content:
+                if keyword.lower() in text_content:
                     services_found.append(keyword)
             
             data['services'] = services_found
+            logger.debug(f"Found {len(services_found)} services from {len(service_keywords)} catalog keywords")
             
             # Find social media links - capture full URLs
             social_platforms = {
@@ -789,7 +812,162 @@ class FathomProspector:
                 'social_links': [],
                 'staff_count': 0
             }
-    
+    async def scrape_website_async(self, url: str, session: aiohttp.ClientSession) -> Dict[str, any]:
+        """Async version of scrape_website for concurrent fetching"""
+        
+        if self.demo_mode:
+            return self.get_mock_website_data(url)
+        
+        if not url:
+            return {
+                'title': 'Not Available - No Website',
+                'description': 'Not Available - No Website',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0
+            }
+        
+        if not self.check_robots_txt(url):
+            logger.warning(f"Robots.txt disallows scraping: {url}")
+            return {
+                'title': 'Not Available - Restricted',
+                'description': 'Not Available - Restricted',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0
+            }
+            
+        try:
+            await asyncio.sleep(random.uniform(0.5, 1.0))
+            
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                response.raise_for_status()
+                html = await response.text()
+            
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            data = {
+                'title': '',
+                'description': '',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0
+            }
+            
+            # Get page title
+            if soup.title and soup.title.string:
+                data['title'] = soup.title.string.strip()
+            else:
+                data['title'] = 'Not Available'
+            
+            # Get meta description
+            meta_desc = soup.find('meta', attrs={'name': 'description'})
+            if meta_desc and meta_desc.get('content'):
+                data['description'] = meta_desc.get('content', '').strip()
+            else:
+                og_desc = soup.find('meta', attrs={'property': 'og:description'})
+                if og_desc and og_desc.get('content'):
+                    data['description'] = og_desc.get('content', '').strip()
+                else:
+                    data['description'] = 'Not Available'
+            
+            # Extract services mentioned - dynamically from device catalog
+            text_content = soup.get_text().lower()
+            
+            # Build keyword list from device_catalog
+            service_keywords = set()
+            for device_name, device_info in self.device_catalog.items():
+                service_keywords.update(device_info.get('keywords', []))
+                service_keywords.update(device_info.get('specialties', []))
+            
+            service_keywords = list(service_keywords)
+            
+            services_found = []
+            for keyword in service_keywords:
+                if keyword.lower() in text_content:
+                    services_found.append(keyword)
+            
+            data['services'] = services_found
+            
+            # Find social media links (same logic as sync version)
+            social_platforms = {
+                'facebook.com': 'Facebook',
+                'fb.com': 'Facebook',
+                'instagram.com': 'Instagram',
+                'twitter.com': 'Twitter',
+                'x.com': 'Twitter',
+                'linkedin.com': 'LinkedIn',
+                'youtube.com': 'YouTube',
+                'youtu.be': 'YouTube',
+                'tiktok.com': 'TikTok',
+                'pinterest.com': 'Pinterest'
+            }
+            
+            social_links = []
+            seen_platforms = set()
+            
+            for link in soup.find_all('a', href=True):
+                href = link.get('href', '').strip()
+                href_lower = href.lower()
+                
+                if not href or href.startswith('#') or href.startswith('javascript:'):
+                    continue
+                
+                for domain, platform_name in social_platforms.items():
+                    if domain in href_lower and platform_name not in seen_platforms:
+                        full_url = href
+                        if href.startswith('//'):
+                            full_url = f"https:{href}"
+                        elif not href.startswith('http'):
+                            full_url = urljoin(url, href)
+                        
+                        social_links.append({
+                            'platform': platform_name,
+                            'url': full_url
+                        })
+                        seen_platforms.add(platform_name)
+            
+            data['social_links'] = social_links
+            
+            # Estimate staff count
+            staff_keywords = ['dr.', 'doctor', 'physician', 'provider', 'practitioner', 'nurse']
+            staff_count = sum(text_content.count(keyword) for keyword in staff_keywords)
+            data['staff_count'] = min(staff_count, 20)
+            
+            return data
+            
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout scraping {url}")
+            return {'title': 'Error - Timeout', 'description': 'Error - Timeout', 
+                    'services': [], 'social_links': [], 'staff_count': 0}
+        except Exception as e:
+            logger.warning(f"Error scraping {url}: {str(e)}")
+            return {'title': 'Error', 'description': 'Error', 
+                    'services': [], 'social_links': [], 'staff_count': 0}
+
+    async def scrape_websites_batch(self, urls: List[str]) -> List[Dict[str, any]]:
+        """Scrape multiple websites concurrently"""
+        if not urls:
+            return []
+        
+        async with aiohttp.ClientSession() as session:
+            tasks = [self.scrape_website_async(url, session) for url in urls]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Handle exceptions
+            final_results = []
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Error scraping {urls[i]}: {result}")
+                    final_results.append({
+                        'title': 'Error', 'description': 'Error', 
+                        'services': [], 'social_links': [], 'staff_count': 0
+                    })
+                else:
+                    final_results.append(result)
+            
+            return final_results
+            
     def detect_specialty(self, practice_data: Dict) -> str:
         """
         Detect the primary specialty of a practice (keyword-based)
