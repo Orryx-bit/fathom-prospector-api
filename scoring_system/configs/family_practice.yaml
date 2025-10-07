@@ -1,56 +1,87 @@
-# Family Practice Specialty Scoring Configuration
-# Production Rebuild V4.0 - Optimized for DPC/Concierge Models
+# Scoring Config Schema v4.1
+# - version: numeric config version
+# - specialty: slug for the vertical
+# - thresholds: {standard|limited_data|min_data} -> {high_fit, medium_fit, low_fit}
+# - weights: top-level categories with per-signal weights (positive or negative)
+# - keyword_bonus: flat bonus per matched high-value keyword (capped by max_keyword_bonus)
+# - data_completeness: fields that determine limited_data/min_data mode
+# - special_rules: optional rules (boosts/penalties) with enable flags
+# Notes:
+# * All weights are additive; suggested sum of absolute values ~100.
+# * No '...' end-of-document markers (they break YAML parsing).
+# * Keep key names consistent across specialties.
 
-# Score Thresholds
+version: 4.1
+specialty: family_practice
 thresholds:
   standard:
     high_fit: 70
     medium_fit: 50
     low_fit: 0
-  
   limited_data:
     high_fit: 50
     medium_fit: 35
     low_fit: 0
-  
   minimum_data:
     high_fit: 40
     medium_fit: 25
     low_fit: 0
-
-# Scoring Weights
+data_completeness:
+  required_fields:
+  - name
+  - address
+  - phone
+  nice_to_have:
+  - website
+  - domain
+  - google_place_id
+  - reviews_count
+  - avg_rating
+  - categories
+  - services
+  limited_threshold: 3
+  minimum_threshold: 1
 weights:
   specialty_match:
-    family_practice: 20
-    primary_care: 18
-    internal_medicine: 15
-
+    category_contains:
+      family_practice: 18
+      primary_care: 16
+      family_medicine: 18
+    name_contains:
+      family: 4
+      primary care: 4
   business_model:
-    concierge: 10
-    membership_based: 10
-    dpc: 10
-
-  services:
-    same_day_visit: 5
-    chronic_condition: 5
-    telemedicine: 3
-
+    independent: 10
+    group_2to5: 6
+    group_6plus: 4
+    hospital_owned: -6
+  services_offered:
+    weight_management: 6
+    hormone_therapy: 5
+    aesthetic_services: 6
+    women_health: 5
+    telehealth: 3
+  credibility_indicators:
+    has_md_do: 8
+    accepts_insurance: 5
+    in_network_major_plans: 3
   reviews_rating:
-    rating_4_5_plus: 5
-    review_count_50_plus: 5
-
+    avg_rating_gt_4_4: 6
+    reviews_count_gt_60: 5
+    recent_reviews_90d: 2
   digital_presence:
-    has_website: 5
-    patient_portal: 4
-    instagram_found: 3
-
-  high_value_keywords:
-    - "direct primary care"
-    - "membership medicine"
-    - "family physician"
-    - "concierge doctor"
-    - "annual wellness"
-    - "chronic condition"
-
+    has_website: 4
+    patient_portal: 5
+    online_booking: 4
+high_value_keywords:
+- family medicine
+- primary care
+- wellness
+- aesthetics
+- weight management
 keyword_bonus: 2
 max_keyword_bonus: 10
+special_rules:
+  upside_for_aesthetics:
+    enabled: true
+    has_aesthetics_page_bonus: 8
