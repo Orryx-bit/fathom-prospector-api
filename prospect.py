@@ -2,7 +2,7 @@
 """
 Fathom Medical Device Prospecting System
 Comprehensive tool for finding and scoring medical practices
-Production-Hardened Version 3.6 (Final Gemini Model Fix)
+Production-Hardened Version 3.7 (Final Gemini Parsing Fix)
 """
 
 import argparse
@@ -104,7 +104,6 @@ class FathomProspector:
         if self.gemini_key:
             try:
                 genai.configure(api_key=self.gemini_key)
-                # --- THIS IS THE ONE-LINE FIX ---
                 self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
                 logger.info("Gemini API: ✓ Configured with gemini-1.5-flash")
             except Exception as e:
@@ -183,19 +182,26 @@ class FathomProspector:
         prompt_data['website_content_summary'] = practice_data.get('services_text', '')[:2000]
         prompt_data['detected_specialty'] = specialty
 
-        prompt = f"""You are a sales analyst for Venus Concepts, an aesthetic device company. Evaluate this lead based on the data provided. Respond ONLY with a valid JSON object.
+        prompt = f"""You are a sales analyst for Venus Concepts. Evaluate this lead. Respond ONLY with a valid JSON object.
         DATA: {json.dumps(prompt_data, indent=2)}
         CRITERIA:
-        1. Decision Maker Autonomy (1-10): Is this an independent practice (high score) or a hospital/chain (low score)?
-        2. Aesthetic Focus (1-10): Are they a dedicated medspa (high score) or general practice (low score)?
-        3. Financial Readiness (1-10): Do they seem like a premium business that can afford a $100k device?
-        4. Growth Potential (1-10): Are they hiring or marketing heavily?
+        1. Decision Maker Autonomy (1-10): Independent practice (high score) vs hospital/chain (low score)?
+        2. Aesthetic Focus (1-10): Dedicated medspa (high score) vs general practice (low score)?
+        3. Financial Readiness (1-10): Premium business that can afford a $100k device?
+        4. Growth Potential (1-10): Hiring or marketing heavily?
         RESPONSE FORMAT: {{"scores": {{"decision_maker_autonomy": 0, "aesthetic_focus": 0, "financial_readiness": 0, "growth_potential": 0}}, "final_summary": "<Your 2-sentence analysis here.>"}}
         """
         try:
             response = self.gemini_model.generate_content(prompt)
-            cleaned_text = re.search(r'\{.*\}', response.text, re.DOTALL).group(0)
-            ai_analysis = json.loads(cleaned_text)
+            # --- ROBUST JSON PARSING ---
+            text = response.text
+            json_match = re.search(r'\{.*\}', text, re.DOTALL)
+            if not json_match:
+                raise ValueError("No JSON object found in Gemini response.")
+            
+            ai_analysis = json.loads(json_match.group(0))
+            # --- END ROBUST JSON PARSING ---
+
             scores = ai_analysis.get("scores", {})
             total_score = int(((scores.get("decision_maker_autonomy",0)*0.35) + (scores.get("aesthetic_focus",0)*0.3) + (scores.get("financial_readiness",0)*0.2) + (scores.get("growth_potential",0)*0.15)) * 10)
             return total_score, ai_analysis, specialty
