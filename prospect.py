@@ -2,7 +2,7 @@
 """
 Fathom Medical Device Prospecting System
 Comprehensive tool for finding and scoring medical practices
-Production-Hardened Version 3.2 (With Gemini AI Integration)
+Production-Hardened Version 3.3 (With Enhanced Logging)
 """
 
 import argparse
@@ -156,23 +156,23 @@ class FathomProspector:
         })
         
         self.existing_customers = set()
-        if existing_customers_csv and os.path.exists(existing_customers_csv):
-            self.load_existing_customers(existing_customers_csv)
+        # Use the provided exclusion list, defaulting to a local file if not specified
+        exclusion_file = existing_customers_csv or 'exclusion_list.txt'
+        if os.path.exists(exclusion_file):
+            self.load_existing_customers(exclusion_file)
 
-    def load_existing_customers(self, csv_file_path: str):
+    def load_existing_customers(self, file_path: str):
         try:
-            df = pd.read_csv(csv_file_path)
-            name_col = next((c for c in df.columns if 'name' in c.lower()), df.columns[0])
-            for name in df[name_col].dropna():
-                cleaned_name = re.sub(r'\b(llc|inc|corp|ltd)\b', '', str(name).lower()).strip()
-                self.existing_customers.add(cleaned_name)
-            logger.info(f"Loaded {len(self.existing_customers)} existing customers.")
+            with open(file_path, 'r', encoding='utf-8') as f:
+                customers = [line.strip().lower() for line in f if line.strip() and not line.startswith('#')]
+                self.existing_customers = set(customers)
+            logger.info(f"Loaded {len(self.existing_customers)} customers from exclusion list: {file_path}")
         except Exception as e:
-            logger.error(f"Failed to load existing customers CSV: {e}")
+            logger.error(f"Failed to load exclusion list {file_path}: {e}")
 
     def is_existing_customer(self, practice_name: str) -> bool:
-        cleaned_name = re.sub(r'\b(llc|inc|corp|ltd)\b', '', practice_name.lower()).strip()
-        return any(existing in cleaned_name or cleaned_name in existing for existing in self.existing_customers)
+        cleaned_name = practice_name.lower().strip()
+        return any(customer_name in cleaned_name for customer_name in self.existing_customers)
 
     def google_places_search(self, query: str, location: str, radius: int) -> List[Dict]:
         if self.demo_mode:
@@ -202,10 +202,14 @@ class FathomProspector:
             soup = BeautifulSoup(response.content, 'html.parser')
             text_content = soup.get_text(" ", strip=True)
             
+            # Extract meta description, falling back to an empty string
+            description_tag = soup.find('meta', attrs={'name': 'description'})
+            description = description_tag.get('content', '') if description_tag else ''
+
             return {
                 "title": soup.title.string.strip() if soup.title and soup.title.string else "",
-                "description": (meta.get('content') for meta in soup.find_all('meta', attrs={'name': 'description'})),
-                "services": [kw for kw in COMP_HINTS + VENUS_HINTS + WEIGHT_LOSS_HINTS if _text_has_any(text_content, [kw])],
+                "description": description,
+                "services": list(set([kw for kw in COMP_HINTS + VENUS_HINTS + WEIGHT_LOSS_HINTS if _text_has_any(text_content, [kw])])),
                 "hiring": _text_has_any(text_content, CAREER_HINTS),
             }
         except requests.RequestException as e:
@@ -259,11 +263,19 @@ class FathomProspector:
             logger.error(f"Error during Gemini analysis for {practice_data.get('name')}: {e}")
             return 0, {"summary": f"AI analysis failed: {e}"}, specialty
 
+    # --- FUNCTION WITH NEW LOGGING ---
     def process_practice(self, place_data: Dict) -> Optional[Dict]:
-        if not place_data or self.is_existing_customer(place_data.get('name', '')):
+        if not place_data:
+            return None
+        
+        practice_name = place_data.get('name', 'Unknown')
+        logger.info(f"Processing: {practice_name}")
+
+        # Check against exclusion list FIRST and log if skipped
+        if self.is_existing_customer(practice_name):
+            logger.warning(f"⏭️ Skipping existing customer/excluded system: {practice_name}")
             return None
 
-        logger.info(f"Processing: {place_data.get('name')}")
         practice_record = {
             'name': place_data.get('name'),
             'address': place_data.get('formatted_address'),
@@ -324,15 +336,13 @@ class FathomProspector:
                 processed = self.process_practice(place)
                 if processed:
                     all_results.append(processed)
-                    logger.info(f"✅ Added: {processed.get('name')} (Score: {processed.get('ai_score')})")
-                else:
-                    logger.warning(f"❌ Rejected: {place.get('name')}")
-        
+                    logger.info(f"✅ Added to results: {processed.get('name')} (Score: {processed.get('ai_score')})")
+
         logger.info(f"Found {len(all_results)} unique prospects.")
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         csv_filename = f"prospects_{timestamp}.csv"
         self.export_to_csv(all_results, csv_filename)
-        return all_results, csv_filename, "summary_report.txt" # Dummy report name
+        return all_results, csv_filename, "summary_report.txt"
 
 def main():
     parser = argparse.ArgumentParser(description='Fathom Prospecting System with AI Scoring')
