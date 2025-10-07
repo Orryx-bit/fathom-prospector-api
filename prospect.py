@@ -26,18 +26,10 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
-# Gemini AI imports
-try:
-    import google.generativeai as genai
-    GEMINI_AVAILABLE = True
-except ImportError:
-    GEMINI_AVAILABLE = False
-    logger.warning("google-generativeai not installed - AI features disabled")
-
-# Load environment variables
+# Load environment variables FIRST
 load_dotenv()
 
-# Configure logging
+# Configure logging BEFORE any other imports that might use it
 handlers = [logging.StreamHandler(sys.stdout)]
 
 # Try to add file logging if possible (development/local only)
@@ -54,6 +46,22 @@ logging.basicConfig(
     handlers=handlers
 )
 logger = logging.getLogger(__name__)
+
+# Try to import Gemini AI with the STABLE OLD SDK
+GEMINI_AVAILABLE = False
+try:
+    import google.generativeai as genai
+    gemini_key = os.getenv('GEMINI_API_KEY')
+    if gemini_key:
+        genai.configure(api_key=gemini_key)
+        GEMINI_AVAILABLE = True
+        logger.info("✓ Gemini AI initialized successfully with google-generativeai SDK")
+    else:
+        logger.warning("GEMINI_API_KEY not found - AI features disabled, using rule-based logic")
+except ImportError:
+    logger.warning("google-generativeai package not installed - AI features disabled, using rule-based logic")
+except Exception as e:
+    logger.warning(f"Gemini initialization failed: {str(e)} - AI features disabled, using rule-based logic")
 
 
 
@@ -218,29 +226,26 @@ class FathomProspector:
     
     def __init__(self, demo_mode=False, existing_customers_csv=None, progress_callback=None):
         self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
-        self.gemini_key = os.getenv('GEMINI_API_KEY')
-        self.progress_callback = progress_callback  # Callback for progress updates
-        
         if not self.gmaps_key:
             logger.warning('GOOGLE_PLACES_API_KEY not found - switching to demo mode')
             demo_mode = True
         
-        # Initialize Gemini AI (Option B: Full AI by default)
-        self.ai_enabled = False
+        # Progress callback for real-time updates
+        self.progress_callback = progress_callback
+        
+        # Initialize Gemini AI if available
+        self.ai_enabled = GEMINI_AVAILABLE
         self.gemini_model = None
-        if self.gemini_key and GEMINI_AVAILABLE:
+        
+        if GEMINI_AVAILABLE:
             try:
-                genai.configure(api_key=self.gemini_key)
                 self.gemini_model = genai.GenerativeModel('gemini-1.5-flash')
-                self.ai_enabled = True
-                logger.info('✨ GEMINI AI ENABLED - Full AI analysis active')
+                logger.info('✓ Gemini AI model initialized - AI features enabled')
             except Exception as e:
-                logger.warning(f'Failed to initialize Gemini AI: {str(e)}')
+                logger.warning(f'Failed to initialize Gemini model: {str(e)} - using rule-based logic')
+                self.ai_enabled = False
         else:
-            if not self.gemini_key:
-                logger.warning('GEMINI_API_KEY not found - AI features disabled')
-            if not GEMINI_AVAILABLE:
-                logger.warning('google-generativeai library not available - AI features disabled')
+            logger.info('Using rule-based scoring and outreach (Gemini AI not available)')
         
         self.demo_mode = demo_mode
         self.existing_customers = set()
@@ -812,16 +817,10 @@ class FathomProspector:
     
     def detect_specialty(self, practice_data: Dict) -> str:
         """
-        Detect the primary specialty of a practice (AI-enhanced when available)
+        Detect the primary specialty of a practice (keyword-based)
         Returns: 'dermatology', 'plastic_surgery', 'obgyn', 'medspa', 'familypractice', or 'general'
         """
-        # Try AI-powered detection first
-        if self.ai_enabled:
-            ai_specialty = self.ai_detect_specialty(practice_data)
-            if ai_specialty:
-                return ai_specialty
-        
-        # Fallback to keyword-based detection
+        # Keyword-based detection
         name = practice_data.get('name', '').lower()
         desc = practice_data.get('description', '').lower()
         services = ' '.join(practice_data.get('services', [])).lower()
@@ -841,148 +840,240 @@ class FathomProspector:
         else:
             return 'general'
     
-    def ai_detect_specialty(self, practice_data: Dict) -> Optional[str]:
+    def analyze_pain_points_rule_based(self, practice_data: Dict, specialty: str) -> Dict:
         """
-        AI-powered specialty detection using Gemini
+        Rule-based pain point analysis (replaces AI version)
+        Returns pain points and readiness score based on specialty and practice data
         """
-        if not self.ai_enabled or not self.gemini_model:
-            return None
+        pain_points = []
+        readiness_score = 50  # Base score
         
-        try:
-            name = practice_data.get('name', '')
-            desc = practice_data.get('description', '')
-            services = practice_data.get('services', [])
-            website_text = practice_data.get('website_text', '')[:1000]  # First 1000 chars
+        # Get practice details
+        services = [s.lower() for s in practice_data.get('services', [])]
+        website_text = practice_data.get('website_text', '').lower()
+        devices_found = practice_data.get('devices_found', [])
+        has_website = bool(practice_data.get('website'))
+        
+        # Specialty-specific pain points and scoring
+        if specialty == 'dermatology':
+            pain_points = [
+                'Competitive pressure from med spas offering aesthetic services',
+                'Patient demand for non-invasive body contouring',
+                'Need to expand beyond medical dermatology',
+                'Revenue growth opportunities in aesthetics'
+            ]
+            readiness_score += 20
             
-            prompt = f"""Analyze this medical practice and identify its PRIMARY specialty.
-
-Practice Name: {name}
-Description: {desc}
-Services: {', '.join(services)}
-Website Content: {website_text}
-
-Respond with ONLY ONE of these exact values:
-- dermatology
-- plastic_surgery
-- obgyn
-- medspa
-- familypractice
-- general
-
-Choose the MOST SPECIFIC category. If they offer aesthetic services but are primarily family/primary care, choose 'familypractice'.
-If unclear, choose 'general'.
-
-Specialty:"""
-
-            response = self.gemini_model.generate_content(prompt)
-            specialty = response.text.strip().lower()
+        elif specialty == 'plastic_surgery':
+            pain_points = [
+                'Pre and post-surgical care revenue opportunities',
+                'Non-invasive alternatives for surgical-averse patients',
+                'Patient retention between surgical procedures',
+                'Complementary services for body contouring'
+            ]
+            readiness_score += 25
             
-            # Validate response
-            valid_specialties = ['dermatology', 'plastic_surgery', 'obgyn', 'medspa', 'familypractice', 'general']
-            if specialty in valid_specialties:
-                logger.info(f"🤖 AI detected specialty: {specialty}")
-                return specialty
-            else:
-                logger.warning(f"AI returned invalid specialty: {specialty}")
-                return None
-                
-        except Exception as e:
-            logger.warning(f"AI specialty detection failed: {str(e)}")
-            return None
+        elif specialty == 'obgyn':
+            pain_points = [
+                'Postpartum body contouring demand',
+                'Womens wellness and aesthetics integration',
+                'Patient satisfaction and retention',
+                'Additional revenue streams beyond traditional services'
+            ]
+            readiness_score += 15
+            
+        elif specialty == 'medspa':
+            pain_points = [
+                'Need for advanced technology to compete',
+                'Equipment upgrade or expansion',
+                'Attracting higher-value clients',
+                'Expanding treatment menu'
+            ]
+            readiness_score += 30
+            
+        elif specialty == 'familypractice':
+            pain_points = [
+                'Differentiation in crowded primary care market',
+                'Additional revenue streams beyond insurance',
+                'Patient retention and satisfaction',
+                'Aesthetic services as practice differentiator'
+            ]
+            readiness_score += 10
+            
+        else:  # general
+            pain_points = [
+                'Practice growth and differentiation',
+                'New revenue opportunities',
+                'Patient demand for aesthetic services',
+                'Competitive market positioning'
+            ]
+            readiness_score += 5
+        
+        # Boost score for positive indicators
+        if has_website:
+            readiness_score += 10
+        
+        if any(aesthetic_kw in website_text for aesthetic_kw in ['botox', 'filler', 'laser', 'aesthetic', 'cosmetic']):
+            readiness_score += 15
+            pain_points.append('Already offering aesthetics - ready for advanced equipment')
+        
+        if len(devices_found) > 0:
+            readiness_score += 10
+            pain_points.append('Existing aesthetic equipment - potential upgrade opportunity')
+        
+        if len(services) > 5:
+            readiness_score += 5
+        
+        # Cap score at 100
+        readiness_score = min(100, readiness_score)
+        
+        return {
+            'pain_points': pain_points[:5],  # Top 5
+            'revenue_opportunity': f'High-value aesthetic services for {specialty} practices',
+            'readiness_score': readiness_score,
+            'competing_services': [s for s in services if any(kw in s.lower() for kw in ['botox', 'laser', 'filler', 'aesthetic', 'cosmetic'])],
+            'gap_analysis': 'Venus devices can complement existing services or create new revenue stream',
+            'decision_maker_profile': 'Practice owner, medical director, or office manager',
+            'best_approach': 'Focus on ROI, patient satisfaction, and competitive differentiation'
+        }
     
-    def ai_analyze_pain_points(self, practice_data: Dict, specialty: str) -> Dict:
+    def generate_outreach_template_based(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
         """
-        AI-powered pain point analysis
-        Returns detailed pain points specific to Venus device sales
+        Template-based outreach generation (replaces AI version)
+        Returns personalized email and talking points based on specialty
         """
-        if not self.ai_enabled or not self.gemini_model:
-            return {'pain_points': [], 'readiness_score': 0, 'summary': 'AI analysis not available'}
+        name = practice_data.get('name', 'Practice')
+        contact = practice_data.get('contact_name', 'Doctor')
+        pain_points = pain_analysis.get('pain_points', [])
+        readiness_score = pain_analysis.get('readiness_score', 50)
         
-        try:
-            name = practice_data.get('name', '')
-            desc = practice_data.get('description', '')
-            services = practice_data.get('services', [])
-            website_text = practice_data.get('website_text', '')[:2000]
-            existing_devices = practice_data.get('devices_found', [])
-            
-            prompt = f"""Analyze this {specialty} practice for Venus aesthetic device sales opportunities.
+        # Specialty-specific email templates
+        email_templates = {
+            'dermatology': {
+                'subject': f'Expand Your Aesthetic Services - {name}',
+                'body': f"""Dear {contact},
 
-Practice: {name}
-Description: {desc}
-Current Services: {', '.join(services)}
-Existing Equipment: {', '.join(existing_devices) if existing_devices else 'None detected'}
-Website Content: {website_text}
+I hope this message finds you well. I am reaching out because {name} is exactly the type of leading dermatology practice that benefits most from Venus technologies.
 
-Venus devices treat: body contouring, cellulite reduction, skin tightening, wrinkle reduction, and hair removal.
+Many dermatologists we work with face similar challenges: med spas encroaching on aesthetic services, patients requesting non-invasive body contouring, and the need to stay competitive while maintaining medical excellence.
 
-Analyze and respond in JSON format:
-{{
-    "pain_points": ["list of 3-5 specific pain points this practice likely faces"],
-    "revenue_opportunity": "brief description of revenue potential",
-    "readiness_score": <0-100 integer>,
-    "competing_services": ["list of competing services they currently offer"],
-    "gap_analysis": "what aesthetic services are they missing",
-    "decision_maker_profile": "who likely makes purchasing decisions",
-    "best_approach": "recommended sales approach for this specific practice"
-}}
+Our Venus systems complement your existing practice by adding high-demand services like body contouring, cellulite reduction, and skin tightening—all with clinically proven, FDA-cleared technology.
 
-Respond ONLY with valid JSON, no other text."""
+Would you be open to a brief conversation about how we have helped practices like yours increase aesthetic revenue by 30-40 percent?
 
-            response = self.gemini_model.generate_content(prompt)
-            result = json.loads(response.text.strip())
-            logger.info(f"🧠 AI pain point analysis complete - readiness: {result.get('readiness_score', 0)}")
-            return result
-            
-        except Exception as e:
-            logger.warning(f"AI pain point analysis failed: {str(e)}")
-            return {'pain_points': [], 'readiness_score': 0, 'summary': 'Analysis failed', 'error': str(e)}
-    
-    def ai_generate_outreach(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
-        """
-        AI-powered personalized outreach generation
-        """
-        if not self.ai_enabled or not self.gemini_model:
-            return {'subject': '', 'email': '', 'talking_points': []}
+Best regards,
+Venus Sales Team"""
+            },
+            'plastic_surgery': {
+                'subject': f'Enhance Pre/Post-Surgical Care Revenue - {name}',
+                'body': f"""Dear {contact},
+
+I specialize in working with plastic surgery practices like {name} that want to maximize patient value and retention.
+
+Venus technologies are perfect for pre and post-surgical care, non-invasive alternatives for patients not ready for surgery, and maintenance between procedures.
+
+Our devices complement your surgical practice by capturing patients throughout their aesthetic journey, not just during surgical windows.
+
+I would love to show you how practices similar to yours have increased annual revenue by over $200K with Venus systems.
+
+Can we schedule 15 minutes to discuss?
+
+Best regards,
+Venus Sales Team"""
+            },
+            'obgyn': {
+                'subject': f'Womens Wellness + Aesthetics - {name}',
+                'body': f"""Dear {contact},
+
+I am reaching out to OB/GYN practices like {name} that are expanding into womens wellness and aesthetics.
+
+Postpartum body contouring is one of the fastest-growing service requests in womens health, and Venus technologies allow you to serve this need without invasive procedures.
+
+Many of our OB/GYN partners have successfully integrated Venus treatments for body contouring, skin tightening, and cellulite reduction—perfect for your patient demographic.
+
+Would you be interested in learning how we have helped practices like yours add $100-150K in annual aesthetic revenue?
+
+Best regards,
+Venus Sales Team"""
+            },
+            'medspa': {
+                'subject': f'Upgrade Your Technology - {name}',
+                'body': f"""Dear {contact},
+
+{name} caught my attention as a forward-thinking med spa, and I wanted to reach out about Venus technologies.
+
+The med spa market is competitive, and having state-of-the-art equipment is critical for attracting and retaining high-value clients.
+
+Venus systems deliver clinical results your clients will love: body contouring, cellulite reduction, skin tightening, and wrinkle reduction—all FDA-cleared and backed by extensive clinical studies.
+
+Many med spas we work with see 30-50 percent increase in treatment bookings after adding Venus technologies.
+
+Can we schedule a brief demo or discussion?
+
+Best regards,
+Venus Sales Team"""
+            },
+            'familypractice': {
+                'subject': f'Differentiate Your Practice - {name}',
+                'body': f"""Dear {contact},
+
+I work with forward-thinking family practices like {name} that want to differentiate in a competitive primary care market.
+
+Adding aesthetic services like body contouring and skin tightening creates a powerful practice differentiator while generating cash-pay revenue streams beyond insurance reimbursements.
+
+Venus technologies are perfect for family practices because they are easy to integrate, require minimal training, and patients love the results.
+
+Would you be open to a conversation about how we have helped practices like yours add $75-100K in annual aesthetic revenue?
+
+Best regards,
+Venus Sales Team"""
+            }
+        }
         
-        try:
-            name = practice_data.get('name', '')
-            contact = practice_data.get('contact_name', 'Doctor')
-            
-            prompt = f"""Generate personalized outreach for Venus device sales.
+        # Get specialty-specific template or use general
+        template = email_templates.get(specialty, {
+            'subject': f'Aesthetic Technology for {name}',
+            'body': f"""Dear {contact},
 
-Practice: {name}
-Contact: {contact}
-Specialty: {specialty}
-Pain Points: {', '.join(pain_analysis.get('pain_points', []))}
-Readiness Score: {pain_analysis.get('readiness_score', 0)}
-Best Approach: {pain_analysis.get('best_approach', 'standard')}
+I am reaching out because {name} could benefit from Venus aesthetic technologies.
 
-Generate:
-1. Email subject line (compelling, personalized)
-2. Email body (3-4 paragraphs, conversational, addresses their specific pain points)
-3. 5 key talking points for a phone call
-4. Recommended follow-up timeline
+Our FDA-cleared systems offer body contouring, skin tightening, cellulite reduction, and wrinkle reduction—high-demand services that generate excellent revenue.
 
-Respond in JSON format:
-{{
-    "subject": "email subject",
-    "email_body": "full email text",
-    "talking_points": ["point 1", "point 2", "point 3", "point 4", "point 5"],
-    "follow_up_days": <integer>,
-    "call_to_action": "specific next step"
-}}
+Many practices similar to yours have successfully integrated Venus technologies to enhance patient satisfaction and increase revenue.
 
-Be specific, professional, and focus on THEIR revenue growth and patient satisfaction.
-Respond ONLY with valid JSON."""
+Would you be interested in a brief conversation?
 
-            response = self.gemini_model.generate_content(prompt)
-            result = json.loads(response.text.strip())
-            logger.info(f"✉️ AI outreach generated for {name}")
-            return result
-            
-        except Exception as e:
-            logger.warning(f"AI outreach generation failed: {str(e)}")
-            return {'subject': '', 'email_body': '', 'talking_points': [], 'error': str(e)}
+Best regards,
+Venus Sales Team"""
+        })
+        
+        # Generate talking points based on pain points and specialty
+        talking_points = [
+            f'Addresses key pain point: {pain_points[0] if pain_points else "practice growth"}',
+            'FDA-cleared technology with proven clinical results',
+            f'Typical ROI: $100-200K+ annual revenue for {specialty} practices',
+            'Comprehensive training and ongoing support included',
+            'Flexible financing options available'
+        ]
+        
+        # Determine follow-up timeline based on readiness score
+        if readiness_score >= 70:
+            follow_up_days = 3
+            call_to_action = 'Schedule in-office demo this week'
+        elif readiness_score >= 50:
+            follow_up_days = 5
+            call_to_action = 'Schedule virtual demo or call'
+        else:
+            follow_up_days = 7
+            call_to_action = 'Send additional information and case studies'
+        
+        return {
+            'subject': template['subject'],
+            'email_body': template['body'],
+            'talking_points': talking_points,
+            'follow_up_days': follow_up_days,
+            'call_to_action': call_to_action
+        }
     
     def discover_site_pages(self, base_url: str) -> List[str]:
         """
@@ -1476,40 +1567,36 @@ Respond ONLY with valid JSON."""
         # Calculate AI score with specialty detection
         ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
         
-        # 🚀 AI ENRICHMENT (Option B: Enabled by default when API key present)
-        ai_insights = {}
-        if self.ai_enabled:
-            logger.info(f"🤖 Running full AI analysis for {practice_name}")
-            
-            # Get pain point analysis
-            pain_analysis = self.ai_analyze_pain_points(practice_record, specialty)
-            
-            # Generate personalized outreach
-            outreach_content = self.ai_generate_outreach(practice_record, specialty, pain_analysis)
-            
-            # Store AI insights
-            ai_insights = {
-                'pain_points': pain_analysis.get('pain_points', []),
-                'revenue_opportunity': pain_analysis.get('revenue_opportunity', ''),
-                'ai_readiness_score': pain_analysis.get('readiness_score', 0),
-                'competing_services': pain_analysis.get('competing_services', []),
-                'gap_analysis': pain_analysis.get('gap_analysis', ''),
-                'decision_maker_profile': pain_analysis.get('decision_maker_profile', ''),
-                'best_approach': pain_analysis.get('best_approach', ''),
-                'email_subject': outreach_content.get('subject', ''),
-                'email_body': outreach_content.get('email_body', ''),
-                'talking_points': outreach_content.get('talking_points', []),
-                'follow_up_days': outreach_content.get('follow_up_days', 7),
-                'call_to_action': outreach_content.get('call_to_action', '')
-            }
-            
-            # Boost score if AI readiness is high
-            ai_boost = pain_analysis.get('readiness_score', 0) * 0.2  # Up to 20 point boost
-            ai_score = min(100, ai_score + int(ai_boost))
-            
-            logger.info(f"✨ AI analysis complete - Readiness: {pain_analysis.get('readiness_score', 0)}, Boosted Score: {ai_score}")
-        else:
-            logger.debug(f"AI analysis skipped (AI disabled) for {practice_name}")
+        # Rule-based enrichment (AI disabled)
+        logger.info(f"📊 Running rule-based analysis for {practice_name}")
+        
+        # Get pain point analysis (rule-based)
+        pain_analysis = self.analyze_pain_points_rule_based(practice_record, specialty)
+        
+        # Generate personalized outreach (template-based)
+        outreach_content = self.generate_outreach_template_based(practice_record, specialty, pain_analysis)
+        
+        # Store insights
+        ai_insights = {
+            'pain_points': pain_analysis.get('pain_points', []),
+            'revenue_opportunity': pain_analysis.get('revenue_opportunity', ''),
+            'ai_readiness_score': pain_analysis.get('readiness_score', 0),
+            'competing_services': pain_analysis.get('competing_services', []),
+            'gap_analysis': pain_analysis.get('gap_analysis', ''),
+            'decision_maker_profile': pain_analysis.get('decision_maker_profile', ''),
+            'best_approach': pain_analysis.get('best_approach', ''),
+            'email_subject': outreach_content.get('subject', ''),
+            'email_body': outreach_content.get('email_body', ''),
+            'talking_points': outreach_content.get('talking_points', []),
+            'follow_up_days': outreach_content.get('follow_up_days', 7),
+            'call_to_action': outreach_content.get('call_to_action', '')
+        }
+        
+        # Boost score based on readiness (rule-based)
+        readiness_boost = pain_analysis.get('readiness_score', 0) * 0.2  # Up to 20 point boost
+        ai_score = min(100, ai_score + int(readiness_boost))
+        
+        logger.info(f"✅ Rule-based analysis complete - Readiness: {pain_analysis.get('readiness_score', 0)}, Boosted Score: {ai_score}")
         
         # Get device recommendations
         device_recommendations = self.recommend_device(practice_record, score_breakdown)
@@ -1638,53 +1725,21 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         
         logger.info(f"Summary report generated: {filename}")
     
-    def _emit_progress(self, progress: int, message: str):
-        """Helper method to emit progress updates"""
-        if self.progress_callback:
-            try:
-                self.progress_callback(progress, message)
-            except Exception as e:
-                logger.warning(f"Progress callback failed: {e}")
-        logger.info(f"Progress: {progress}% - {message}")
-    
     def run_prospecting(self, keywords: List[str], location: str, 
                        radius: int, max_results: int):
-        """Main prospecting workflow with detailed progress tracking"""
+        """Main prospecting workflow"""
         
         logger.info(f"Starting prospecting for {keywords} near {location}")
-        self._emit_progress(15, "Initializing search parameters...")
         
         all_results = []
-        total_keywords = len(keywords)
         
-        # Progress allocation:
-        # 15-25%: Search initialization and API setup
-        # 25-85%: Processing places (60% total, divided by keywords and places)
-        # 85-90%: Removing duplicates
-        # 90-95%: Generating CSV
-        # 95-100%: Generating report
-        
-        for keyword_idx, keyword in enumerate(keywords, 1):
-            keyword_progress_start = 25 + ((keyword_idx - 1) * 60 // total_keywords)
-            keyword_progress_end = 25 + (keyword_idx * 60 // total_keywords)
-            
-            self._emit_progress(keyword_progress_start, f"Searching for '{keyword}'...")
+        for keyword in keywords:
             logger.info(f"Searching for: {keyword}")
             
             places = self.google_places_search(keyword, location, radius * 1000)
-            total_places = min(len(places), max_results)
             
-            self._emit_progress(keyword_progress_start + 2, f"Found {total_places} places for '{keyword}'. Processing...")
-            
-            for place_idx, place in enumerate(places[:max_results], 1):
+            for place in places[:max_results]:
                 try:
-                    # Calculate granular progress within this keyword's range
-                    place_progress = keyword_progress_start + 2 + ((place_idx * (keyword_progress_end - keyword_progress_start - 2)) // total_places)
-                    
-                    # Update progress every 5 places or for first/last place
-                    if place_idx == 1 or place_idx == total_places or place_idx % 5 == 0:
-                        self._emit_progress(place_progress, f"Processing {place_idx}/{total_places} for '{keyword}'...")
-                    
                     processed_practice = self.process_practice(place)
                     if processed_practice:
                         all_results.append(processed_practice)
@@ -1695,7 +1750,6 @@ TOP 10 HIGH-PRIORITY PROSPECTS
                     continue
         
         # Remove duplicates
-        self._emit_progress(85, "Removing duplicate entries...")
         unique_results = []
         seen = set()
         for result in all_results:
@@ -1705,17 +1759,13 @@ TOP 10 HIGH-PRIORITY PROSPECTS
                 unique_results.append(result)
         
         logger.info(f"Found {len(unique_results)} unique prospects")
-        self._emit_progress(90, f"Found {len(unique_results)} unique prospects. Generating CSV...")
         
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         csv_filename = f"prospects_{timestamp}.csv"
         report_filename = f"summary_{timestamp}.txt"
         
         self.export_to_csv(unique_results, csv_filename)
-        self._emit_progress(95, "CSV generated. Creating summary report...")
-        
         self.generate_summary_report(unique_results, report_filename)
-        self._emit_progress(98, "Report generated. Finalizing...")
         
         return unique_results, csv_filename, report_filename
 
