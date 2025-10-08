@@ -25,6 +25,7 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
+from openai import OpenAI
 
 # Load environment variables FIRST
 load_dotenv()
@@ -224,18 +225,37 @@ class GooglePlacesAPI:
 class FathomProspector:
     """Main prospecting system for medical devices"""
     
-    def __init__(self, demo_mode=False, existing_customers_csv=None, progress_callback=None):
+def __init__(self, demo_mode=False, existing_customers_csv=None):
         self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
+        self.gemini_key = os.getenv('GEMINI_API_KEY')
+        self.abacus_key = os.getenv('ABACUSAI_API_KEY')  # ADD THIS LINE
+        
         if not self.gmaps_key:
             logger.warning('GOOGLE_PLACES_API_KEY not found - switching to demo mode')
             demo_mode = True
         
-        # Progress callback for real-time updates
-        self.progress_callback = progress_callback
+        # Initialize Abacus AI client for LLM outreach messages
+        self.ai_enabled = False
+        self.llm_client = None
         
-        # Initialize Gemini AI if available
-        self.ai_enabled = GEMINI_AVAILABLE
-        self.gemini_model = None
+        if self.abacus_key:
+            try:
+                self.llm_client = OpenAI(
+                    api_key=self.abacus_key,
+                    base_url="https://api.abacus.ai/v1"
+                )
+                # Test the connection
+                test_response = self.llm_client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[{"role": "user", "content": "test"}],
+                    max_tokens=5
+                )
+                self.ai_enabled = True
+                logger.info('✓ Abacus AI LLM initialized successfully for outreach generation')
+            except Exception as e:
+                logger.warning(f'Failed to initialize Abacus AI: {str(e)} - using fallback messages')
+        else:
+            logger.warning('ABACUSAI_API_KEY not found - using fallback outreach messages')
         
         if GEMINI_AVAILABLE:
             try:
@@ -937,124 +957,73 @@ class FathomProspector:
             'best_approach': 'Focus on ROI, patient satisfaction, and competitive differentiation'
         }
     
-    def generate_outreach_template_based(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
-        """
-        Template-based outreach generation (replaces AI version)
-        Returns personalized email and talking points based on specialty
-        """
-        name = practice_data.get('name', 'Practice')
-        contact = practice_data.get('contact_name', 'Doctor')
-        pain_points = pain_analysis.get('pain_points', [])
-        readiness_score = pain_analysis.get('readiness_score', 50)
+    def craft_outreach_opener(self, practice_data: Dict, ai_score: int, 
+                            device_rec: Dict) -> str:
+        """Generate personalized LLM-powered outreach opener"""
         
-        # Specialty-specific email templates
-        email_templates = {
-            'dermatology': {
-                'subject': f'Expand Your Aesthetic Services - {name}',
-                'body': f"""Dear {contact},
-
-I hope this message finds you well. I am reaching out because {name} is exactly the type of leading dermatology practice that benefits most from Venus technologies.
-
-Many dermatologists we work with face similar challenges: med spas encroaching on aesthetic services, patients requesting non-invasive body contouring, and the need to stay competitive while maintaining medical excellence.
-
-Our Venus systems complement your existing practice by adding high-demand services like body contouring, cellulite reduction, and skin tightening—all with clinically proven, FDA-cleared technology.
-
-Would you be open to a brief conversation about how we have helped practices like yours increase aesthetic revenue by 30-40 percent?
-
-Best regards,
-Venus Sales Team"""
-            },
-            'plastic_surgery': {
-                'subject': f'Enhance Pre/Post-Surgical Care Revenue - {name}',
-                'body': f"""Dear {contact},
-
-I specialize in working with plastic surgery practices like {name} that want to maximize patient value and retention.
-
-Venus technologies are perfect for pre and post-surgical care, non-invasive alternatives for patients not ready for surgery, and maintenance between procedures.
-
-Our devices complement your surgical practice by capturing patients throughout their aesthetic journey, not just during surgical windows.
-
-I would love to show you how practices similar to yours have increased annual revenue by over $200K with Venus systems.
-
-Can we schedule 15 minutes to discuss?
-
-Best regards,
-Venus Sales Team"""
-            },
-            'obgyn': {
-                'subject': f'Womens Wellness + Aesthetics - {name}',
-                'body': f"""Dear {contact},
-
-I am reaching out to OB/GYN practices like {name} that are expanding into womens wellness and aesthetics.
-
-Postpartum body contouring is one of the fastest-growing service requests in womens health, and Venus technologies allow you to serve this need without invasive procedures.
-
-Many of our OB/GYN partners have successfully integrated Venus treatments for body contouring, skin tightening, and cellulite reduction—perfect for your patient demographic.
-
-Would you be interested in learning how we have helped practices like yours add $100-150K in annual aesthetic revenue?
-
-Best regards,
-Venus Sales Team"""
-            },
-            'medspa': {
-                'subject': f'Upgrade Your Technology - {name}',
-                'body': f"""Dear {contact},
-
-{name} caught my attention as a forward-thinking med spa, and I wanted to reach out about Venus technologies.
-
-The med spa market is competitive, and having state-of-the-art equipment is critical for attracting and retaining high-value clients.
-
-Venus systems deliver clinical results your clients will love: body contouring, cellulite reduction, skin tightening, and wrinkle reduction—all FDA-cleared and backed by extensive clinical studies.
-
-Many med spas we work with see 30-50 percent increase in treatment bookings after adding Venus technologies.
-
-Can we schedule a brief demo or discussion?
-
-Best regards,
-Venus Sales Team"""
-            },
-            'familypractice': {
-                'subject': f'Differentiate Your Practice - {name}',
-                'body': f"""Dear {contact},
-
-I work with forward-thinking family practices like {name} that want to differentiate in a competitive primary care market.
-
-Adding aesthetic services like body contouring and skin tightening creates a powerful practice differentiator while generating cash-pay revenue streams beyond insurance reimbursements.
-
-Venus technologies are perfect for family practices because they are easy to integrate, require minimal training, and patients love the results.
-
-Would you be open to a conversation about how we have helped practices like yours add $75-100K in annual aesthetic revenue?
-
-Best regards,
-Venus Sales Team"""
-            }
-        }
+        if ai_score < 70:
+            return ""
         
-        # Get specialty-specific template or use general
-        template = email_templates.get(specialty, {
-            'subject': f'Aesthetic Technology for {name}',
-            'body': f"""Dear {contact},
-
-I am reaching out because {name} could benefit from Venus aesthetic technologies.
-
-Our FDA-cleared systems offer body contouring, skin tightening, cellulite reduction, and wrinkle reduction—high-demand services that generate excellent revenue.
-
-Many practices similar to yours have successfully integrated Venus technologies to enhance patient satisfaction and increase revenue.
-
-Would you be interested in a brief conversation?
-
-Best regards,
-Venus Sales Team"""
-        })
+        practice_name = practice_data.get('name', 'Your Practice')
+        primary_device = device_rec.get('primary_recommendation', {}).get('device', 'our devices')
+        device_rationale = device_rec.get('primary_recommendation', {}).get('rationale', '')
+        services = practice_data.get('services', [])
+        location = practice_data.get('address', '')
+        rating = practice_data.get('rating', 0)
         
-        # Generate talking points based on pain points and specialty
-        talking_points = [
-            f'Addresses key pain point: {pain_points[0] if pain_points else "practice growth"}',
-            'FDA-cleared technology with proven clinical results',
-            f'Typical ROI: $100-200K+ annual revenue for {specialty} practices',
-            'Comprehensive training and ongoing support included',
-            'Flexible financing options available'
-        ]
+        # Fallback message if AI is not enabled
+        fallback_message = f"Hi! I noticed {practice_name}'s excellent reputation. Many practices like yours are seeing significant results with {primary_device}. Would you be interested in a brief conversation?"
+        
+        if not self.ai_enabled or not self.llm_client:
+            return fallback_message
+        
+        try:
+            # Create context-rich prompt for the LLM
+            prompt = f"""You are a medical device sales professional. Create a personalized, friendly outreach message for a medical practice.
+
+Practice Details:
+- Name: {practice_name}
+- Location: {location}
+- Rating: {rating}/5 stars
+- Services offered: {', '.join(services) if services else 'aesthetic and medical services'}
+- AI Score: {ai_score}/100 (High fit for our devices)
+
+Recommended Device:
+- Device: {primary_device}
+- Why it fits: {device_rationale}
+
+Requirements:
+1. Keep it under 100 words
+2. Be warm and conversational, not salesy
+3. Reference their specific services or reputation naturally
+4. Mention the recommended device and why it fits their practice
+5. End with a soft call-to-action (brief conversation or demo)
+6. Don't use Dear/Hi formal greetings, just start conversationally
+7. Make it feel authentic and personalized
+
+Write the outreach message:"""
+
+            response = self.llm_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {"role": "system", "content": "You are an expert medical device sales consultant who writes warm, personalized outreach messages."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=200,
+                temperature=0.7
+            )
+            
+            generated_message = response.choices[0].message.content.strip()
+            
+            # Clean up any quotes or formatting
+            generated_message = generated_message.strip('"').strip("'").strip()
+            
+            logger.info(f"Generated LLM outreach for {practice_name}")
+            return generated_message
+            
+        except Exception as e:
+            logger.error(f"LLM outreach generation failed for {practice_name}: {str(e)}")
+            return fallback_message
         
         # Determine follow-up timeline based on readiness score
         if readiness_score >= 70:
@@ -1828,7 +1797,8 @@ def main():
     print(f"Radius: {radius} km")
     print(f"Max results per keyword: {max_results}")
     print(f"Google Places API: {'✓ Configured' if prospector.gmaps_key else '✗ Missing'}")
-    sys.stdout.flush()
+    print(f"Abacus AI LLM: {'✓ ENABLED - Personalized outreach messages' if prospector.ai_enabled else '✗ Using fallback messages'}")
+    print(f"ENHANCED SEARCH: Using Text Search with keyword variations")
     
     try:
         results, csv_file, report_file = prospector.run_prospecting(
