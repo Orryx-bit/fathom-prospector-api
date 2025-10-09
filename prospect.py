@@ -42,7 +42,7 @@ try:
         )
         ABACUS_API_AVAILABLE = True
 except Exception as e:
-    pass  # Will use template-based outreach as fallback
+    logger.error(f"Failed to initialize Abacus AI: {str(e)}")
 
 # Configure logging BEFORE any other imports that might use it
 handlers = [logging.StreamHandler(sys.stdout)]
