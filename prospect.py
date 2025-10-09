@@ -34,7 +34,6 @@ load_dotenv()
 ABACUS_CLIENT = None
 ABACUS_API_AVAILABLE = False
 try:
-    abacus_api_key = os.getenv('ABACUSAI_API_KEY')
     if abacus_api_key:
         ABACUS_CLIENT = OpenAI(
             api_key=abacus_api_key,
@@ -1854,8 +1853,8 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         logger.info(f"Starting prospecting for {keywords} near {location}")
         
         all_results = []
-total_practices = sum(min(len(self.google_places_search(kw, location, radius * 1000)), max_results) for kw in keywords)
-processed_count = 0
+    total_practices = sum(min(len(self.google_places_search(kw, location, radius * 1000)), max_results) for kw in keywords)
+    processed_count = 0
 
 for keyword in keywords:
     logger.info(f"Searching for: {keyword}")
