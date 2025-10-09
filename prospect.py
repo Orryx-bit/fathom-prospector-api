@@ -42,7 +42,7 @@ try:
         )
         ABACUS_API_AVAILABLE = True
 except Exception as e:
-    logger.error(f"Failed to initialize Abacus AI: {str(e)}")
+    print(f"Failed to initialize Abacus AI: {str(e)}")
 
 # Configure logging BEFORE any other imports that might use it
 handlers = [logging.StreamHandler(sys.stdout)]
