@@ -37,7 +37,7 @@ try:
     if abacus_api_key:
         ABACUS_CLIENT = OpenAI(
             api_key=abacus_api_key,
-            base_url="https://api.abacus.ai"
+            base_url="https://apps.abacus.ai/v1"
         )
         ABACUS_API_AVAILABLE = True
 except Exception as e:
@@ -1892,7 +1892,12 @@ TOP 10 HIGH-PRIORITY PROSPECTS
                     processed_count += 1
                     if self.progress_callback:
                         progress_pct = 10 + int((processed_count / max(total_practices_estimate, 1)) * 85)
-                        self.progress_callback(min(progress_pct, 95))
+                        try:
+                            # Try 2-arg signature first (progress, message)
+                            self.progress_callback(min(progress_pct, 95), f"Processing practice {processed_count}/{total_practices_estimate}")
+                        except TypeError:
+                            # Fall back to 1-arg signature (progress only)
+                            self.progress_callback(min(progress_pct, 95))
                 
                 except Exception as e:
                     logger.error(f"Error processing practice: {str(e)}")
