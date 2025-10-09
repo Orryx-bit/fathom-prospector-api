@@ -38,7 +38,7 @@ try:
     if abacus_api_key:
         ABACUS_CLIENT = OpenAI(
             api_key=abacus_api_key,
-            base_url="https://api.abacus.ai/v1"
+            base_url="https://api.abacus.ai"
         )
         ABACUS_API_AVAILABLE = True
 except Exception as e:
