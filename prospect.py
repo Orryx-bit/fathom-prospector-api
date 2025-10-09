@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 Fathom Medical Device Prospecting System
@@ -16,7 +15,7 @@ import re
 import sys
 import time
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
@@ -34,6 +33,7 @@ load_dotenv()
 ABACUS_CLIENT = None
 ABACUS_API_AVAILABLE = False
 try:
+    abacus_api_key = os.getenv('ABACUSAI_API_KEY')
     if abacus_api_key:
         ABACUS_CLIENT = OpenAI(
             api_key=abacus_api_key,
@@ -93,7 +93,7 @@ class GooglePlacesAPI:
         self.base_url = "https://maps.googleapis.com/maps/api"
         # Connection timeout, Read timeout
         self.timeout = (10, 30)
-        
+    
     def _make_request(self, endpoint: str, params: dict, max_retries: int = 3) -> dict:
         """
         Make API request with timeout and retry logic
@@ -102,7 +102,7 @@ class GooglePlacesAPI:
             endpoint: API endpoint (e.g., '/place/nearbysearch/json')
             params: Query parameters
             max_retries: Number of retry attempts
-            
+        
         Returns:
             API response as dict
         """
@@ -132,19 +132,19 @@ class GooglePlacesAPI:
                 else:
                     logger.warning(f"API returned status: {status}")
                     return data
-                    
+            
             except requests.Timeout:
                 logger.warning(f"Timeout on attempt {attempt + 1}/{max_retries}")
                 if attempt == max_retries - 1:
                     raise Exception("API request timed out after multiple attempts")
                 time.sleep(2 ** attempt)  # Exponential backoff
-                
+            
             except requests.RequestException as e:
                 logger.warning(f"Request error on attempt {attempt + 1}/{max_retries}: {e}")
                 if attempt == max_retries - 1:
                     raise Exception(f"API request failed: {str(e)}")
                 time.sleep(2 ** attempt)
-                
+        
         raise Exception("Max retries exceeded")
     
     def geocode(self, address: str) -> List[dict]:
@@ -153,7 +153,7 @@ class GooglePlacesAPI:
         
         Args:
             address: Address string to geocode
-            
+        
         Returns:
             List of geocoding results
         """
@@ -175,7 +175,7 @@ class GooglePlacesAPI:
             location: Dict with 'lat' and 'lng' keys
             radius: Search radius in meters
             keyword: Search keyword
-            
+        
         Returns:
             Dict with 'results' key containing list of places found (handles pagination automatically)
         """
@@ -207,7 +207,7 @@ class GooglePlacesAPI:
                 next_page_token = data.get('next_page_token')
                 if not next_page_token:
                     break
-                    
+            
             except Exception as e:
                 logger.error(f"Error fetching places: {e}")
                 break
@@ -222,7 +222,7 @@ class GooglePlacesAPI:
         Args:
             place_id: Google Place ID
             fields: List of fields to retrieve
-            
+        
         Returns:
             Place details dict or None
         """
@@ -445,7 +445,7 @@ class FathomProspector:
                 self.existing_customers.add(cleaned_name)
             
             logger.info(f"Loaded {len(self.existing_customers)} existing customers for exclusion")
-            
+        
         except Exception as e:
             logger.error(f"Failed to load existing customers CSV: {str(e)}")
     
@@ -548,7 +548,7 @@ class FathomProspector:
             
             logger.info(f"✅ {len(results)} medical businesses passed all filters")
             return results
-            
+        
         except Exception as e:
             logger.error(f"Error in Google Places search: {str(e)}")
             logger.info("Falling back to demo mode")
@@ -561,12 +561,12 @@ class FathomProspector:
             details = self.gmaps_api.place_details(
                 place_id=place_id,
                 fields=['name', 'formatted_address', 'formatted_phone_number', 
-                       'website', 'rating', 'user_ratings_total', 'types']
+                        'website', 'rating', 'user_ratings_total', 'types']
             )
             
             # place_details() already returns the result dict, not the full response
             return details if details else None
-            
+        
         except Exception as e:
             logger.error(f"Error getting place details: {str(e)}")
             return None
@@ -636,11 +636,11 @@ class FathomProspector:
         try:
             if not url:
                 return False
-                
+            
             parsed = urlparse(url)
             if not parsed.scheme or not parsed.netloc:
                 return False
-                
+            
             robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
             
             rp = RobotFileParser()
@@ -651,7 +651,7 @@ class FathomProspector:
         except Exception:
             return True
     
-    def get_mock_website_data(self, url: str) -> Dict[str, any]:
+    def get_mock_website_data(self, url: str) -> Dict[str, Any]:
         """Generate mock website data for demo purposes"""
         mock_data = {
             'https://austinaesthetic.com': {
@@ -687,7 +687,7 @@ class FathomProspector:
     
     @sleep_and_retry
     @limits(calls=30, period=60)
-    def scrape_website(self, url: str) -> Dict[str, any]:
+    def scrape_website(self, url: str) -> Dict[str, Any]:
         """Scrape practice website for additional information"""
         
         if self.demo_mode:
@@ -712,7 +712,7 @@ class FathomProspector:
                 'social_links': [],
                 'staff_count': 0
             }
-            
+        
         try:
             time.sleep(random.uniform(0.5, 1.0))
             
@@ -807,7 +807,7 @@ class FathomProspector:
             data['social_links'] = social_links
             
             # Estimate staff count
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
             data['staff_count'] = min(unique_staff, 20)
@@ -815,7 +815,7 @@ class FathomProspector:
             logger.info(f"Website scrape complete for {url}: {len(data['services'])} services found")
             
             return data
-            
+        
         except requests.exceptions.Timeout:
             logger.error(f"Timeout scraping website {url}")
             return {
@@ -883,7 +883,7 @@ class FathomProspector:
                 'Revenue growth opportunities in aesthetics'
             ]
             readiness_score += 20
-            
+        
         elif specialty == 'plastic_surgery':
             pain_points = [
                 'Pre and post-surgical care revenue opportunities',
@@ -892,7 +892,7 @@ class FathomProspector:
                 'Complementary services for body contouring'
             ]
             readiness_score += 25
-            
+        
         elif specialty == 'obgyn':
             pain_points = [
                 'Postpartum body contouring demand',
@@ -901,7 +901,7 @@ class FathomProspector:
                 'Additional revenue streams beyond traditional services'
             ]
             readiness_score += 15
-            
+        
         elif specialty == 'medspa':
             pain_points = [
                 'Need for advanced technology to compete',
@@ -910,7 +910,7 @@ class FathomProspector:
                 'Expanding treatment menu'
             ]
             readiness_score += 30
-            
+        
         elif specialty == 'familypractice':
             pain_points = [
                 'Differentiation in crowded primary care market',
@@ -919,7 +919,7 @@ class FathomProspector:
                 'Aesthetic services as practice differentiator'
             ]
             readiness_score += 10
-            
+        
         else:  # general
             pain_points = [
                 'Practice growth and differentiation',
@@ -1049,7 +1049,7 @@ Format your response EXACTLY like this:
                 'follow_up_days': 5,
                 'call_to_action': 'Schedule a 15-minute demo call'
             }
-            
+        
         except Exception as e:
             logger.error(f"AI outreach generation failed: {str(e)}, falling back to templates")
             return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
@@ -1252,14 +1252,32 @@ Venus Sales Team"""
             }
             
             social_links = []
+            seen_platforms = set()
             for link in soup.find_all('a', href=True):
-                href = link['href'].lower()
+                href = link.get('href', '').strip()
+                href_lower = href.lower()
+                
+                # Skip empty or invalid hrefs
+                if not href or href.startswith('#') or href.startswith('javascript:'):
+                    continue
+                
                 for domain, platform_name in social_platforms.items():
-                    if domain in href and platform_name not in social_links:
-                        social_links.append(platform_name)
+                    if domain in href_lower and platform_name not in seen_platforms:
+                        # Clean up the URL
+                        full_url = href
+                        if href.startswith('//'):
+                            full_url = 'https:' + href
+                        elif href.startswith('/') or not href.startswith('http'):
+                            # Relative URL - skip it as it's not a social link
+                            continue
+                        
+                        # Add the full URL to the list
+                        social_links.append(full_url)
+                        seen_platforms.add(platform_name)
+                        break
             
             # Find staff mentions
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             
             return {
@@ -1268,7 +1286,7 @@ Venus Sales Team"""
                 'text': text_content,
                 'social_links': social_links
             }
-            
+        
         except Exception as e:
             logger.debug(f"Error scraping {url}: {str(e)}")
             return {
@@ -1278,7 +1296,7 @@ Venus Sales Team"""
                 'social_links': []
             }
     
-    def scrape_website_deep(self, base_url: str, max_pages: int = 5) -> Dict[str, any]:
+    def scrape_website_deep(self, base_url: str, max_pages: int = 5) -> Dict[str, Any]:
         """
         Intelligently scrape multiple pages from a medical practice website
         Returns aggregated data from all pages
@@ -1345,7 +1363,7 @@ Venus Sales Team"""
                     all_staff_mentions.extend(page_data['staff_mentions'])
                     all_text.append(page_data['text'])
                     pages_scraped += 1
-                    
+                
                 except Exception as e:
                     logger.debug(f"Skipping page {page_url}: {str(e)}")
                     continue
@@ -1363,7 +1381,7 @@ Venus Sales Team"""
                 'social_links': list(all_social_links),
                 'staff_count': staff_count
             }
-            
+        
         except Exception as e:
             logger.error(f"Error in deep scrape for {base_url}: {str(e)}")
             # Fall back to single-page scrape
@@ -1415,9 +1433,9 @@ Venus Sales Team"""
         address = practice_data.get('formatted_address', '').lower()
         all_text = f"{practice_name} {practice_desc} {address}"
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 1. Specialty Match (20 points)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         specialty_keywords = [
             'dermatology', 'dermatologist', 'plastic surgery', 'plastic surgeon',
             'cosmetic', 'aesthetic', 'med spa', 'medical spa', 'medspa',
@@ -1428,10 +1446,10 @@ Venus Sales Team"""
         specialty_matches = sum(1 for keyword in specialty_keywords if keyword in all_text)
         scores['specialty_match'] = min(specialty_matches * 4, 20)
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 2. Decision-Making Autonomy (20 points) 🔥 CRITICAL
         # CORRECTED: Solo/small = HIGH score (single decision maker)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         staff_count = practice_data.get('staff_count', 0)
         
         # Check for hospital affiliation indicators
@@ -1472,9 +1490,9 @@ Venus Sales Team"""
         
         scores['decision_autonomy'] = autonomy_score
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 3. Aesthetic Services (15 points)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         services = practice_data.get('services', [])
         aesthetic_services = [
             'botox', 'fillers', 'laser', 'coolsculpting', 'body contouring',
@@ -1483,12 +1501,12 @@ Venus Sales Team"""
         ]
         
         service_matches = sum(1 for service in aesthetic_services 
-                            if any(service in s.lower() for s in services))
+                              if any(service in s.lower() for s in services))
         scores['aesthetic_services'] = min(service_matches * 3, 15)
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 4. Competing Devices (10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         competing_devices = [
             'coolsculpting', 'thermage', 'ultherapy', 'sculptra', 
             'emsculpt', 'vanquish', 'exilis'
@@ -1497,15 +1515,15 @@ Venus Sales Team"""
         device_count = sum(1 for device in competing_devices if device in practice_desc)
         scores['competing_devices'] = min(device_count * 5, 10)
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 5. Social Media Activity (10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         social_links = practice_data.get('social_links', [])
         scores['social_activity'] = min(len(social_links) * 3, 10)
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 6. Reviews & Rating (10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         rating = practice_data.get('rating', 0)
         review_count = practice_data.get('user_ratings_total', 0)
         
@@ -1518,9 +1536,9 @@ Venus Sales Team"""
         else:
             scores['reviews_rating'] = 1
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 7. Search Visibility (10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         website = practice_data.get('website', '')
         if website and 'http' in website:
             scores['search_visibility'] = 10
@@ -1531,10 +1549,10 @@ Venus Sales Team"""
         else:
             scores['search_visibility'] = 1
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 8. Financial Indicators (10 points)
         # Affluent area + cash-pay readiness
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         
         # Check for affluent area indicators
         affluent_indicators = [
@@ -1558,9 +1576,9 @@ Venus Sales Team"""
         
         scores['financial_indicators'] = financial_score
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 9. Weight Loss Services (5 points)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         weight_keywords = [
             'weight loss', 'medical weight', 'hormone therapy', 'iv therapy',
             'body contouring', 'fat reduction', 'inch loss'
@@ -1569,9 +1587,9 @@ Venus Sales Team"""
         weight_matches = sum(1 for keyword in weight_keywords if keyword in all_text)
         scores['weight_loss_services'] = min(weight_matches * 2, 5)
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # 10. Specialty-Specific Keyword Bonus (up to +10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         services = practice_data.get('services', [])
         services_text = ' '.join(services).lower()
         all_text_with_services = f"{practice_name} {practice_desc} {services_text}"
@@ -1582,9 +1600,9 @@ Venus Sales Team"""
                 keyword_bonus += 2
         keyword_bonus = min(keyword_bonus, 10)
         
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         # TOTAL SCORE (out of 110, normalized to 100)
-        # ═══════════════════════════════════════════════════════════
+        # ════════════════════════════════════════════════════════════════
         base_score = sum(scores.values())
         total_score = min(base_score + keyword_bonus, 100)
         
@@ -1620,7 +1638,7 @@ Venus Sales Team"""
             }
         
         sorted_devices = sorted(device_scores.items(), 
-                              key=lambda x: x[1]['score'], reverse=True)
+                                key=lambda x: x[1]['score'], reverse=True)
         
         recommendations = []
         for i, (device_name, data) in enumerate(sorted_devices[:3]):
@@ -1637,7 +1655,7 @@ Venus Sales Team"""
         }
     
     def craft_outreach_opener(self, practice_data: Dict, ai_score: int, 
-                            device_rec: Dict) -> str:
+                               device_rec: Dict) -> str:
         """Generate personalized outreach opener"""
         
         if ai_score < 70:
@@ -1704,10 +1722,10 @@ Venus Sales Team"""
             'gap_analysis': pain_analysis.get('gap_analysis', ''),
             'decision_maker_profile': pain_analysis.get('decision_maker_profile', ''),
             'best_approach': pain_analysis.get('best_approach', ''),
-            'cold_call_script': outreach_content.get('cold_call_script', ''),
-            'instagram_dm': outreach_content.get('instagram_dm', ''),
-            'email_subject': outreach_content.get('email_subject', outreach_content.get('subject', '')),
-            'email_body': outreach_content.get('email_body', ''),
+            'outreachColdCall': outreach_content.get('cold_call_script', ''),
+            'outreachInstagram': outreach_content.get('instagram_dm', ''),
+            'outreachEmailSubject': outreach_content.get('email_subject', outreach_content.get('subject', '')),
+            'outreachEmail': outreach_content.get('email_body', ''),
             'talking_points': outreach_content.get('talking_points', []),
             'follow_up_days': outreach_content.get('follow_up_days', 7),
             'call_to_action': outreach_content.get('call_to_action', '')
@@ -1729,7 +1747,7 @@ Venus Sales Team"""
         # Calculate data completeness
         required_fields = ['name', 'address', 'phone', 'website']
         completeness = sum(1 for field in required_fields 
-                         if practice_record.get(field)) / len(required_fields)
+                           if practice_record.get(field)) / len(required_fields)
         
         # Determine confidence level
         if ai_score >= 70 and completeness >= 0.75:
@@ -1773,7 +1791,7 @@ Venus Sales Team"""
             'data_completeness',
             # AI-enhanced fields (Option B: Full AI integration)
             'ai_readiness_score', 'revenue_opportunity', 'gap_analysis', 'best_approach',
-            'decision_maker_profile', 'cold_call_script', 'instagram_dm', 'email_subject', 'email_body', 'pain_points',
+            'decision_maker_profile', 'outreachColdCall', 'outreachInstagram', 'outreachEmailSubject', 'outreachEmail', 'pain_points',
             'competing_services', 'talking_points', 'follow_up_days', 'call_to_action'
         ]
         
@@ -1818,18 +1836,18 @@ MEDICAL DEVICE PROSPECTING REPORT
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 EXECUTIVE SUMMARY
-================
+════════════════════════════════════════════════════════════════
 Total Prospects Analyzed: {total_prospects}
 Average AI Score: {avg_score:.1f}/100
 
 PROSPECT DISTRIBUTION
-====================
+════════════════════════════════════════════════════════════════
 High-Fit (70-100): {high_fit} ({high_fit/total_prospects*100:.1f}%)
 Medium-Fit (50-69): {medium_fit} ({medium_fit/total_prospects*100:.1f}%)
 Low-Fit (0-49): {low_fit} ({low_fit/total_prospects*100:.1f}%)
 
 TOP 10 HIGH-PRIORITY PROSPECTS
-==============================
+════════════════════════════════════════════════════════════════
 """
         
         for i, prospect in enumerate(sorted_results[:10], 1):
@@ -1847,36 +1865,38 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         logger.info(f"Summary report generated: {filename}")
     
     def run_prospecting(self, keywords: List[str], location: str, 
-                       radius: int, max_results: int):
+                        radius: int, max_results: int):
         """Main prospecting workflow"""
         
         logger.info(f"Starting prospecting for {keywords} near {location}")
         
         all_results = []
-    total_practices = sum(min(len(self.google_places_search(kw, location, radius * 1000)), max_results) for kw in keywords)
-    processed_count = 0
-
-for keyword in keywords:
-    logger.info(f"Searching for: {keyword}")
-    
-    places = self.google_places_search(keyword, location, radius * 1000)
-    
-    for place in places[:max_results]:
-        try:
-            processed_practice = self.process_practice(place)
-            if processed_practice:
-                all_results.append(processed_practice)
-                logger.info(f"Processed: {processed_practice.get('name', 'Unknown')} - Score: {processed_practice.get('ai_score', 0)}")
+        
+        # Estimate total practices to process
+        total_practices_estimate = len(keywords) * max_results
+        processed_count = 0
+        
+        for keyword in keywords:
+            logger.info(f"Searching for: {keyword}")
             
-            # Update progress
-            processed_count += 1
-            if self.progress_callback:
-                progress_pct = 10 + int((processed_count / max(total_practices, 1)) * 85)
-                self.progress_callback(min(progress_pct, 95))
+            places = self.google_places_search(keyword, location, radius * 1000)
             
-        except Exception as e:
-            logger.error(f"Error processing practice: {str(e)}")
-            continue
+            for place in places[:max_results]:
+                try:
+                    processed_practice = self.process_practice(place)
+                    if processed_practice:
+                        all_results.append(processed_practice)
+                        logger.info(f"Processed: {processed_practice.get('name', 'Unknown')} - Score: {processed_practice.get('ai_score', 0)}")
+                    
+                    # Update progress
+                    processed_count += 1
+                    if self.progress_callback:
+                        progress_pct = 10 + int((processed_count / max(total_practices_estimate, 1)) * 85)
+                        self.progress_callback(min(progress_pct, 95))
+                
+                except Exception as e:
+                    logger.error(f"Error processing practice: {str(e)}")
+                    continue
         
         # Remove duplicates
         unique_results = []
@@ -1944,7 +1964,7 @@ def main():
         
         radius = args.radius or int(input(f"Enter search radius in km (default: 25): ") or "25")
         max_results = args.max_results or int(input(f"Enter max results per keyword (default: 150): ") or "150")
-        
+    
     else:
         keywords = args.keywords
         city = args.city
@@ -1973,7 +1993,7 @@ def main():
             print(f"\nTOP 5 PROSPECTS:")
             for i, prospect in enumerate(top_prospects, 1):
                 print(f"{i}. {prospect.get('name', 'Unknown')} - Score: {prospect.get('ai_score', 0)}/100")
-        
+    
     except Exception as e:
         logger.error(f"Error during prospecting: {str(e)}")
         print(f"Error: {str(e)}")
