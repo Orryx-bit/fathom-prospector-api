@@ -26,13 +26,10 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
-# Gemini AI removed - using rule-based logic only
-GEMINI_AVAILABLE = False
-
-# Load environment variables
+# Load environment variables FIRST
 load_dotenv()
 
-# Configure logging
+# Configure logging BEFORE any other imports that might use it
 handlers = [logging.StreamHandler(sys.stdout)]
 
 # Try to add file logging if possible (development/local only)
@@ -49,6 +46,31 @@ logging.basicConfig(
     handlers=handlers
 )
 logger = logging.getLogger(__name__)
+
+# Abacus RouteLLM Integration (OpenAI-compatible)
+AI_AVAILABLE = False
+openai_client = None
+
+try:
+    from openai import OpenAI
+    abacus_key = os.getenv('ABACUSAI_API_KEY')
+    
+    if abacus_key:
+        # Initialize OpenAI client with Abacus RouteLLM endpoint
+        openai_client = OpenAI(
+            api_key=abacus_key,
+            base_url="https://apps.abacus.ai/v1"  # Abacus RouteLLM endpoint
+        )
+        AI_AVAILABLE = True
+        logger.info("✓ Abacus RouteLLM initialized successfully - AI features enabled")
+        logger.info("   Smart routing active: Access to GPT-4, Claude, Llama, and more")
+    else:
+        logger.warning("ABACUSAI_API_KEY not found - AI features disabled, using rule-based logic")
+except ImportError:
+    logger.warning("openai package not installed - AI features disabled, using rule-based logic")
+    logger.warning("Run: pip install openai")
+except Exception as e:
+    logger.warning(f"Abacus RouteLLM initialization failed: {str(e)} - AI features disabled, using rule-based logic")
 
 
 
@@ -211,16 +233,25 @@ class GooglePlacesAPI:
 class FathomProspector:
     """Main prospecting system for medical devices"""
     
-    def __init__(self, demo_mode=False, existing_customers_csv=None):
+    def __init__(self, demo_mode=False, existing_customers_csv=None, progress_callback=None):
         self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
         if not self.gmaps_key:
             logger.warning('GOOGLE_PLACES_API_KEY not found - switching to demo mode')
             demo_mode = True
         
-        # AI permanently disabled - using rule-based logic
-        self.ai_enabled = False
-        self.gemini_model = None
-        logger.info('Using rule-based scoring and outreach (AI disabled)')
+        # Progress callback for real-time updates
+        self.progress_callback = progress_callback
+        
+        # Initialize Abacus RouteLLM if available
+        self.ai_enabled = AI_AVAILABLE
+        self.openai_client = openai_client
+        self.model_name = "gpt-4o-mini"  # Default model: fast and cheap ($0.15/1M input tokens)
+        
+        if AI_AVAILABLE:
+            logger.info(f'✓ Abacus RouteLLM ready - AI features enabled')
+            logger.info(f'   Using model: {self.model_name} for cost efficiency')
+        else:
+            logger.info('Using rule-based scoring and outreach (Abacus RouteLLM not available)')
         
         self.demo_mode = demo_mode
         self.existing_customers = set()
@@ -234,6 +265,45 @@ class FathomProspector:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
+    
+    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
+        """
+        Unified method to call Abacus RouteLLM API
+        
+        Args:
+            prompt: User prompt
+            system_message: Optional system message for context
+            max_tokens: Max response length
+            temperature: Creativity level (0.0-1.0)
+            
+        Returns:
+            Response text or empty string if failed
+        """
+        if not self.ai_enabled or not self.openai_client:
+            logger.debug("AI not available, skipping AI call")
+            return ""
+        
+        try:
+            messages = []
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            messages.append({"role": "user", "content": prompt})
+            
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=30.0  # Prevent hanging
+            )
+            
+            result = response.choices[0].message.content.strip()
+            logger.debug(f"🤖 AI response received ({len(result)} chars)")
+            return result
+            
+        except Exception as e:
+            logger.error(f"AI API error: {str(e)}")
+            return ""
         
         if not demo_mode:
             try:
@@ -800,6 +870,262 @@ class FathomProspector:
         desc = practice_data.get('description', '').lower()
         services = ' '.join(practice_data.get('services', [])).lower()
         all_text = f"{name} {desc} {services}"
+
+    def detect_specialty_ai(self, practice_data: Dict) -> str:
+        """
+        AI-powered specialty detection using Abacus RouteLLM
+        Analyzes practice data with context awareness
+        Falls back to rule-based if AI unavailable
+        """
+        if not self.ai_enabled:
+            return self.detect_specialty(practice_data)
+        
+        try:
+            name = practice_data.get('name', 'Unknown Practice')
+            desc = practice_data.get('description', '')
+            services = ', '.join(practice_data.get('services', []))
+            website_text = practice_data.get('website_text', '')[:500]  # First 500 chars
+            
+            prompt = f"""Analyze this medical practice and determine their PRIMARY specialty.
+
+Practice Name: {name}
+Description: {desc}
+Services Offered: {services}
+Website Content: {website_text}
+
+Based on ALL the context above, determine the single best specialty classification:
+- dermatology: Skin doctors, medical dermatology, cosmetic dermatology
+- plastic_surgery: Plastic surgeons, cosmetic surgeons, reconstructive surgery
+- obgyn: OB/GYN, gynecology, women's health, obstetrics
+- medspa: Medical spas, aesthetic centers, cosmetic clinics (non-physician owned)
+- familypractice: Family medicine, primary care, general practice, internal medicine
+- general: Everything else
+
+Return ONLY ONE WORD from the list above. No explanation."""
+
+            system_msg = "You are an expert medical practice analyst specializing in practice classification."
+            
+            result = self.call_ai(prompt, system_msg, max_tokens=20, temperature=0.3).lower().strip()
+            
+            # Validate result
+            valid_specialties = ['dermatology', 'plastic_surgery', 'obgyn', 'medspa', 'familypractice', 'general']
+            if result in valid_specialties:
+                logger.info(f"🤖 AI-enhanced specialty detection: {result}")
+                return result
+            else:
+                logger.warning(f"AI returned invalid specialty '{result}', using rule-based fallback")
+                return self.detect_specialty(practice_data)
+                
+        except Exception as e:
+            logger.error(f"AI specialty detection failed: {str(e)}, using rule-based fallback")
+            return self.detect_specialty(practice_data)
+    
+    def analyze_pain_points_ai(self, practice_data: Dict, specialty: str) -> Dict:
+        """
+        AI-powered pain point analysis using Abacus RouteLLM
+        Generates personalized insights based on practice context
+        Falls back to rule-based if AI unavailable
+        """
+        if not self.ai_enabled:
+            return self.analyze_pain_points_rule_based(practice_data, specialty)
+        
+        try:
+            name = practice_data.get('name', 'Unknown Practice')
+            services = ', '.join(practice_data.get('services', []))
+            website_text = practice_data.get('website_text', '')[:800]
+            has_website = bool(practice_data.get('website'))
+            devices_found = practice_data.get('devices_found', [])
+            
+            prompt = f"""Analyze this medical practice and identify their top 3-4 business pain points related to aesthetic services and growth.
+
+Practice: {name}
+Specialty: {specialty}
+Services: {services}
+Has Website: {has_website}
+Competing Devices: {devices_found}
+Website Content: {website_text}
+
+Generate:
+1. 3-4 specific pain points this practice likely faces
+2. A readiness score (0-100) for adopting Venus aesthetic technology
+
+Format your response as:
+PAIN_POINTS:
+- [pain point 1]
+- [pain point 2]
+- [pain point 3]
+- [pain point 4]
+
+READINESS_SCORE: [number 0-100]
+
+Consider factors like competition, market position, current services, and growth potential."""
+
+            system_msg = "You are a medical device sales strategist specializing in identifying practice needs."
+            
+            response = self.call_ai(prompt, system_msg, max_tokens=400, temperature=0.7)
+            
+            if not response:
+                return self.analyze_pain_points_rule_based(practice_data, specialty)
+            
+            # Parse the AI response
+            pain_points = []
+            readiness_score = 50
+            
+            # Extract pain points
+            if 'PAIN_POINTS:' in response:
+                pain_section = response.split('PAIN_POINTS:')[1].split('READINESS_SCORE:')[0]
+                pain_points = [p.strip('- ').strip() for p in pain_section.split('\n') if p.strip().startswith('-')]
+            
+            # Extract readiness score
+            if 'READINESS_SCORE:' in response:
+                try:
+                    score_text = response.split('READINESS_SCORE:')[1].strip().split()[0]
+                    readiness_score = int(''.join(filter(str.isdigit, score_text)))
+                    readiness_score = max(0, min(100, readiness_score))  # Clamp to 0-100
+                except:
+                    readiness_score = 50
+            
+            if not pain_points:
+                logger.warning("AI returned no pain points, using rule-based fallback")
+                return self.analyze_pain_points_rule_based(practice_data, specialty)
+            
+            logger.info(f"🤖 AI-generated pain points: {len(pain_points)} insights, readiness: {readiness_score}")
+            
+            return {
+                'pain_points': pain_points,
+                'readiness_score': readiness_score,
+                'ai_generated': True
+            }
+            
+        except Exception as e:
+            logger.error(f"AI pain point analysis failed: {str(e)}, using rule-based fallback")
+            return self.analyze_pain_points_rule_based(practice_data, specialty)
+    
+    def generate_outreach_ai(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
+        """
+        AI-powered outreach generation using Abacus RouteLLM
+        Creates personalized cold call script, Instagram DM, and email
+        Falls back to template-based if AI unavailable
+        """
+        if not self.ai_enabled:
+            return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
+        
+        try:
+            name = practice_data.get('name', 'Unknown Practice')
+            contact = practice_data.get('contact_name', 'Doctor')
+            location = practice_data.get('location', '')
+            pain_points = pain_analysis.get('pain_points', [])
+            readiness_score = pain_analysis.get('readiness_score', 50)
+            services = ', '.join(practice_data.get('services', []))[:200]
+            rating = practice_data.get('rating', 0)
+            device_rec = self.recommend_device(practice_data, {}).get('primary_recommendation', {}).get('device', 'Venus Bliss MAX')
+            
+            pain_points_text = '\n'.join([f"- {p}" for p in pain_points[:3]])
+            
+            # Single prompt to generate all 3 outreach types
+            prompt = f"""Generate personalized sales outreach for a medical device sales team reaching out to this practice. Create 3 different versions optimized for each channel.
+
+Practice: {name}
+Contact: {contact}
+Location: {location}
+Specialty: {specialty}
+Services: {services}
+Rating: {rating}/5
+Readiness Score: {readiness_score}/100
+
+Key Pain Points:
+{pain_points_text}
+
+Product: Venus aesthetic technologies (body contouring, skin tightening, cellulite reduction, wrinkle reduction)
+Recommended Device: {device_rec}
+
+Generate exactly 3 outreach versions:
+
+1. COLD CALL SCRIPT (2-3 minute phone conversation opener)
+- Start with a warm introduction
+- Reference their reputation or specific details
+- Mention 1-2 pain points naturally
+- Position {device_rec} as a solution
+- End with soft ask for 15-min meeting
+- Keep it conversational, not scripted
+
+2. INSTAGRAM DM (casual, social media appropriate, 2-3 sentences max)
+- Brief and friendly
+- Reference their Instagram/social presence
+- Mention Venus and results other practices see
+- Ask if they'd be open to learn more
+- Keep it light and non-salesy
+
+3. EMAIL (professional, 120-150 words)
+- Compelling subject line
+- Professional but warm tone
+- Reference specific practice details
+- Mention how Venus addresses their challenges
+- Soft call-to-action
+- Real person tone, not corporate
+
+Format your response EXACTLY like this:
+COLD_CALL:
+[cold call script here]
+
+INSTAGRAM:
+[Instagram DM here]
+
+EMAIL_SUBJECT:
+[subject line]
+
+EMAIL_BODY:
+[email body]"""
+
+            system_msg = "You are a top-performing medical device sales professional known for personalized, effective multi-channel outreach."
+            
+            response = self.call_ai(prompt, system_msg, max_tokens=1200, temperature=0.8)
+            
+            if not response:
+                return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
+            
+            # Parse all 3 outreach types
+            cold_call = ""
+            instagram = ""
+            email_subject = ""
+            email_body = ""
+            
+            # Extract cold call
+            if 'COLD_CALL:' in response:
+                parts = response.split('INSTAGRAM:', 1)
+                cold_call = parts[0].replace('COLD_CALL:', '').strip()
+            
+            # Extract Instagram DM
+            if 'INSTAGRAM:' in response:
+                parts = response.split('INSTAGRAM:', 1)[1].split('EMAIL_SUBJECT:', 1)
+                instagram = parts[0].strip()
+            
+            # Extract email subject and body
+            if 'EMAIL_SUBJECT:' in response:
+                parts = response.split('EMAIL_SUBJECT:', 1)[1].split('EMAIL_BODY:', 1)
+                email_subject = parts[0].strip()
+                if len(parts) > 1:
+                    email_body = parts[1].strip()
+            
+            # Validation - ensure we got at least email
+            if not email_body:
+                return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
+            
+            logger.info(f"🤖 AI outreach generated successfully for {name}")
+            
+            return {
+                'outreachColdCall': cold_call if cold_call else None,
+                'outreachInstagram': instagram if instagram else None,
+                'outreachEmail': email_body if email_body else None,
+                'outreachEmailSubject': email_subject if email_subject else None,
+                'talking_points': pain_points[:3],
+                'ai_generated': True
+            }
+            
+        except Exception as e:
+            logger.error(f"AI outreach generation failed: {str(e)}, using template-based fallback")
+            return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
+
         
         # Priority order (most specific first)
         if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
@@ -1042,9 +1368,16 @@ Venus Sales Team"""
             follow_up_days = 7
             call_to_action = 'Send additional information and case studies'
         
+        # Generate simple cold call and Instagram versions from email
+        cold_call = f"Hi, this is [Your Name] from Venus Medical. I'm reaching out because {name} would be a great fit for our aesthetic technologies. {pain_points[0] if pain_points else 'Many practices like yours'} - and Venus addresses this with proven body contouring and skin tightening solutions. Could we schedule a brief 15-minute call to discuss?"
+        
+        instagram = f"Hi! Noticed {name}'s excellent reputation. Many practices like yours are seeing great results with Venus aesthetic technologies. Would you be open to learning more?"
+        
         return {
-            'subject': template['subject'],
-            'email_body': template['body'],
+            'outreachColdCall': cold_call,
+            'outreachInstagram': instagram,
+            'outreachEmail': template['body'],
+            'outreachEmailSubject': template['subject'],
             'talking_points': talking_points,
             'follow_up_days': follow_up_days,
             'call_to_action': call_to_action
@@ -1240,7 +1573,8 @@ Venus Sales Team"""
         """
         
         # STEP 1: Detect specialty
-        specialty = self.detect_specialty(practice_data)
+        # Use AI-enhanced detection (falls back to rule-based automatically)
+        specialty = self.detect_specialty_ai(practice_data)
         
         # STEP 2: Get specialty-specific config (or use default)
         if specialty in self.specialty_scoring:
@@ -1546,10 +1880,13 @@ Venus Sales Team"""
         logger.info(f"📊 Running rule-based analysis for {practice_name}")
         
         # Get pain point analysis (rule-based)
-        pain_analysis = self.analyze_pain_points_rule_based(practice_record, specialty)
+        # Use AI-enhanced pain analysis (falls back to rule-based automatically)
+        pain_analysis = self.analyze_pain_points_ai(practice_record, specialty)
         
         # Generate personalized outreach (template-based)
-        outreach_content = self.generate_outreach_template_based(practice_record, specialty, pain_analysis)
+        # Use AI-enhanced outreach generation (falls back to template-based automatically)
+        logger.info(f"🤖 Generating AI outreach for {practice_name}...")
+        outreach_content = self.generate_outreach_ai(practice_record, specialty, pain_analysis)
         
         # Store insights
         ai_insights = {
@@ -1560,11 +1897,14 @@ Venus Sales Team"""
             'gap_analysis': pain_analysis.get('gap_analysis', ''),
             'decision_maker_profile': pain_analysis.get('decision_maker_profile', ''),
             'best_approach': pain_analysis.get('best_approach', ''),
-            'email_subject': outreach_content.get('subject', ''),
-            'email_body': outreach_content.get('email_body', ''),
             'talking_points': outreach_content.get('talking_points', []),
             'follow_up_days': outreach_content.get('follow_up_days', 7),
-            'call_to_action': outreach_content.get('call_to_action', '')
+            'call_to_action': outreach_content.get('call_to_action', ''),
+            # Frontend expects these exact field names
+            'outreachColdCall': outreach_content.get('outreachColdCall'),
+            'outreachInstagram': outreach_content.get('outreachInstagram'),
+            'outreachEmail': outreach_content.get('outreachEmail'),
+            'outreachEmailSubject': outreach_content.get('outreachEmailSubject')
         }
         
         # Boost score based on readiness (rule-based)
