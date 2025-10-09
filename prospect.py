@@ -1854,22 +1854,30 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         logger.info(f"Starting prospecting for {keywords} near {location}")
         
         all_results = []
-        
-        for keyword in keywords:
-            logger.info(f"Searching for: {keyword}")
+total_practices = sum(min(len(self.google_places_search(kw, location, radius * 1000)), max_results) for kw in keywords)
+processed_count = 0
+
+for keyword in keywords:
+    logger.info(f"Searching for: {keyword}")
+    
+    places = self.google_places_search(keyword, location, radius * 1000)
+    
+    for place in places[:max_results]:
+        try:
+            processed_practice = self.process_practice(place)
+            if processed_practice:
+                all_results.append(processed_practice)
+                logger.info(f"Processed: {processed_practice.get('name', 'Unknown')} - Score: {processed_practice.get('ai_score', 0)}")
             
-            places = self.google_places_search(keyword, location, radius * 1000)
+            # Update progress
+            processed_count += 1
+            if self.progress_callback:
+                progress_pct = 10 + int((processed_count / max(total_practices, 1)) * 85)
+                self.progress_callback(min(progress_pct, 95))
             
-            for place in places[:max_results]:
-                try:
-                    processed_practice = self.process_practice(place)
-                    if processed_practice:
-                        all_results.append(processed_practice)
-                        logger.info(f"Processed: {processed_practice.get('name', 'Unknown')} - Score: {processed_practice.get('ai_score', 0)}")
-                    
-                except Exception as e:
-                    logger.error(f"Error processing practice: {str(e)}")
-                    continue
+        except Exception as e:
+            logger.error(f"Error processing practice: {str(e)}")
+            continue
         
         # Remove duplicates
         unique_results = []
