@@ -264,47 +264,9 @@ class FathomProspector:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
-    
-    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
-        """
-        Unified method to call Abacus RouteLLM API
         
-        Args:
-            prompt: User prompt
-            system_message: Optional system message for context
-            max_tokens: Max response length
-            temperature: Creativity level (0.0-1.0)
-            
-        Returns:
-            Response text or empty string if failed
-        """
-        if not self.ai_enabled or not self.openai_client:
-            logger.debug("AI not available, skipping AI call")
-            return ""
-        
-        try:
-            messages = []
-            if system_message:
-                messages.append({"role": "system", "content": system_message})
-            messages.append({"role": "user", "content": prompt})
-            
-            response = self.openai_client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=30.0  # Prevent hanging
-            )
-            
-            result = response.choices[0].message.content.strip()
-            logger.debug(f"🤖 AI response received ({len(result)} chars)")
-            return result
-            
-        except Exception as e:
-            logger.error(f"AI API error: {str(e)}")
-            return ""
-        
-        if not demo_mode:
+        # Initialize Google Places API
+        if not self.demo_mode:
             try:
                 self.gmaps_api = GooglePlacesAPI(self.gmaps_key)
                 test_result = self.gmaps_api.geocode("Austin, TX")
@@ -444,6 +406,45 @@ class FathomProspector:
                 ]
             }
         }
+    
+    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
+        """
+        Unified method to call Abacus RouteLLM API
+        
+        Args:
+            prompt: User prompt
+            system_message: Optional system message for context
+            max_tokens: Max response length
+            temperature: Creativity level (0.0-1.0)
+            
+        Returns:
+            Response text or empty string if failed
+        """
+        if not self.ai_enabled or not self.openai_client:
+            logger.debug("AI not available, skipping AI call")
+            return ""
+        
+        try:
+            messages = []
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            messages.append({"role": "user", "content": prompt})
+            
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=30.0  # Prevent hanging
+            )
+            
+            result = response.choices[0].message.content.strip()
+            logger.debug(f"🤖 AI response received ({len(result)} chars)")
+            return result
+            
+        except Exception as e:
+            logger.error(f"AI API error: {str(e)}")
+            return ""
     
     def load_existing_customers(self, csv_file_path: str):
         """Load existing customers from CSV for exclusion"""
