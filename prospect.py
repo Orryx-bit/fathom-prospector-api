@@ -2,7 +2,7 @@
 """
 Fathom Medical Device Prospecting System
 Comprehensive tool for finding and scoring medical practices
-Production-Hardened Version 3.0
+Production-Hardened Version 3.1 - AI Generation Removed from Search
 """
 
 import argparse
@@ -29,7 +29,7 @@ from openai import OpenAI
 # Load environment variables FIRST
 load_dotenv()
 
-# Initialize Abacus AI Client for Outreach Generation
+# Initialize Abacus AI Client for ON-DEMAND Outreach Generation (not during search)
 ABACUS_CLIENT = None
 ABACUS_API_AVAILABLE = False
 try:
@@ -79,7 +79,7 @@ except Exception as e:
 
 # Log Abacus AI status
 if ABACUS_API_AVAILABLE:
-    logger.info("✓ Abacus AI API initialized - AI-powered outreach enabled")
+    logger.info("✓ Abacus AI API initialized - AI-powered outreach available ON-DEMAND")
 else:
     logger.info("Abacus AI API not available - using template-based outreach")
 
@@ -579,56 +579,56 @@ class FathomProspector:
             logger.error(f"Error getting place details: {str(e)}")
             return None
     
+    def is_medical_business(self, place_data: Dict) -> bool:
+        """
+        Strict filtering: Check if a place is a legitimate medical/aesthetic business
+        using Google Places types. Keeps behavior stable while removing contradictions.
+        """
+        place_types = place_data.get('types', []) or []
+        name = (place_data.get('name') or '').lower()
 
-def is_medical_business(self, place_data: Dict) -> bool:
-    """
-    Strict filtering: Check if a place is a legitimate medical/aesthetic business
-    using Google Places types. Keeps behavior stable while removing contradictions.
-    """
-    place_types = place_data.get('types', []) or []
-    name = (place_data.get('name') or '').lower()
+        # REQUIRED: Must have at least ONE of these medical-related types
+        # (removed 'dentist' and 'hospital' to avoid contradictions with keyword excludes)
+        medical_types = {
+            'doctor', 'health', 'spa', 'beauty_salon', 'hair_care',
+            'physiotherapist'
+        }
+        has_medical_type = any(ptype in place_types for ptype in medical_types)
+        if not has_medical_type:
+            logger.info(f"❌ FILTERED OUT (no medical type): {name} - Types: {place_types}")
+            return False
 
-    # REQUIRED: Must have at least ONE of these medical-related types
-    # (removed 'dentist' and 'hospital' to avoid contradictions with keyword excludes)
-    medical_types = {
-        'doctor', 'health', 'spa', 'beauty_salon', 'hair_care',
-        'physiotherapist'
-    }
-    has_medical_type = any(ptype in place_types for ptype in medical_types)
-    if not has_medical_type:
-        logger.info(f"❌ FILTERED OUT (no medical type): {name} - Types: {place_types}")
-        return False
+        # EXCLUDE: Generic non-medical categories
+        exclude_types = {
+            'store', 'food', 'restaurant', 'cafe', 'bar', 'grocery_or_supermarket',
+            'shopping_mall', 'clothing_store', 'jewelry_store', 'shoe_store',
+            'electronics_store', 'furniture_store', 'home_goods_store',
+            'hardware_store', 'car_dealer', 'car_repair', 'gas_station',
+            'gym', 'night_club', 'movie_theater', 'bowling_alley',
+            'amusement_park', 'aquarium', 'art_gallery', 'museum',
+            'library', 'school', 'university', 'real_estate_agency',
+            'travel_agency', 'insurance_agency', 'accounting', 'lawyer',
+            'general_contractor', 'electrician', 'plumber', 'roofing_contractor',
+            'locksmith', 'moving_company', 'storage', 'laundry', 'car_wash'
+        }
+        if any(ptype in place_types for ptype in exclude_types):
+            logger.info(f"❌ FILTERED OUT (non-medical business): {name} - Types: {place_types}")
+            return False
 
-    # EXCLUDE: Generic non-medical categories
-    exclude_types = {
-        'store', 'food', 'restaurant', 'cafe', 'bar', 'grocery_or_supermarket',
-        'shopping_mall', 'clothing_store', 'jewelry_store', 'shoe_store',
-        'electronics_store', 'furniture_store', 'home_goods_store',
-        'hardware_store', 'car_dealer', 'car_repair', 'gas_station',
-        'gym', 'night_club', 'movie_theater', 'bowling_alley',
-        'amusement_park', 'aquarium', 'art_gallery', 'museum',
-        'library', 'school', 'university', 'real_estate_agency',
-        'travel_agency', 'insurance_agency', 'accounting', 'lawyer',
-        'general_contractor', 'electrician', 'plumber', 'roofing_contractor',
-        'locksmith', 'moving_company', 'storage', 'laundry', 'car_wash'
-    }
-    if any(ptype in place_types for ptype in exclude_types):
-        logger.info(f"❌ FILTERED OUT (non-medical business): {name} - Types: {place_types}")
-        return False
+        # EXCLUDE: Keywords indicating non-target businesses (add 'hospital')
+        exclude_keywords = [
+            'pharmacy', 'drugstore', 'cvs', 'walgreens', 'walmart', 'target',
+            'urgent care', 'emergency room', 'laboratory', 'imaging center',
+            'physical therapy', 'chiropractor', 'massage', 'acupuncture',
+            'veterinary', 'pet', 'animal', 'dentist', 'orthodont', 'hospital'
+        ]
+        if any(keyword in name for keyword in exclude_keywords):
+            logger.info(f"❌ FILTERED OUT (excluded keyword): {name}")
+            return False
 
-    # EXCLUDE: Keywords indicating non-target businesses (add 'hospital')
-    exclude_keywords = [
-        'pharmacy', 'drugstore', 'cvs', 'walgreens', 'walmart', 'target',
-        'urgent care', 'emergency room', 'laboratory', 'imaging center',
-        'physical therapy', 'chiropractor', 'massage', 'acupuncture',
-        'veterinary', 'pet', 'animal', 'dentist', 'orthodont', 'hospital'
-    ]
-    if any(keyword in name for keyword in exclude_keywords):
-        logger.info(f"❌ FILTERED OUT (excluded keyword): {name}")
-        return False
-
-    logger.info(f"✅ PASSED FILTER: {name} - Types: {place_types}")
-    return True
+        logger.info(f"✅ PASSED FILTER: {name} - Types: {place_types}")
+        return True
+    
     def is_hospital_system(self, name: str) -> bool:
         """Check if a practice name indicates a hospital system"""
         name_lower = name.lower()
@@ -863,340 +863,6 @@ def is_medical_business(self, place_data: Dict) -> bool:
         else:
             return 'general'
     
-    def analyze_pain_points_rule_based(self, practice_data: Dict, specialty: str) -> Dict:
-        """
-        Rule-based pain point analysis (replaces AI version)
-        Returns pain points and readiness score based on specialty and practice data
-        """
-        pain_points = []
-        readiness_score = 50  # Base score
-        
-        # Get practice details
-        services = [s.lower() for s in practice_data.get('services', [])]
-        website_text = practice_data.get('website_text', '').lower()
-        devices_found = practice_data.get('devices_found', [])
-        has_website = bool(practice_data.get('website'))
-        
-        # Specialty-specific pain points and scoring
-        if specialty == 'dermatology':
-            pain_points = [
-                'Competitive pressure from med spas offering aesthetic services',
-                'Patient demand for non-invasive body contouring',
-                'Need to expand beyond medical dermatology',
-                'Revenue growth opportunities in aesthetics'
-            ]
-            readiness_score += 20
-        
-        elif specialty == 'plastic_surgery':
-            pain_points = [
-                'Pre and post-surgical care revenue opportunities',
-                'Non-invasive alternatives for surgical-averse patients',
-                'Patient retention between surgical procedures',
-                'Complementary services for body contouring'
-            ]
-            readiness_score += 25
-        
-        elif specialty == 'obgyn':
-            pain_points = [
-                'Postpartum body contouring demand',
-                'Womens wellness and aesthetics integration',
-                'Patient satisfaction and retention',
-                'Additional revenue streams beyond traditional services'
-            ]
-            readiness_score += 15
-        
-        elif specialty == 'medspa':
-            pain_points = [
-                'Need for advanced technology to compete',
-                'Equipment upgrade or expansion',
-                'Attracting higher-value clients',
-                'Expanding treatment menu'
-            ]
-            readiness_score += 30
-        
-        elif specialty == 'familypractice':
-            pain_points = [
-                'Differentiation in crowded primary care market',
-                'Additional revenue streams beyond insurance',
-                'Patient retention and satisfaction',
-                'Aesthetic services as practice differentiator'
-            ]
-            readiness_score += 10
-        
-        else:  # general
-            pain_points = [
-                'Practice growth and differentiation',
-                'New revenue opportunities',
-                'Patient demand for aesthetic services',
-                'Competitive market positioning'
-            ]
-            readiness_score += 5
-        
-        # Boost score for positive indicators
-        if has_website:
-            readiness_score += 10
-        
-        if any(aesthetic_kw in website_text for aesthetic_kw in ['botox', 'filler', 'laser', 'aesthetic', 'cosmetic']):
-            readiness_score += 15
-            pain_points.append('Already offering aesthetics - ready for advanced equipment')
-        
-        if len(devices_found) > 0:
-            readiness_score += 10
-            pain_points.append('Existing aesthetic equipment - potential upgrade opportunity')
-        
-        if len(services) > 5:
-            readiness_score += 5
-        
-        # Cap score at 100
-        readiness_score = min(100, readiness_score)
-        
-        return {
-            'pain_points': pain_points[:5],  # Top 5
-            'revenue_opportunity': f'High-value aesthetic services for {specialty} practices',
-            'readiness_score': readiness_score,
-            'competing_services': [s for s in services if any(kw in s.lower() for kw in ['botox', 'laser', 'filler', 'aesthetic', 'cosmetic'])],
-            'gap_analysis': 'Venus devices can complement existing services or create new revenue stream',
-            'decision_maker_profile': 'Practice owner, medical director, or office manager',
-            'best_approach': 'Focus on ROI, patient satisfaction, and competitive differentiation'
-        }
-    
-    def generate_ai_outreach(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
-        """
-        Generate 3 types of AI-powered outreach messages using Abacus AI
-        Returns: cold call script, Instagram DM, and email
-        """
-        if not ABACUS_API_AVAILABLE or not ABACUS_CLIENT:
-            logger.info("Abacus API not available, falling back to template-based outreach")
-            return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
-        
-        practice_name = practice_data.get('name', 'the practice')
-        pain_points = pain_analysis.get('pain_points', [])
-        pain_points_str = ', '.join(pain_points[:3]) if pain_points else 'revenue growth and patient satisfaction'
-        
-        # Prepare context for AI
-        context = f"""
-Practice: {practice_name}
-Specialty: {specialty}
-Key Pain Points: {pain_points_str}
-Readiness Score: {pain_analysis.get('readiness_score', 50)}/100
-
-We sell Venus medical devices (FDA-cleared body contouring, skin tightening, cellulite reduction).
-"""
-        
-        try:
-            # Generate all 3 message types in one call for consistency
-            prompt = f"""You are a top-performing medical device sales rep for Venus Concept. Create 3 personalized outreach messages for this prospect:
-
-{context}
-
-Generate:
-1. **COLD CALL SCRIPT** (30-45 seconds, conversational, handles objections)
-2. **INSTAGRAM DM** (2-3 sentences, casual but professional, attention-grabbing)
-3. **EMAIL** (Subject line + 4-paragraph body, professional, clear CTA)
-
-Requirements:
-- Reference their specialty and specific pain points
-- Focus on ROI and patient outcomes
-- Sound human, not robotic
-- Be specific about Venus benefits for their specialty
-- Include clear next step/CTA
-
-Format your response EXACTLY like this:
----COLD_CALL---
-[cold call script here]
----INSTAGRAM_DM---
-[Instagram DM here]
----EMAIL_SUBJECT---
-[email subject here]
----EMAIL_BODY---
-[email body here]
-"""
-            
-            logger.info(f"🤖 Generating AI outreach for {practice_name}...")
-            
-            response = ABACUS_CLIENT.chat.completions.create(
-                model="gpt-4o",  # Using Abacus's best model
-                messages=[
-                    {"role": "system", "content": "You are an expert medical device sales professional. Write persuasive, personalized outreach that converts."},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.7,
-                max_tokens=1000
-            )
-            
-            content = response.choices[0].message.content.strip()
-            
-            # Parse the structured response
-            cold_call = ""
-            instagram_dm = ""
-            email_subject = ""
-            email_body = ""
-            
-            if "---COLD_CALL---" in content:
-                cold_call = content.split("---COLD_CALL---")[1].split("---INSTAGRAM_DM---")[0].strip()
-            if "---INSTAGRAM_DM---" in content:
-                instagram_dm = content.split("---INSTAGRAM_DM---")[1].split("---EMAIL_SUBJECT---")[0].strip()
-            if "---EMAIL_SUBJECT---" in content:
-                email_subject = content.split("---EMAIL_SUBJECT---")[1].split("---EMAIL_BODY---")[0].strip()
-            if "---EMAIL_BODY---" in content:
-                email_body = content.split("---EMAIL_BODY---")[1].strip()
-            
-            logger.info(f"✅ AI outreach generated successfully for {practice_name}")
-            
-            return {
-                'cold_call_script': cold_call or "Hi, this is [Name] from Venus Concept. Do you have a quick minute?",
-                'instagram_dm': instagram_dm or f"Hi! Noticed {practice_name}'s great work. Venus devices are helping similar practices boost revenue. Interested in learning more?",
-                'email_subject': email_subject or f"Quick Question - {practice_name}",
-                'email_body': email_body or f"Hi,\n\nI work with {specialty} practices and wanted to reach out...",
-                'talking_points': pain_points[:5] if pain_points else ['ROI', 'Patient Satisfaction', 'Competitive Edge'],
-                'follow_up_days': 5,
-                'call_to_action': 'Schedule a 15-minute demo call'
-            }
-        
-        except Exception as e:
-            logger.error(f"AI outreach generation failed: {str(e)}, falling back to templates")
-            return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
-    
-    def generate_outreach_template_based(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
-        """
-        Template-based outreach generation (replaces AI version)
-        Returns personalized email and talking points based on specialty
-        """
-        name = practice_data.get('name', 'Practice')
-        contact = practice_data.get('contact_name', 'Doctor')
-        pain_points = pain_analysis.get('pain_points', [])
-        readiness_score = pain_analysis.get('readiness_score', 50)
-        
-        # Specialty-specific email templates
-        email_templates = {
-            'dermatology': {
-                'subject': f'Expand Your Aesthetic Services - {name}',
-                'body': f"""Dear {contact},
-
-I hope this message finds you well. I am reaching out because {name} is exactly the type of leading dermatology practice that benefits most from Venus technologies.
-
-Many dermatologists we work with face similar challenges: med spas encroaching on aesthetic services, patients requesting non-invasive body contouring, and the need to stay competitive while maintaining medical excellence.
-
-Our Venus systems complement your existing practice by adding high-demand services like body contouring, cellulite reduction, and skin tightening—all with clinically proven, FDA-cleared technology.
-
-Would you be open to a brief conversation about how we have helped practices like yours increase aesthetic revenue by 30-40 percent?
-
-Best regards,
-Venus Sales Team"""
-            },
-            'plastic_surgery': {
-                'subject': f'Enhance Pre/Post-Surgical Care Revenue - {name}',
-                'body': f"""Dear {contact},
-
-I specialize in working with plastic surgery practices like {name} that want to maximize patient value and retention.
-
-Venus technologies are perfect for pre and post-surgical care, non-invasive alternatives for patients not ready for surgery, and maintenance between procedures.
-
-Our devices complement your surgical practice by capturing patients throughout their aesthetic journey, not just during surgical windows.
-
-I would love to show you how practices similar to yours have increased annual revenue by over $200K with Venus systems.
-
-Can we schedule 15 minutes to discuss?
-
-Best regards,
-Venus Sales Team"""
-            },
-            'obgyn': {
-                'subject': f'Womens Wellness + Aesthetics - {name}',
-                'body': f"""Dear {contact},
-
-I am reaching out to OB/GYN practices like {name} that are expanding into womens wellness and aesthetics.
-
-Postpartum body contouring is one of the fastest-growing service requests in womens health, and Venus technologies allow you to serve this need without invasive procedures.
-
-Many of our OB/GYN partners have successfully integrated Venus treatments for body contouring, skin tightening, and cellulite reduction—perfect for your patient demographic.
-
-Would you be interested in learning how we have helped practices like yours add $100-150K in annual aesthetic revenue?
-
-Best regards,
-Venus Sales Team"""
-            },
-            'medspa': {
-                'subject': f'Upgrade Your Technology - {name}',
-                'body': f"""Dear {contact},
-
-{name} caught my attention as a forward-thinking med spa, and I wanted to reach out about Venus technologies.
-
-The med spa market is competitive, and having state-of-the-art equipment is critical for attracting and retaining high-value clients.
-
-Venus systems deliver clinical results your clients will love: body contouring, cellulite reduction, skin tightening, and wrinkle reduction—all FDA-cleared and backed by extensive clinical studies.
-
-Many med spas we work with see 30-50 percent increase in treatment bookings after adding Venus technologies.
-
-Can we schedule a brief demo or discussion?
-
-Best regards,
-Venus Sales Team"""
-            },
-            'familypractice': {
-                'subject': f'Differentiate Your Practice - {name}',
-                'body': f"""Dear {contact},
-
-I work with forward-thinking family practices like {name} that want to differentiate in a competitive primary care market.
-
-Adding aesthetic services like body contouring and skin tightening creates a powerful practice differentiator while generating cash-pay revenue streams beyond insurance reimbursements.
-
-Venus technologies are perfect for family practices because they are easy to integrate, require minimal training, and patients love the results.
-
-Would you be open to a conversation about how we have helped practices like yours add $75-100K in annual aesthetic revenue?
-
-Best regards,
-Venus Sales Team"""
-            }
-        }
-        
-        # Get specialty-specific template or use general
-        template = email_templates.get(specialty, {
-            'subject': f'Aesthetic Technology for {name}',
-            'body': f"""Dear {contact},
-
-I am reaching out because {name} could benefit from Venus aesthetic technologies.
-
-Our FDA-cleared systems offer body contouring, skin tightening, cellulite reduction, and wrinkle reduction—high-demand services that generate excellent revenue.
-
-Many practices similar to yours have successfully integrated Venus technologies to enhance patient satisfaction and increase revenue.
-
-Would you be interested in a brief conversation?
-
-Best regards,
-Venus Sales Team"""
-        })
-        
-        # Generate talking points based on pain points and specialty
-        talking_points = [
-            f'Addresses key pain point: {pain_points[0] if pain_points else "practice growth"}',
-            'FDA-cleared technology with proven clinical results',
-            f'Typical ROI: $100-200K+ annual revenue for {specialty} practices',
-            'Comprehensive training and ongoing support included',
-            'Flexible financing options available'
-        ]
-        
-        # Determine follow-up timeline based on readiness score
-        if readiness_score >= 70:
-            follow_up_days = 3
-            call_to_action = 'Schedule in-office demo this week'
-        elif readiness_score >= 50:
-            follow_up_days = 5
-            call_to_action = 'Schedule virtual demo or call'
-        else:
-            follow_up_days = 7
-            call_to_action = 'Send additional information and case studies'
-        
-        return {
-            'cold_call_script': f"Hi, this is [Your Name] from Venus Concept. I noticed {name} is a {specialty} practice and wanted to reach out about our FDA-cleared body contouring and skin tightening devices. Many {specialty} practices are seeing significant patient demand and revenue growth. Do you have a quick minute?",
-            'instagram_dm': f"Hi! Noticed {name}'s excellent work in {specialty}. Venus devices are helping similar practices boost aesthetic revenue 30-40%. Quick chat this week?",
-            'email_subject': template['subject'],
-            'email_body': template['body'],
-            'talking_points': talking_points,
-            'follow_up_days': follow_up_days,
-            'call_to_action': call_to_action
-        }
-    
     def discover_site_pages(self, base_url: str) -> List[str]:
         """
         Discover high-value pages on a practice website
@@ -1390,219 +1056,219 @@ Venus Sales Team"""
             # Fall back to single-page scrape
             return self.scrape_website(base_url)
     
+    def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str]:
+        """
+        Calculate AI-powered scoring with specialty-specific weights
 
-def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str]:
-    """
-    Calculate AI-powered scoring with specialty-specific weights
+        Returns:
+            (total_score, score_breakdown, detected_specialty)
+        """
 
-    Returns:
-        (total_score, score_breakdown, detected_specialty)
-    """
+        # STEP 1: Detect specialty
+        specialty = self.detect_specialty(practice_data)
 
-    # STEP 1: Detect specialty
-    specialty = self.detect_specialty(practice_data)
-
-    # STEP 2: Get specialty-specific config (or use default)
-    if specialty in self.specialty_scoring:
-        config = self.specialty_scoring[specialty]
-        logger.info(f"🎯 Using {specialty.upper()} scoring profile")
-    else:
-        config = self.specialty_scoring.get('dermatology', next(iter(self.specialty_scoring.values())))
-        logger.info(f"Using DEFAULT scoring profile for {specialty}")
-
-    weights = config.get('weights', {})
-    high_value_keywords = config.get('high_value_keywords', [])
-
-    # Component scores (raw, unweighted)
-    scores = {
-        'specialty_match': 0,
-        'decision_autonomy': 0,
-        'aesthetic_services': 0,
-        'competing_devices': 0,
-        'social_activity': 0,
-        'reviews_rating': 0,
-        'search_visibility': 0,
-        'financial_indicators': 0,
-        'weight_loss_services': 0
-    }
-
-    # Common text fields
-    practice_name = (practice_data.get('name') or '').lower()
-    practice_desc = (practice_data.get('description') or '').lower()
-    address = (practice_data.get('formatted_address') or '').lower()
-    all_text = f"{practice_name} {practice_desc} {address}"
-
-    # 1) Specialty match (raw cap 20)
-    specialty_keywords = [
-        'dermatology', 'dermatologist', 'plastic surgery', 'plastic surgeon',
-        'cosmetic', 'aesthetic', 'med spa', 'medical spa', 'medspa',
-        'skin care', 'skincare', 'beauty', 'obgyn', 'ob/gyn', 'gynecologist',
-        "women's health", 'family practice', 'family medicine'
-    ]
-    specialty_matches = sum(1 for kw in specialty_keywords if kw in all_text)
-    scores['specialty_match'] = min(specialty_matches * 4, 20)
-
-    # 2) Decision autonomy (raw cap 20) — neutral when unknown
-    #    Solo/small = higher; hospital/corporate penalized
-    staff_count = practice_data.get('staff_count')
-    has_hospital_affiliation = bool(practice_data.get('hospital_affiliation', False))
-
-    corporate_indicators = [
-        'corporate', 'chain', 'franchise', 'national', 'locations',
-        'branches', 'group practice', 'associates'
-    ]
-    is_corporate = any(ind in all_text for ind in corporate_indicators)
-
-    if staff_count is None:
-        autonomy_score = 10  # neutral default when unknown
-    else:
-        try:
-            sc = int(staff_count)
-        except Exception:
-            sc = None
-        if sc is None:
-            autonomy_score = 10
-        elif sc <= 1:
-            autonomy_score = 20
-        elif sc == 2:
-            autonomy_score = 18
-        elif sc <= 4:
-            autonomy_score = 15
-        elif sc <= 6:
-            autonomy_score = 10
-        elif sc <= 10:
-            autonomy_score = 5
+        # STEP 2: Get specialty-specific config (or use default)
+        if specialty in self.specialty_scoring:
+            config = self.specialty_scoring[specialty]
+            logger.info(f"🎯 Using {specialty.upper()} scoring profile")
         else:
-            autonomy_score = 2
+            config = self.specialty_scoring.get('dermatology', next(iter(self.specialty_scoring.values())))
+            logger.info(f"Using DEFAULT scoring profile for {specialty}")
 
-    if has_hospital_affiliation:
-        autonomy_score = max(0, autonomy_score - 10)
-    if is_corporate:
-        autonomy_score = max(0, autonomy_score - 8)
+        weights = config.get('weights', {})
+        high_value_keywords = config.get('high_value_keywords', [])
 
-    scores['decision_autonomy'] = autonomy_score
+        # Component scores (raw, unweighted)
+        scores = {
+            'specialty_match': 0,
+            'decision_autonomy': 0,
+            'aesthetic_services': 0,
+            'competing_devices': 0,
+            'social_activity': 0,
+            'reviews_rating': 0,
+            'search_visibility': 0,
+            'financial_indicators': 0,
+            'weight_loss_services': 0
+        }
 
-    # 3) Aesthetic services (raw cap 15)
-    services = practice_data.get('services') or []
-    aesthetic_services = [
-        'botox', 'fillers', 'laser', 'coolsculpting', 'body contouring',
-        'skin tightening', 'hair removal', 'ipl', 'radiofrequency',
-        'body sculpting', 'cellulite', 'fat reduction'
-    ]
-    service_matches = sum(
-        1 for svc in aesthetic_services if any(svc in (s or '').lower() for s in services)
-    )
-    scores['aesthetic_services'] = min(service_matches * 3, 15)
+        # Common text fields
+        practice_name = (practice_data.get('name') or '').lower()
+        practice_desc = (practice_data.get('description') or '').lower()
+        address = (practice_data.get('formatted_address') or '').lower()
+        all_text = f"{practice_name} {practice_desc} {address}"
 
-    # 4) Competing devices (raw cap 10)
-    competing_devices = [
-        'coolsculpting', 'thermage', 'ultherapy', 'sculptra', 'emsculpt', 'vanquish', 'exilis'
-    ]
-    device_count = sum(1 for dev in competing_devices if dev in practice_desc)
-    scores['competing_devices'] = min(device_count * 5, 10)
+        # 1) Specialty match (raw cap 20)
+        specialty_keywords = [
+            'dermatology', 'dermatologist', 'plastic surgery', 'plastic surgeon',
+            'cosmetic', 'aesthetic', 'med spa', 'medical spa', 'medspa',
+            'skin care', 'skincare', 'beauty', 'obgyn', 'ob/gyn', 'gynecologist',
+            "women's health", 'family practice', 'family medicine'
+        ]
+        specialty_matches = sum(1 for kw in specialty_keywords if kw in all_text)
+        scores['specialty_match'] = min(specialty_matches * 4, 20)
 
-    # 5) Social activity (raw cap 10)
-    social_links = practice_data.get('social_links') or []
-    scores['social_activity'] = min(len(social_links) * 3, 10)
+        # 2) Decision autonomy (raw cap 20) — neutral when unknown
+        #    Solo/small = higher; hospital/corporate penalized
+        staff_count = practice_data.get('staff_count')
+        has_hospital_affiliation = bool(practice_data.get('hospital_affiliation', False))
 
-    # 6) Reviews & rating (raw cap 10) — prefer normalized review_count
-    try:
-        rating = float(practice_data.get('rating') or 0)
-    except Exception:
-        rating = 0.0
-    try:
-        review_count = int(
-            practice_data.get('review_count')
-            or practice_data.get('user_ratings_total')
-            or 0
+        corporate_indicators = [
+            'corporate', 'chain', 'franchise', 'national', 'locations',
+            'branches', 'group practice', 'associates'
+        ]
+        is_corporate = any(ind in all_text for ind in corporate_indicators)
+
+        if staff_count is None:
+            autonomy_score = 10  # neutral default when unknown
+        else:
+            try:
+                sc = int(staff_count)
+            except Exception:
+                sc = None
+            if sc is None:
+                autonomy_score = 10
+            elif sc <= 1:
+                autonomy_score = 20
+            elif sc == 2:
+                autonomy_score = 18
+            elif sc <= 4:
+                autonomy_score = 15
+            elif sc <= 6:
+                autonomy_score = 10
+            elif sc <= 10:
+                autonomy_score = 5
+            else:
+                autonomy_score = 2
+
+        if has_hospital_affiliation:
+            autonomy_score = max(0, autonomy_score - 10)
+        if is_corporate:
+            autonomy_score = max(0, autonomy_score - 8)
+
+        scores['decision_autonomy'] = autonomy_score
+
+        # 3) Aesthetic services (raw cap 15)
+        services = practice_data.get('services') or []
+        aesthetic_services = [
+            'botox', 'fillers', 'laser', 'coolsculpting', 'body contouring',
+            'skin tightening', 'hair removal', 'ipl', 'radiofrequency',
+            'body sculpting', 'cellulite', 'fat reduction'
+        ]
+        service_matches = sum(
+            1 for svc in aesthetic_services if any(svc in (s or '').lower() for s in services)
         )
-    except Exception:
-        review_count = 0
+        scores['aesthetic_services'] = min(service_matches * 3, 15)
 
-    if rating >= 4.5 and review_count >= 50:
-        scores['reviews_rating'] = 10
-    elif rating >= 4.0 and review_count >= 25:
-        scores['reviews_rating'] = 7
-    elif rating >= 3.5 and review_count >= 10:
-        scores['reviews_rating'] = 4
-    else:
-        scores['reviews_rating'] = 1
+        # 4) Competing devices (raw cap 10)
+        competing_devices = [
+            'coolsculpting', 'thermage', 'ultherapy', 'sculptra', 'emsculpt', 'vanquish', 'exilis'
+        ]
+        device_count = sum(1 for dev in competing_devices if dev in practice_desc)
+        scores['competing_devices'] = min(device_count * 5, 10)
 
-    # 7) Search visibility (raw cap 10)
-    website = practice_data.get('website') or ''
-    if website and 'http' in website:
-        scores['search_visibility'] = 10
-    elif website:
-        scores['search_visibility'] = 7
-    elif practice_data.get('formatted_phone_number'):
-        scores['search_visibility'] = 4
-    else:
-        scores['search_visibility'] = 1
+        # 5) Social activity (raw cap 10)
+        social_links = practice_data.get('social_links') or []
+        scores['social_activity'] = min(len(social_links) * 3, 10)
 
-    # 8) Financial indicators (raw cap 10)
-    affluent_indicators = [
-        'hills', 'park', 'lake', 'estates', 'plaza', 'center',
-        'avenue', 'boulevard', 'suite'
-    ]
-    is_affluent_area = any(ind in address for ind in affluent_indicators)
+        # 6) Reviews & rating (raw cap 10) — prefer normalized review_count
+        try:
+            rating = float(practice_data.get('rating') or 0)
+        except Exception:
+            rating = 0.0
+        try:
+            review_count = int(
+                practice_data.get('review_count')
+                or practice_data.get('user_ratings_total')
+                or 0
+            )
+        except Exception:
+            review_count = 0
 
-    cashpay_keywords = [
-        'aesthetic', 'cosmetic', 'elective', 'spa', 'beauty',
-        'anti-aging', 'wellness', 'rejuvenation'
-    ]
-    offers_cashpay = any(kw in all_text for kw in cashpay_keywords)
+        if rating >= 4.5 and review_count >= 50:
+            scores['reviews_rating'] = 10
+        elif rating >= 4.0 and review_count >= 25:
+            scores['reviews_rating'] = 7
+        elif rating >= 3.5 and review_count >= 10:
+            scores['reviews_rating'] = 4
+        else:
+            scores['reviews_rating'] = 1
 
-    financial_score = 0
-    if is_affluent_area:
-        financial_score += 5
-    if offers_cashpay:
-        financial_score += 5
-    scores['financial_indicators'] = min(financial_score, 10)
+        # 7) Search visibility (raw cap 10)
+        website = practice_data.get('website') or ''
+        if website and 'http' in website:
+            scores['search_visibility'] = 10
+        elif website:
+            scores['search_visibility'] = 7
+        elif practice_data.get('formatted_phone_number'):
+            scores['search_visibility'] = 4
+        else:
+            scores['search_visibility'] = 1
 
-    # 9) Weight loss services (raw cap 5)
-    weight_keywords = [
-        'weight loss', 'medical weight', 'hormone therapy', 'iv therapy',
-        'body contouring', 'fat reduction', 'inch loss'
-    ]
-    weight_matches = sum(1 for kw in weight_keywords if kw in all_text)
-    scores['weight_loss_services'] = min(weight_matches * 2, 5)
+        # 8) Financial indicators (raw cap 10)
+        affluent_indicators = [
+            'hills', 'park', 'lake', 'estates', 'plaza', 'center',
+            'avenue', 'boulevard', 'suite'
+        ]
+        is_affluent_area = any(ind in address for ind in affluent_indicators)
 
-    # 10) Specialty-specific keyword bonus (unchanged, up to +10)
-    services_text = ' '.join(services).lower()
-    all_text_with_services = f"{practice_name} {practice_desc} {services_text}"
-    keyword_bonus = 0
-    for keyword in high_value_keywords:
-        if keyword in all_text_with_services:
-            keyword_bonus += 2
-    keyword_bonus = min(keyword_bonus, 10)
+        cashpay_keywords = [
+            'aesthetic', 'cosmetic', 'elective', 'spa', 'beauty',
+            'anti-aging', 'wellness', 'rejuvenation'
+        ]
+        offers_cashpay = any(kw in all_text for kw in cashpay_keywords)
 
-    # === Weighted total ===
-    raw_caps = {
-        'specialty_match': 20,
-        'decision_autonomy': 20,
-        'aesthetic_services': 15,
-        'competing_devices': 10,
-        'social_activity': 10,
-        'reviews_rating': 10,
-        'search_visibility': 10,
-        'financial_indicators': 10,
-        'weight_loss_services': 5,
-    }
+        financial_score = 0
+        if is_affluent_area:
+            financial_score += 5
+        if offers_cashpay:
+            financial_score += 5
+        scores['financial_indicators'] = min(financial_score, 10)
 
-    weighted_sum = 0.0
-    total_weight_cap = 0.0
-    for k, raw in scores.items():
-        cap = raw_caps.get(k, 10) or 1
-        w = float(weights.get(k, cap))
-        normalized = max(0.0, min(1.0, raw / cap))
-        weighted_sum += normalized * w
-        total_weight_cap += w
+        # 9) Weight loss services (raw cap 5)
+        weight_keywords = [
+            'weight loss', 'medical weight', 'hormone therapy', 'iv therapy',
+            'body contouring', 'fat reduction', 'inch loss'
+        ]
+        weight_matches = sum(1 for kw in weight_keywords if kw in all_text)
+        scores['weight_loss_services'] = min(weight_matches * 2, 5)
 
-    # Sum of weights may vary by profile; normalize to 100
-    base_score = int(round(min(weighted_sum / (total_weight_cap or 100.0) * 100.0, 100)))
-    total_score = min(base_score + keyword_bonus, 100)
+        # 10) Specialty-specific keyword bonus (unchanged, up to +10)
+        services_text = ' '.join(services).lower()
+        all_text_with_services = f"{practice_name} {practice_desc} {services_text}"
+        keyword_bonus = 0
+        for keyword in high_value_keywords:
+            if keyword in all_text_with_services:
+                keyword_bonus += 2
+        keyword_bonus = min(keyword_bonus, 10)
 
-    return total_score, scores, specialty
+        # === Weighted total ===
+        raw_caps = {
+            'specialty_match': 20,
+            'decision_autonomy': 20,
+            'aesthetic_services': 15,
+            'competing_devices': 10,
+            'social_activity': 10,
+            'reviews_rating': 10,
+            'search_visibility': 10,
+            'financial_indicators': 10,
+            'weight_loss_services': 5,
+        }
+
+        weighted_sum = 0.0
+        total_weight_cap = 0.0
+        for k, raw in scores.items():
+            cap = raw_caps.get(k, 10) or 1
+            w = float(weights.get(k, cap))
+            normalized = max(0.0, min(1.0, raw / cap))
+            weighted_sum += normalized * w
+            total_weight_cap += w
+
+        # Sum of weights may vary by profile; normalize to 100
+        base_score = int(round(min(weighted_sum / (total_weight_cap or 100.0) * 100.0, 100)))
+        total_score = min(base_score + keyword_bonus, 100)
+
+        return total_score, scores, specialty
+    
     def recommend_device(self, practice_data: Dict, ai_scores: Dict) -> Dict:
         """Recommend top device based on practice profile"""
         
@@ -1664,7 +1330,7 @@ def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], 
         return opener
     
     def process_practice(self, place_data: Dict) -> Optional[Dict]:
-        """Process a single practice through the full pipeline"""
+        """Process a single practice through the full pipeline - NO AI GENERATION DURING SEARCH"""
         
         practice_name = place_data.get('name', 'Unknown')
         logger.info(f"Processing practice: {practice_name}")
@@ -1690,7 +1356,7 @@ def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], 
             'title': 'Not Available'
         }
         
-        # Scrape website if available (using deep multi-page scraping)
+        # Scrape website if available
         if practice_record['website']:
             logger.info(f"Deep scraping website: {practice_record['website']}")
             website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
@@ -1699,43 +1365,17 @@ def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], 
         # Calculate AI score with specialty detection
         ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
         
-        # Rule-based enrichment (AI disabled)
-        logger.info(f"📊 Running rule-based analysis for {practice_name}")
+        # ═══════════════════════════════════════════════════════════════
+        # SIMPLIFIED: No AI generation during search
+        # AI outreach will be generated on-demand via frontend button
+        # ═══════════════════════════════════════════════════════════════
         
-        # Get pain point analysis (rule-based)
-        pain_analysis = self.analyze_pain_points_rule_based(practice_record, specialty)
+        logger.info(f"📊 Score calculated: {ai_score}/100 for {practice_name}")
         
-        # Generate personalized outreach (AI-powered with template fallback)
-        outreach_content = self.generate_ai_outreach(practice_record, specialty, pain_analysis)
-        
-        # Store insights including AI-generated outreach
-        ai_insights = {
-            'pain_points': pain_analysis.get('pain_points', []),
-            'revenue_opportunity': pain_analysis.get('revenue_opportunity', ''),
-            'ai_readiness_score': pain_analysis.get('readiness_score', 0),
-            'competing_services': pain_analysis.get('competing_services', []),
-            'gap_analysis': pain_analysis.get('gap_analysis', ''),
-            'decision_maker_profile': pain_analysis.get('decision_maker_profile', ''),
-            'best_approach': pain_analysis.get('best_approach', ''),
-            'outreachColdCall': outreach_content.get('cold_call_script', ''),
-            'outreachInstagram': outreach_content.get('instagram_dm', ''),
-            'outreachEmailSubject': outreach_content.get('email_subject', outreach_content.get('subject', '')),
-            'outreachEmail': outreach_content.get('email_body', ''),
-            'talking_points': outreach_content.get('talking_points', []),
-            'follow_up_days': outreach_content.get('follow_up_days', 7),
-            'call_to_action': outreach_content.get('call_to_action', '')
-        }
-        
-        # Boost score based on readiness (rule-based)
-        readiness_boost = pain_analysis.get('readiness_score', 0) * 0.2  # Up to 20 point boost
-        ai_score = min(100, ai_score + int(readiness_boost))
-        
-        logger.info(f"✅ Rule-based analysis complete - Readiness: {pain_analysis.get('readiness_score', 0)}, Boosted Score: {ai_score}")
-        
-        # Get device recommendations
+        # Get device recommendations (rule-based)
         device_recommendations = self.recommend_device(practice_record, score_breakdown)
         
-        # Generate outreach opener
+        # Generate simple outreach opener (template-based, fast)
         outreach_opener = self.craft_outreach_opener(
             practice_record, ai_score, device_recommendations)
         
@@ -1752,7 +1392,8 @@ def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], 
         else:
             confidence = "Low"
         
-        # Compile final record
+        # Compile final record WITHOUT AI-generated outreach
+        # Outreach will be generated on-demand via the frontend button
         final_record = {
             **practice_record,
             'specialty': specialty,
@@ -1763,19 +1404,251 @@ def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], 
             'all_device_recs': device_recommendations.get('all_recommendations', []),
             'outreach_opener': outreach_opener,
             'confidence_level': confidence,
-            'data_completeness': completeness,
-            **ai_insights  # Merge AI insights into final record
+            'data_completeness': completeness
         }
         
         return final_record
     
+    def generate_outreach_for_prospect_standalone(self, practice_data: Dict) -> Dict:
+        """
+        STANDALONE METHOD: Generate AI outreach for a single prospect ON-DEMAND
+        This is called by the API endpoint when user clicks the button
+        NOT called during the search process
+        """
+        practice_name = practice_data.get('name', 'the practice')
+        specialty = practice_data.get('specialty', 'general')
+        
+        logger.info(f"🤖 ON-DEMAND: Generating AI outreach for {practice_name}")
+        
+        # Simple pain points based on specialty (rule-based, fast)
+        pain_points_map = {
+            'dermatology': [
+                'Competitive pressure from med spas offering aesthetic services',
+                'Patient demand for non-invasive body contouring',
+                'Revenue growth opportunities in aesthetics'
+            ],
+            'plastic_surgery': [
+                'Pre and post-surgical care revenue opportunities',
+                'Non-invasive alternatives for surgical-averse patients',
+                'Patient retention between surgical procedures'
+            ],
+            'obgyn': [
+                'Postpartum body contouring demand',
+                'Womens wellness and aesthetics integration',
+                'Additional revenue streams beyond traditional services'
+            ],
+            'medspa': [
+                'Need for advanced technology to compete',
+                'Equipment upgrade or expansion',
+                'Attracting higher-value clients'
+            ],
+            'familypractice': [
+                'Differentiation in crowded primary care market',
+                'Additional revenue streams beyond insurance',
+                'Aesthetic services as practice differentiator'
+            ]
+        }
+        
+        pain_points = pain_points_map.get(specialty, [
+            'Practice growth and differentiation',
+            'New revenue opportunities',
+            'Patient demand for aesthetic services'
+        ])
+        
+        pain_points_str = ', '.join(pain_points[:3]) if pain_points else 'revenue growth and patient satisfaction'
+        
+        # Prepare context for AI
+        context = f"""
+Practice: {practice_name}
+Specialty: {specialty}
+Key Pain Points: {pain_points_str}
+Score: {practice_data.get('ai_score', 'N/A')}/100
+
+We sell Venus medical devices (FDA-cleared body contouring, skin tightening, cellulite reduction).
+"""
+        
+        # Try AI generation, fall back to templates
+        if ABACUS_API_AVAILABLE and ABACUS_CLIENT:
+            try:
+                prompt = f"""You are a top-performing medical device sales rep for Venus Concept. Create 3 personalized outreach messages for this prospect:
+
+{context}
+
+Generate:
+1. **COLD CALL SCRIPT** (30-45 seconds, conversational, handles objections)
+2. **INSTAGRAM DM** (2-3 sentences, casual but professional, attention-grabbing)
+3. **EMAIL** (Subject line + 4-paragraph body, professional, clear CTA)
+
+Requirements:
+- Reference their specialty and specific pain points
+- Focus on ROI and patient outcomes
+- Sound human, not robotic
+- Be specific about Venus benefits for their specialty
+- Include clear next step/CTA
+
+Format your response EXACTLY like this:
+---COLD_CALL---
+[cold call script here]
+---INSTAGRAM_DM---
+[Instagram DM here]
+---EMAIL_SUBJECT---
+[email subject here]
+---EMAIL_BODY---
+[email body here]
+"""
+                
+                logger.info(f"🤖 Generating AI outreach for {practice_name}...")
+                
+                response = ABACUS_CLIENT.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "system", "content": "You are an expert medical device sales professional. Write persuasive, personalized outreach that converts."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    temperature=0.7,
+                    max_tokens=1000
+                )
+                
+                content = response.choices[0].message.content.strip()
+                
+                # Parse the structured response
+                cold_call = ""
+                instagram_dm = ""
+                email_subject = ""
+                email_body = ""
+                
+                if "---COLD_CALL---" in content:
+                    cold_call = content.split("---COLD_CALL---")[1].split("---INSTAGRAM_DM---")[0].strip()
+                if "---INSTAGRAM_DM---" in content:
+                    instagram_dm = content.split("---INSTAGRAM_DM---")[1].split("---EMAIL_SUBJECT---")[0].strip()
+                if "---EMAIL_SUBJECT---" in content:
+                    email_subject = content.split("---EMAIL_SUBJECT---")[1].split("---EMAIL_BODY---")[0].strip()
+                if "---EMAIL_BODY---" in content:
+                    email_body = content.split("---EMAIL_BODY---")[1].strip()
+                
+                logger.info(f"✅ AI outreach generated successfully for {practice_name}")
+                
+                return {
+                    'success': True,
+                    'cold_call_script': cold_call or f"Hi, this is [Name] from Venus Concept. Do you have a quick minute to discuss how we're helping {specialty} practices boost revenue?",
+                    'instagram_dm': instagram_dm or f"Hi! Noticed {practice_name}'s great work. Venus devices are helping similar practices boost revenue 30-40%. Interested in learning more?",
+                    'email_subject': email_subject or f"Quick Question - {practice_name}",
+                    'email_body': email_body or f"Hi,\n\nI work with {specialty} practices and wanted to reach out about how Venus technologies are helping practices like yours increase aesthetic revenue...",
+                    'talking_points': pain_points[:5] if pain_points else ['ROI', 'Patient Satisfaction', 'Competitive Edge']
+                }
+            
+            except Exception as e:
+                logger.error(f"AI outreach generation failed: {str(e)}, falling back to templates")
+        
+        # Fallback: Template-based outreach
+        logger.info(f"Using template-based outreach for {practice_name}")
+        return self._generate_template_outreach(practice_name, specialty, pain_points)
+    
+    def _generate_template_outreach(self, practice_name: str, specialty: str, pain_points: List[str]) -> Dict:
+        """Generate template-based outreach (fallback when AI unavailable)"""
+        
+        # Specialty-specific templates
+        email_templates = {
+            'dermatology': {
+                'subject': f'Expand Your Aesthetic Services - {practice_name}',
+                'body': f"""Dear Doctor,
+
+I hope this message finds you well. I am reaching out because {practice_name} is exactly the type of leading dermatology practice that benefits most from Venus technologies.
+
+Many dermatologists we work with face similar challenges: med spas encroaching on aesthetic services, patients requesting non-invasive body contouring, and the need to stay competitive while maintaining medical excellence.
+
+Our Venus systems complement your existing practice by adding high-demand services like body contouring, cellulite reduction, and skin tightening—all with clinically proven, FDA-cleared technology.
+
+Would you be open to a brief conversation about how we have helped practices like yours increase aesthetic revenue by 30-40 percent?
+
+Best regards,
+Venus Sales Team"""
+            },
+            'plastic_surgery': {
+                'subject': f'Enhance Pre/Post-Surgical Care Revenue - {practice_name}',
+                'body': f"""Dear Doctor,
+
+I specialize in working with plastic surgery practices like {practice_name} that want to maximize patient value and retention.
+
+Venus technologies are perfect for pre and post-surgical care, non-invasive alternatives for patients not ready for surgery, and maintenance between procedures.
+
+Our devices complement your surgical practice by capturing patients throughout their aesthetic journey, not just during surgical windows.
+
+I would love to show you how practices similar to yours have increased annual revenue by over $200K with Venus systems.
+
+Can we schedule 15 minutes to discuss?
+
+Best regards,
+Venus Sales Team"""
+            },
+            'obgyn': {
+                'subject': f'Womens Wellness + Aesthetics - {practice_name}',
+                'body': f"""Dear Doctor,
+
+I am reaching out to OB/GYN practices like {practice_name} that are expanding into womens wellness and aesthetics.
+
+Postpartum body contouring is one of the fastest-growing service requests in womens health, and Venus technologies allow you to serve this need without invasive procedures.
+
+Many of our OB/GYN partners have successfully integrated Venus treatments for body contouring, skin tightening, and cellulite reduction—perfect for your patient demographic.
+
+Would you be interested in learning how we have helped practices like yours add $100-150K in annual aesthetic revenue?
+
+Best regards,
+Venus Sales Team"""
+            },
+            'medspa': {
+                'subject': f'Upgrade Your Technology - {practice_name}',
+                'body': f"""Dear {practice_name} Team,
+
+Your practice caught my attention as a forward-thinking med spa, and I wanted to reach out about Venus technologies.
+
+The med spa market is competitive, and having state-of-the-art equipment is critical for attracting and retaining high-value clients.
+
+Venus systems deliver clinical results your clients will love: body contouring, cellulite reduction, skin tightening, and wrinkle reduction—all FDA-cleared and backed by extensive clinical studies.
+
+Many med spas we work with see 30-50 percent increase in treatment bookings after adding Venus technologies.
+
+Can we schedule a brief demo or discussion?
+
+Best regards,
+Venus Sales Team"""
+            }
+        }
+        
+        # Get specialty-specific template or use general
+        template = email_templates.get(specialty, {
+            'subject': f'Aesthetic Technology for {practice_name}',
+            'body': f"""Dear Team,
+
+I am reaching out because {practice_name} could benefit from Venus aesthetic technologies.
+
+Our FDA-cleared systems offer body contouring, skin tightening, cellulite reduction, and wrinkle reduction—high-demand services that generate excellent revenue.
+
+Many practices similar to yours have successfully integrated Venus technologies to enhance patient satisfaction and increase revenue.
+
+Would you be interested in a brief conversation?
+
+Best regards,
+Venus Sales Team"""
+        })
+        
+        return {
+            'success': True,
+            'cold_call_script': f"Hi, this is [Name] from Venus Concept. I noticed {practice_name} is a {specialty} practice and wanted to reach out about our FDA-cleared body contouring and skin tightening devices. Many {specialty} practices are seeing significant patient demand and revenue growth. Do you have a quick minute?",
+            'instagram_dm': f"Hi! Noticed {practice_name}'s excellent work in {specialty}. Venus devices are helping similar practices boost aesthetic revenue 30-40%. Quick chat this week?",
+            'email_subject': template['subject'],
+            'email_body': template['body'],
+            'talking_points': pain_points[:5] if pain_points else ['ROI', 'Patient Satisfaction', 'Competitive Edge']
+        }
+    
     def export_to_csv(self, results: List[Dict], filename: str):
-        """Export results to CSV"""
+        """Export results to CSV - WITHOUT AI outreach fields"""
         
         if not results:
             logger.warning("No results to export")
             return
         
+        # Simplified CSV columns - AI outreach removed
         csv_columns = [
             'name', 'specialty', 'address', 'phone', 'website', 'rating', 'review_count',
             'ai_score', 'confidence_level', 'primary_device_rec', 'device_rationale',
@@ -1783,21 +1656,17 @@ def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], 
             'specialty_match_score', 'decision_autonomy_score', 'aesthetic_services_score', 
             'competing_devices_score', 'social_activity_score', 'reviews_rating_score',
             'search_visibility_score', 'financial_indicators_score', 'weight_loss_services_score',
-            'data_completeness',
-            # AI-enhanced fields (Option B: Full AI integration)
-            'ai_readiness_score', 'revenue_opportunity', 'gap_analysis', 'best_approach',
-            'decision_maker_profile', 'outreachColdCall', 'outreachInstagram', 'outreachEmailSubject', 'outreachEmail', 'pain_points',
-            'competing_services', 'talking_points', 'follow_up_days', 'call_to_action'
+            'data_completeness'
         ]
         
         csv_data = []
         for result in results:
             row = {}
             for col in csv_columns:
-                if col.endswith('_score') and col != 'ai_score' and col != 'ai_readiness_score':
+                if col.endswith('_score') and col != 'ai_score':
                     score_key = col.replace('_score', '')
                     row[col] = result.get('score_breakdown', {}).get(score_key, 0)
-                elif col in ['services', 'social_links', 'pain_points', 'competing_services', 'talking_points']:
+                elif col in ['services', 'social_links']:
                     # Join list fields with semicolons
                     row[col] = '; '.join(str(x) for x in result.get(col, []))
                 else:
