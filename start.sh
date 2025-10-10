@@ -1,5 +1,18 @@
-#!/bin/Bash Terminal
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+if ! command -v python >/dev/null 2>&1; then
+    echo "❌ Python is not installed or not on PATH" >&2
+    exit 1
+fi
+
+if ! command -v pip >/dev/null 2>&1; then
+    echo "❌ pip is not installed or not on PATH" >&2
+    exit 1
+fi
 
 echo "🚀 Starting Fathom API with dependency verification..."
 
@@ -16,9 +29,13 @@ if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi
 
-# Upgrade pip
-echo "📦 Upgrading pip..."
-python -m pip install --upgrade pip
+# Upgrade pip (can be skipped by exporting SKIP_PIP_UPGRADE=1)
+if [[ "${SKIP_PIP_UPGRADE:-0}" != "1" ]]; then
+    echo "📦 Upgrading pip..."
+    python -m pip install --upgrade pip
+else
+    echo "⏭️ Skipping pip upgrade because SKIP_PIP_UPGRADE=${SKIP_PIP_UPGRADE:-0}"
+fi
 
 # Install requirements
 echo "📦 Installing requirements..."
@@ -38,6 +55,7 @@ echo "🔍 Verifying scoring_system module..."
 python -c "import scoring_system; print('✅ scoring_system module found!')"
 
 # Start the server with uvicorn (required by Railway)
+PORT="${PORT:-8000}"
 echo "🎯 Starting API server on port $PORT..."
 cd /app || cd "$(pwd)"
 exec python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 300

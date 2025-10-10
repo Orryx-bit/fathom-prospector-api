@@ -60,7 +60,11 @@ app.add_middleware(
 )
 
 # API Key for security (set via environment variable)
-API_KEY = os.getenv("FATHOM_API_KEY", "your-secret-api-key-change-this")
+API_KEY = os.getenv("FATHOM_API_KEY")
+if not API_KEY or API_KEY == "your-secret-api-key-change-this":
+    raise RuntimeError(
+        "FATHOM_API_KEY must be configured with a non-default value before starting the server"
+    )
 
 # Store for tracking search jobs
 search_jobs = {}

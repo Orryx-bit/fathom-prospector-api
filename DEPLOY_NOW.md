@@ -1,17 +1,17 @@
 
 # 🚀 DEPLOY RIGHT NOW - Step by Step
 
-## Your API Keys (Already Configured)
-✅ Google Maps API: `AIzaSyDWxeB-EfE2L7XIG0S4HKtdcRRoyNApCkE`
-✅ Google Places API: `AIzaSyDWxeB-EfE2L7XIG0S4HKtdcRRoyNApCkE`
-✅ Gemini API: `AIzaSyD49-K0dOGqhWIrPPlP4mSSwcrndPbxwU4`
+## Secrets Checklist (Provide Your Own Values)
+✅ Google Maps API: `<store-in-your-secrets-manager>`
+✅ Google Places API: `<store-in-your-secrets-manager>`
+✅ Gemini API: `<store-in-your-secrets-manager>`
 
 ---
 
 ## Step 1: Download This Entire Folder
 Download `/home/ubuntu/fathom-railway-fresh-deploy` to your computer
 
-All files are ready with API keys embedded!
+All files include placeholder secrets—replace them with your own keys before committing or deploying.
 
 ---
 
@@ -30,7 +30,7 @@ All files are ready with API keys embedded!
 ### Option A: Drag and Drop (Easiest)
 1. On your new GitHub repository page
 2. Click **"uploading an existing file"**
-3. Drag and drop ALL files from the downloaded folder
+3. Drag and drop ALL files from the downloaded folder (replace any placeholder `.env` secrets with your own values before committing)
 4. **MAKE SURE** the `scoring_system` folder with all 7 files inside is included
 5. Scroll down and click **"Commit changes"**
 
@@ -76,19 +76,19 @@ Go to your repository on GitHub and verify you see:
 In the Railway dashboard:
 1. Click on your service
 2. Go to **"Variables"** tab
-3. Click **"Add Variable"** and add these:
+3. Click **"Add Variable"** and populate the following keys with freshly generated or rotated values (never commit real keys to git):
 
 ```
-GOOGLE_MAPS_API_KEY=AIzaSyDWxeB-EfE2L7XIG0S4HKtdcRRoyNApCkE
+GOOGLE_MAPS_API_KEY=<google-maps-api-key>
 ```
 ```
-GOOGLE_PLACES_API_KEY=AIzaSyDWxeB-EfE2L7XIG0S4HKtdcRRoyNApCkE
+GOOGLE_PLACES_API_KEY=<google-places-api-key>
 ```
 ```
-GEMINI_API_KEY=AIzaSyD49-K0dOGqhWIrPPlP4mSSwcrndPbxwU4
+GEMINI_API_KEY=<gemini-api-key>
 ```
 ```
-FATHOM_API_KEY=your-secret-api-key-change-this
+FATHOM_API_KEY=<generate-unique-shared-secret>
 ```
 ```
 PORT=8000
@@ -96,6 +96,8 @@ PORT=8000
 ```
 HOST=0.0.0.0
 ```
+
+Keep these secrets in your cloud provider's secret manager or Railway environment variables, and rotate them if you suspect exposure.
 
 ---
 

@@ -25,6 +25,17 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
+# Environment placeholder markers that should be treated as unset values
+PLACEHOLDER_VALUES: Dict[str, set[str]] = {
+    "GOOGLE_MAPS_API_KEY": {"replace-with-your-google-maps-api-key"},
+    "GOOGLE_PLACES_API_KEY": {"replace-with-your-google-places-api-key"},
+    "GEMINI_API_KEY": {"replace-with-your-gemini-api-key"},
+    "FATHOM_API_KEY": {
+        "generate-a-unique-shared-secret",
+        "your-secret-api-key-change-this",
+    },
+}
+
 # Load environment variables FIRST
 load_dotenv()
 
@@ -46,14 +57,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def normalize_secret(name: str, raw_value: Optional[str]) -> Optional[str]:
+    """Return ``None`` for unset or placeholder secrets."""
+
+    if raw_value is None:
+        return None
+
+    value = raw_value.strip()
+    if not value:
+        return None
+
+    placeholders = PLACEHOLDER_VALUES.get(name)
+    if placeholders and value in placeholders:
+        logger.warning(
+            "%s is using a placeholder value; treating it as unset",
+            name,
+        )
+        return None
+
+    return value
+
 # Abacus RouteLLM Integration (OpenAI-compatible)
 AI_AVAILABLE = False
 openai_client = None
 
 try:
     from openai import OpenAI
-    abacus_key = os.getenv('ABACUSAI_API_KEY')
-    
+    abacus_key = normalize_secret('ABACUSAI_API_KEY', os.getenv('ABACUSAI_API_KEY'))
+
     if abacus_key:
         # Initialize OpenAI client with Abacus RouteLLM endpoint
         openai_client = OpenAI(
@@ -233,7 +265,7 @@ class FathomProspector:
     """Main prospecting system for medical devices"""
     
     def __init__(self, demo_mode=False, existing_customers_csv=None, progress_callback=None):
-        self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
+        self.gmaps_key = normalize_secret('GOOGLE_PLACES_API_KEY', os.getenv('GOOGLE_PLACES_API_KEY'))
         if not self.gmaps_key:
             logger.warning('GOOGLE_PLACES_API_KEY not found - switching to demo mode')
             demo_mode = True

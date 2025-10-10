@@ -45,16 +45,18 @@ Backend API for Fathom Prospector medical device prospecting system.
 4. Choose your new repository (fathom-v1)
 
 #### Step 2: Configure Environment Variables
-In Railway dashboard, add these variables:
+In Railway dashboard, add these variables using values issued from your secrets manager (do not reuse production keys across environments):
 
 ```
-GOOGLE_MAPS_API_KEY=AIzaSyDWxeB-EfE2L7XIG0S4HKtdcRRoyNApCkE
-GOOGLE_PLACES_API_KEY=AIzaSyDWxeB-EfE2L7XIG0S4HKtdcRRoyNApCkE
-GEMINI_API_KEY=AIzaSyD49-K0dOGqhWIrPPlP4mSSwcrndPbxwU4
-FATHOM_API_KEY=your-secret-api-key-change-this
+GOOGLE_MAPS_API_KEY=<google-maps-api-key>
+GOOGLE_PLACES_API_KEY=<google-places-api-key>
+GEMINI_API_KEY=<gemini-api-key>
+FATHOM_API_KEY=<generate-unique-shared-secret>
 PORT=8000
 HOST=0.0.0.0
 ```
+
+Create a local `.env` file by copying `.env.example` and substituting the placeholders above with freshly generated credentials. Rotate secrets regularly and revoke any keys that may have been exposed.
 
 #### Step 3: Deploy
 1. Railway will automatically detect the configuration
