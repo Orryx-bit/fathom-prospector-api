@@ -1448,7 +1448,7 @@ Venus Sales Team"""
                         social_links.append(platform_name)
             
             # Find staff mentions
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             
             return {
