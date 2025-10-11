@@ -527,16 +527,16 @@ async def run_prospect_search(job_id: str, request: SearchRequest):
             loop = asyncio.get_event_loop()
             await asyncio.wait_for(
                 loop.run_in_executor(executor, _run_prospect_search_sync, job_id, request),
-                timeout=300  # 5 minute max per search
+                timeout=1800  # 30 minute max per search
             )
         except asyncio.TimeoutError:
-            logger.error(f"Job {job_id}: Search timed out after 5 minutes")
+            logger.error(f"Job {job_id}: Search timed out after 30 minutes")
             with search_jobs_lock:
                 search_jobs[job_id].update({
                     "status": "failed",
                     "progress": 0,
                     "message": "Search timed out",
-                    "error": "Search exceeded 5 minute time limit",
+                    "error": "Search exceeded 30 minute time limit",
                     "completed_at": datetime.now().isoformat()
                 })
             update_metrics("search_failed", error_type="timeout")
