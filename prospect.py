@@ -870,6 +870,20 @@ class FathomProspector:
         desc = practice_data.get('description', '').lower()
         services = ' '.join(practice_data.get('services', [])).lower()
         all_text = f"{name} {desc} {services}"
+        
+        # Priority order (most specific first)
+        if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
+            return 'dermatology'
+        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
+            return 'plastic_surgery'
+        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
+            return 'obgyn'
+        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
+            return 'medspa'
+        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
+            return 'familypractice'
+        else:
+            return 'general'
 
     def detect_specialty_ai(self, practice_data: Dict) -> str:
         """
@@ -1022,7 +1036,7 @@ Consider factors like competition, market position, current services, and growth
             
             pain_points_text = '\n'.join([f"- {p}" for p in pain_points[:3]])
             
-           prompt = f"""You're crafting HIGH-IMPACT sales outreach for Venus Concepts medical devices. These messages must STAND OUT in crowded inboxes and during live calls. Generic = ignored.
+            prompt = f"""You're crafting HIGH-IMPACT sales outreach for Venus Concepts medical devices. These messages must STAND OUT in crowded inboxes and during live calls. Generic = ignored.
 
 Practice: {name}
 Contact: {contact}
@@ -1131,21 +1145,6 @@ EMAIL_BODY:
         except Exception as e:
             logger.error(f"AI outreach generation failed: {str(e)}, using template-based fallback")
             return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
-
-        
-        # Priority order (most specific first)
-        if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
-            return 'dermatology'
-        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
-            return 'plastic_surgery'
-        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
-            return 'obgyn'
-        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
-            return 'medspa'
-        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
-            return 'familypractice'
-        else:
-            return 'general'
     
     def analyze_pain_points_rule_based(self, practice_data: Dict, specialty: str) -> Dict:
         """
@@ -1611,9 +1610,9 @@ Venus Sales Team"""
         address = practice_data.get('formatted_address', '').lower()
         all_text = f"{practice_name} {practice_desc} {address}"
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 1. Specialty Match (20 points)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         specialty_keywords = [
             'dermatology', 'dermatologist', 'plastic surgery', 'plastic surgeon',
             'cosmetic', 'aesthetic', 'med spa', 'medical spa', 'medspa',
@@ -1624,10 +1623,10 @@ Venus Sales Team"""
         specialty_matches = sum(1 for keyword in specialty_keywords if keyword in all_text)
         scores['specialty_match'] = min(specialty_matches * 4, 20)
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 2. Decision-Making Autonomy (20 points) 🔥 CRITICAL
         # CORRECTED: Solo/small = HIGH score (single decision maker)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         staff_count = practice_data.get('staff_count', 0)
         
         # Check for hospital affiliation indicators
@@ -1668,9 +1667,9 @@ Venus Sales Team"""
         
         scores['decision_autonomy'] = autonomy_score
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 3. Aesthetic Services (15 points)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         services = practice_data.get('services', [])
         aesthetic_services = [
             'botox', 'fillers', 'laser', 'coolsculpting', 'body contouring',
@@ -1682,9 +1681,9 @@ Venus Sales Team"""
                             if any(service in s.lower() for s in services))
         scores['aesthetic_services'] = min(service_matches * 3, 15)
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 4. Competing Devices (10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         competing_devices = [
             'coolsculpting', 'thermage', 'ultherapy', 'sculptra', 
             'emsculpt', 'vanquish', 'exilis'
@@ -1693,15 +1692,15 @@ Venus Sales Team"""
         device_count = sum(1 for device in competing_devices if device in practice_desc)
         scores['competing_devices'] = min(device_count * 5, 10)
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 5. Social Media Activity (10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         social_links = practice_data.get('social_links', [])
         scores['social_activity'] = min(len(social_links) * 3, 10)
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 6. Reviews & Rating (10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         rating = practice_data.get('rating', 0)
         review_count = practice_data.get('user_ratings_total', 0)
         
@@ -1714,9 +1713,9 @@ Venus Sales Team"""
         else:
             scores['reviews_rating'] = 1
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 7. Search Visibility (10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         website = practice_data.get('website', '')
         if website and 'http' in website:
             scores['search_visibility'] = 10
@@ -1727,10 +1726,10 @@ Venus Sales Team"""
         else:
             scores['search_visibility'] = 1
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 8. Financial Indicators (10 points)
         # Affluent area + cash-pay readiness
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         
         # Check for affluent area indicators
         affluent_indicators = [
@@ -1754,9 +1753,9 @@ Venus Sales Team"""
         
         scores['financial_indicators'] = financial_score
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 9. Weight Loss Services (5 points)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         weight_keywords = [
             'weight loss', 'medical weight', 'hormone therapy', 'iv therapy',
             'body contouring', 'fat reduction', 'inch loss'
@@ -1765,9 +1764,9 @@ Venus Sales Team"""
         weight_matches = sum(1 for keyword in weight_keywords if keyword in all_text)
         scores['weight_loss_services'] = min(weight_matches * 2, 5)
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # 10. Specialty-Specific Keyword Bonus (up to +10 points)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         services = practice_data.get('services', [])
         services_text = ' '.join(services).lower()
         all_text_with_services = f"{practice_name} {practice_desc} {services_text}"
@@ -1778,9 +1777,9 @@ Venus Sales Team"""
                 keyword_bonus += 2
         keyword_bonus = min(keyword_bonus, 10)
         
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         # TOTAL SCORE (out of 110, normalized to 100)
-        # ═══════════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════
         base_score = sum(scores.values())
         total_score = min(base_score + keyword_bonus, 100)
         
