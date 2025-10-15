@@ -1022,47 +1022,53 @@ Consider factors like competition, market position, current services, and growth
             
             pain_points_text = '\n'.join([f"- {p}" for p in pain_points[:3]])
             
-            # Single prompt to generate all 3 outreach types
-            prompt = f"""Generate personalized sales outreach for a medical device sales team reaching out to this practice. Create 3 different versions optimized for each channel.
+           prompt = f"""You're crafting HIGH-IMPACT sales outreach for Venus Concepts medical devices. These messages must STAND OUT in crowded inboxes and during live calls. Generic = ignored.
 
 Practice: {name}
 Contact: {contact}
 Location: {location}
 Specialty: {specialty}
-Services: {services}
-Rating: {rating}/5
+Services Offered: {services}
 Readiness Score: {readiness_score}/100
 
-Key Pain Points:
+Pain Points Identified:
 {pain_points_text}
 
-Product: Venus aesthetic technologies (body contouring, skin tightening, cellulite reduction, wrinkle reduction)
-Recommended Device: {device_rec}
+Venus Solution: {device_rec} (body contouring, skin tightening, cellulite reduction, wrinkle reduction)
 
-Generate exactly 3 outreach versions:
+⚠️ STRICT RULES - DO NOT VIOLATE:
+❌ NEVER mention star ratings, reviews, or "great reputation" - every competitor says this
+❌ NEVER use generic openers like "I came across your practice" or "I wanted to reach out"
+❌ NEVER write corporate-speak or salesy language
+✅ DO use specific details about their services, location, or specialty
+✅ DO lead with insights, gaps, or opportunities they're missing
+✅ DO write like a real human having a genuine conversation
+✅ DO create pattern interrupts that make them curious
 
-1. COLD CALL SCRIPT (2-3 minute phone conversation opener)
-- Start with a warm introduction
-- Reference their reputation or specific details
-- Mention 1-2 pain points naturally
-- Position {device_rec} as a solution
-- End with soft ask for 15-min meeting
-- Keep it conversational, not scripted
+Generate 3 HIGH-CONVERSION outreach versions:
 
-2. INSTAGRAM DM (casual, social media appropriate, 2-3 sentences max)
-- Brief and friendly
-- Reference their Instagram/social presence
-- Mention Venus and results other practices see
-- Ask if they'd be open to learn more
-- Keep it light and non-salesy
+1. COLD CALL SCRIPT (Live phone call - must hook in first 10 seconds)
+- Open with an unexpected insight or specific observation about their practice
+- Reference a service gap, local competition, or revenue opportunity
+- Mention how {device_rec} solves their specific pain point
+- Use natural speech patterns (contractions, short sentences, casual tone)
+- End with a soft time-bound ask: "Got 15 minutes Thursday to walk through this?"
+- MAKE IT CONVERSATIONAL - a real person would say these exact words
 
-3. EMAIL (professional, 120-150 words)
-- Compelling subject line
-- Professional but warm tone
-- Reference specific practice details
-- Mention how Venus addresses their challenges
-- Soft call-to-action
-- Real person tone, not corporate
+2. INSTAGRAM DM (Must feel personal, not like a sales pitch)
+- Open with something SPECIFIC you noticed (their content, a service, their vibe)
+- Bridge to Venus results in 1 sentence (social proof or revenue data)
+- Casual question to gauge interest
+- NO business jargon - write like you're DMing a colleague
+- 2-3 sentences MAX
+
+3. EMAIL (Must survive the 3-second inbox scan)
+- Subject line: Create curiosity or urgency WITHOUT being clickbait
+- First line: Pattern interrupt - NOT "Hope this email finds you well"
+- Body: Specific to THEIR practice (services, location context, pain point)
+- Include a micro-case study or data point (e.g., "$40K/month revenue boost for 3 practices near you")
+- End with frictionless CTA: "Want to see the numbers?" or "15-min call to walk through this?"
+- 120-150 words max - respect their time
 
 Format your response EXACTLY like this:
 COLD_CALL:
@@ -1079,7 +1085,7 @@ EMAIL_BODY:
 
             system_msg = "You are a top-performing medical device sales professional known for personalized, effective multi-channel outreach."
             
-            response = self.call_ai(prompt, system_msg, max_tokens=1200, temperature=0.8)
+            response = self.call_ai(prompt, system_msg, max_tokens=1200, temperature=0.9)
             
             if not response:
                 return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
