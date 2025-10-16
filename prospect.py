@@ -750,6 +750,283 @@ class FathomProspector:
     
     @sleep_and_retry
     @limits(calls=30, period=60)
+
+    def extract_emails(self, soup: BeautifulSoup, url: str) -> List[str]:
+        """
+        Extract email addresses from website
+        
+        Args:
+            soup: BeautifulSoup object
+            url: Website URL for context
+            
+        Returns:
+            List of unique email addresses (up to 5)
+        """
+        emails = set()
+        
+        try:
+            # Method 1: mailto: links
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                if href.startswith('mailto:'):
+                    # Extract email from mailto: link
+                    email = href.replace('mailto:', '').split('?')[0].strip()
+                    if '@' in email and '.' in email:
+                        emails.add(email.lower())
+            
+            # Method 2: Email pattern in visible text
+            text_content = soup.get_text()
+            # Email regex pattern
+            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+            found_emails = re.findall(email_pattern, text_content)
+            
+            # Filter out common false positives
+            spam_keywords = ['example', 'test', 'noreply', 'no-reply', 'donotreply']
+            for email in found_emails:
+                email_lower = email.lower()
+                if not any(spam in email_lower for spam in spam_keywords):
+                    if '@' in email_lower and '.' in email_lower:
+                        emails.add(email_lower)
+            
+            # Method 3: Schema.org markup
+            for meta in soup.find_all('meta', attrs={'itemprop': 'email'}):
+                if meta.get('content'):
+                    email = meta['content'].strip().lower()
+                    if '@' in email and '.' in email:
+                        emails.add(email)
+            
+            # Convert to list and limit to top 5
+            email_list = list(emails)[:5]
+            
+            if email_list:
+                logger.info(f"📧 Found {len(email_list)} email(s): {', '.join(email_list)}")
+            
+            return email_list
+            
+        except Exception as e:
+            logger.warning(f"Error extracting emails from {url}: {str(e)}")
+            return []
+    
+    def extract_contact_names(self, soup: BeautifulSoup, business_name: str, url: str) -> List[str]:
+        """
+        Extract doctor/owner names from website
+        
+        Args:
+            soup: BeautifulSoup object
+            business_name: Business name for reference
+            url: Website URL for context
+            
+        Returns:
+            List of contact names (up to 5)
+        """
+        names = []
+        seen_names = set()
+        
+        try:
+            # Pattern 1: Extract from business name itself
+            if business_name:
+                # Match "Dr. FirstName LastName" or "FirstName LastName MD/DDS/etc"
+                name_patterns = [
+                    r'Dr\.?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',  # Dr. John Smith
+                    r'([A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:MD|DDS|DMD|DO|DPM)',  # John Smith MD
+                ]
+                
+                for pattern in name_patterns:
+                    matches = re.findall(pattern, business_name)
+                    for match in matches:
+                        clean_name = match.strip()
+                        if clean_name and clean_name not in seen_names and len(clean_name) > 5:
+                            names.append(f"Dr. {clean_name}" if not clean_name.startswith('Dr') else clean_name)
+                            seen_names.add(clean_name)
+            
+            # Pattern 2: Check headings for staff names
+            for heading in soup.find_all(['h1', 'h2', 'h3', 'h4']):
+                text = heading.get_text().strip()
+                
+                # Look for doctor/physician indicators
+                if any(keyword in text.lower() for keyword in ['dr.', 'doctor', 'meet', 'physician', 'about']):
+                    # Try to extract name
+                    name_match = re.search(r'(Dr\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)', text)
+                    if name_match:
+                        clean_name = name_match.group(1).strip()
+                        if clean_name not in seen_names and len(clean_name) > 5:
+                            names.append(clean_name)
+                            seen_names.add(clean_name)
+            
+            # Pattern 3: Look for "Meet Dr." or "About Dr." sections
+            text_content = soup.get_text()
+            meet_patterns = [
+                r'Meet\s+(Dr\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
+                r'About\s+(Dr\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
+            ]
+            
+            for pattern in meet_patterns:
+                matches = re.findall(pattern, text_content)
+                for match in matches:
+                    clean_name = match.strip()
+                    if clean_name not in seen_names and len(clean_name) > 5:
+                        names.append(clean_name)
+                        seen_names.add(clean_name)
+            
+            # Pattern 4: Schema.org Person markup
+            for person_div in soup.find_all(attrs={'itemtype': re.compile(r'schema.org/Person')}):
+                name_span = person_div.find(attrs={'itemprop': 'name'})
+                if name_span:
+                    clean_name = name_span.get_text().strip()
+                    if clean_name not in seen_names and len(clean_name) > 5:
+                        if 'dr' in clean_name.lower() or 'doctor' in clean_name.lower():
+                            names.append(clean_name)
+                            seen_names.add(clean_name)
+            
+            # Limit to top 5 names
+            names = names[:5]
+            
+            if names:
+                logger.info(f"👤 Found {len(names)} contact name(s): {', '.join(names)}")
+            
+            return names
+            
+        except Exception as e:
+            logger.warning(f"Error extracting contact names from {url}: {str(e)}")
+            return []
+    
+    def extract_additional_phones(self, soup: BeautifulSoup, primary_phone: str, url: str) -> List[str]:
+        """
+        Extract additional phone numbers from website
+        
+        Args:
+            soup: BeautifulSoup object
+            primary_phone: Primary phone from Google Places (to avoid duplicates)
+            url: Website URL for context
+            
+        Returns:
+            List of additional phone numbers (up to 3)
+        """
+        phones = set()
+        
+        try:
+            # Normalize primary phone for comparison
+            primary_normalized = re.sub(r'[^0-9]', '', primary_phone) if primary_phone else ''
+            
+            text_content = soup.get_text()
+            
+            # Phone number patterns
+            phone_patterns = [
+                r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}',  # (123) 456-7890 or 123-456-7890
+                r'\d{3}[-.\s]\d{3}[-.\s]\d{4}',           # 123.456.7890
+                r'1[-.\s]\d{3}[-.\s]\d{3}[-.\s]\d{4}',    # 1-123-456-7890
+            ]
+            
+            for pattern in phone_patterns:
+                matches = re.findall(pattern, text_content)
+                for match in matches:
+                    # Normalize phone for comparison
+                    normalized = re.sub(r'[^0-9]', '', match)
+                    
+                    # Must be exactly 10 or 11 digits
+                    if len(normalized) in [10, 11]:
+                        # Skip if it's the primary phone
+                        if normalized != primary_normalized and normalized[-10:] != primary_normalized[-10:]:
+                            phones.add(match.strip())
+            
+            # Also check tel: links
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                if href.startswith('tel:'):
+                    phone = href.replace('tel:', '').strip()
+                    normalized = re.sub(r'[^0-9]', '', phone)
+                    
+                    if len(normalized) in [10, 11]:
+                        if normalized != primary_normalized and normalized[-10:] != primary_normalized[-10:]:
+                            phones.add(phone)
+            
+            # Limit to top 3 additional phones
+            phone_list = list(phones)[:3]
+            
+            if phone_list:
+                logger.info(f"📞 Found {len(phone_list)} additional phone(s): {', '.join(phone_list)}")
+            
+            return phone_list
+            
+        except Exception as e:
+            logger.warning(f"Error extracting additional phones from {url}: {str(e)}")
+            return []
+    
+    def extract_contact_form_url(self, soup: BeautifulSoup, base_url: str) -> str:
+        """
+        Extract contact form URL from website
+        
+        Args:
+            soup: BeautifulSoup object
+            base_url: Base URL of the website
+            
+        Returns:
+            Contact form URL or empty string
+        """
+        try:
+            # Look for contact/schedule/appointment links
+            contact_keywords = ['contact', 'schedule', 'appointment', 'book', 'consult']
+            
+            for link in soup.find_all('a', href=True):
+                href = link['href'].lower()
+                link_text = link.get_text().lower()
+                
+                # Check if link or text contains contact keywords
+                if any(keyword in href or keyword in link_text for keyword in contact_keywords):
+                    # Build full URL
+                    if href.startswith('http'):
+                        return link['href']
+                    elif href.startswith('/'):
+                        return urljoin(base_url, href)
+            
+            return ''
+            
+        except Exception as e:
+            logger.warning(f"Error extracting contact form URL: {str(e)}")
+            return ''
+    
+    def extract_team_members(self, soup: BeautifulSoup, url: str) -> List[str]:
+        """
+        Extract team member names from website
+        
+        Args:
+            soup: BeautifulSoup object
+            url: Website URL for context
+            
+        Returns:
+            List of team member names with titles (up to 10)
+        """
+        team_members = []
+        seen_members = set()
+        
+        try:
+            # Look for team/staff sections
+            team_sections = soup.find_all(['div', 'section'], class_=re.compile(r'team|staff|doctor|provider', re.I))
+            
+            for section in team_sections:
+                # Look for names with titles
+                for heading in section.find_all(['h2', 'h3', 'h4', 'h5']):
+                    text = heading.get_text().strip()
+                    
+                    # Match patterns like "Dr. John Smith - Board Certified Surgeon"
+                    if any(keyword in text.lower() for keyword in ['dr.', 'doctor', 'md', 'dds', 'dmd']):
+                        if text not in seen_members and len(text) > 5 and len(text) < 100:
+                            team_members.append(text)
+                            seen_members.add(text)
+            
+            # Limit to top 10 team members
+            team_members = team_members[:10]
+            
+            if team_members:
+                logger.info(f"👥 Found {len(team_members)} team member(s)")
+            
+            return team_members
+            
+        except Exception as e:
+            logger.warning(f"Error extracting team members from {url}: {str(e)}")
+            return []
+
+
     def scrape_website(self, url: str) -> Dict[str, any]:
         """Scrape practice website for additional information"""
         
@@ -763,7 +1040,12 @@ class FathomProspector:
                 'description': 'Not Available - No Website',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
         
         if not self.check_robots_txt(url):
@@ -773,7 +1055,12 @@ class FathomProspector:
                 'description': 'Not Available - Restricted',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
             
         try:
@@ -789,7 +1076,12 @@ class FathomProspector:
                 'description': '',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
             
             # Get page title
@@ -875,7 +1167,14 @@ class FathomProspector:
             unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
             data['staff_count'] = min(unique_staff, 20)
             
-            logger.info(f"Website scrape complete for {url}: {len(data['services'])} services found")
+            # Extract contact intelligence
+            data['emails'] = self.extract_emails(soup, url)
+            data['contact_names'] = self.extract_contact_names(soup, '', url)
+            data['additional_phones'] = self.extract_additional_phones(soup, '', url)
+            data['contact_form_url'] = self.extract_contact_form_url(soup, url)
+            data['team_members'] = self.extract_team_members(soup, url)
+            
+            logger.info(f"Website scrape complete for {url}: {len(data['services'])} services, {len(data['emails'])} emails, {len(data['contact_names'])} contacts found")
             
             return data
             
@@ -886,7 +1185,12 @@ class FathomProspector:
                 'description': 'Not Available - Timeout',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
         except Exception as e:
             logger.error(f"Error scraping website {url}: {str(e)}")
@@ -895,7 +1199,12 @@ class FathomProspector:
                 'description': 'Not Available - Error',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
     
     def is_js_heavy_site(self, url: str) -> bool:
@@ -977,7 +1286,12 @@ class FathomProspector:
                 'description': 'Not Available - No Website',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
         
         try:
@@ -1104,10 +1418,17 @@ class FathomProspector:
                 unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
                 data['staff_count'] = min(unique_staff, 20)
                 
+                # Extract contact intelligence
+                data['emails'] = self.extract_emails(soup, url)
+                data['contact_names'] = self.extract_contact_names(soup, '', url)
+                data['additional_phones'] = self.extract_additional_phones(soup, '', url)
+                data['contact_form_url'] = self.extract_contact_form_url(soup, url)
+                data['team_members'] = self.extract_team_members(soup, url)
+                
                 # Close browser
                 browser.close()
                 
-                logger.info(f"✅ Playwright scrape complete for {url}: {len(data['services'])} services found")
+                logger.info(f"✅ Playwright scrape complete for {url}: {len(data['services'])} services, {len(data['emails'])} emails, {len(data['contact_names'])} contacts found")
                 
                 return data
                 
@@ -1142,7 +1463,12 @@ class FathomProspector:
                 'description': 'Not Available - No Website',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
         
         # Check 1: Is this a known JS-heavy platform?
@@ -1789,7 +2115,12 @@ Venus Sales Team"""
                 'description': 'Not Available - No Website',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
         
         if not self.check_robots_txt(base_url):
