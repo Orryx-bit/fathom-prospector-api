@@ -1,4 +1,4 @@
-#!/bin/Bash Terminal
+#!/bin/bash
 set -e
 
 echo "🚀 Starting Fathom API with dependency verification..."
@@ -23,6 +23,10 @@ python -m pip install --upgrade pip
 # Install requirements
 echo "📦 Installing requirements..."
 pip install -r requirements.txt
+
+# Install Playwright browsers
+echo "🎭 Installing Playwright browsers..."
+python -m playwright install --with-deps chromium
 
 # Verify critical packages
 echo "🔍 Verifying pandas installation..."
