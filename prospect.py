@@ -255,6 +255,8 @@ class FathomProspector:
     """Main prospecting system for medical devices"""
     
     def __init__(self, demo_mode=False, existing_customers_csv=None, progress_callback=None):
+        self.gmaps_api = None  # Initialize early to prevent AttributeError
+        
         self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
         if not self.gmaps_key:
             logger.warning('GOOGLE_PLACES_API_KEY not found - switching to demo mode')
@@ -286,59 +288,23 @@ class FathomProspector:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
-    
-    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
-        """
-        Unified method to call Abacus RouteLLM API
         
-        Args:
-            prompt: User prompt
-            system_message: Optional system message for context
-            max_tokens: Max response length
-            temperature: Creativity level (0.0-1.0)
-            
-        Returns:
-            Response text or empty string if failed
-        """
-        if not self.ai_enabled or not self.openai_client:
-            logger.debug("AI not available, skipping AI call")
-            return ""
-        
-        try:
-            messages = []
-            if system_message:
-                messages.append({"role": "system", "content": system_message})
-            messages.append({"role": "user", "content": prompt})
-            
-            response = self.openai_client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=30.0  # Prevent hanging
-            )
-            
-            result = response.choices[0].message.content.strip()
-            logger.debug(f"🤖 AI response received ({len(result)} chars)")
-            return result
-            
-        except Exception as e:
-            logger.error(f"AI API error: {str(e)}")
-            return ""
-        
+        # Initialize Google Maps API if not in demo mode
         if not demo_mode:
             try:
                 self.gmaps_api = GooglePlacesAPI(self.gmaps_key)
-                test_result = self.gmaps_api.geocode("Austin, TX")
+                test_result = self.gmaps_api.geocode('Austin, TX')
                 if not test_result:
-                    logger.warning("Google Places API test failed - switching to demo mode")
+                    logger.warning('Google Places API test failed - switching to demo mode')
                     self.demo_mode = True
+                    self.gmaps_api = None
             except Exception as e:
-                logger.warning(f"Google Places API initialization failed: {str(e)} - switching to demo mode")
+                logger.warning(f'Google Places API initialization failed: {str(e)} - switching to demo mode')
                 self.demo_mode = True
+                self.gmaps_api = None
         
         if self.demo_mode:
-            logger.info("Running in DEMO MODE with mock data")
+            logger.info('Running in DEMO MODE with mock data')
         
         # Search templates for different practice types
         self.search_templates = {
@@ -467,6 +433,46 @@ class FathomProspector:
             }
         }
     
+    
+    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
+        """
+        Unified method to call Abacus RouteLLM API
+        
+        Args:
+            prompt: User prompt
+            system_message: Optional system message for context
+            max_tokens: Max response length
+            temperature: Creativity level (0.0-1.0)
+            
+        Returns:
+            Response text or empty string if failed
+        """
+        if not self.ai_enabled or not self.openai_client:
+            logger.debug("AI not available, skipping AI call")
+            return ""
+        
+        try:
+            messages = []
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            messages.append({"role": "user", "content": prompt})
+            
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=30.0  # Prevent hanging
+            )
+            
+            result = response.choices[0].message.content.strip()
+            logger.debug(f"🤖 AI response received ({len(result)} chars)")
+            return result
+            
+        except Exception as e:
+            logger.error(f"AI API error: {str(e)}")
+            return ""
+    
     def load_existing_customers(self, csv_file_path: str):
         """Load existing customers from CSV for exclusion"""
         try:
@@ -555,6 +561,12 @@ class FathomProspector:
             logger.info(f"DEMO MODE: Generating mock data for {query} near {location}")
             return self.get_mock_data(query, location)
         
+        # Defensive check: ensure gmaps_api is initialized
+        if not self.gmaps_api:
+            logger.error("Google Maps API not initialized - switching to demo mode")
+            self.demo_mode = True
+            return self.get_mock_data(query, location)
+        
         try:
             logger.info(f"Searching Google Places: {query} near {location}")
             
@@ -603,6 +615,11 @@ class FathomProspector:
     
     def get_place_details(self, place_id: str) -> Optional[Dict]:
         """Get detailed information for a specific place"""
+        # Defensive check: ensure gmaps_api is initialized
+        if not self.gmaps_api:
+            logger.debug("Google Maps API not initialized, cannot get place details")
+            return None
+        
         try:
             details = self.gmaps_api.place_details(
                 place_id=place_id,
