@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 Fathom Medical Device Prospecting System
