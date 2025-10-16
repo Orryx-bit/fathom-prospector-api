@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Fathom Medical Device Prospecting System
@@ -25,6 +26,13 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
+# Playwright imports for JavaScript-heavy sites
+try:
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
 # Load environment variables FIRST
 load_dotenv()
 
@@ -45,6 +53,21 @@ logging.basicConfig(
     handlers=handlers
 )
 logger = logging.getLogger(__name__)
+
+# Domain whitelist for known JavaScript-heavy website builders
+# These sites will automatically use Playwright for better scraping
+JS_HEAVY_DOMAINS = [
+    'squarespace.com',
+    'wix.com',
+    'webflow.com',
+    'weebly.com',
+    'shopify.com',
+    'wordpress.com',  # WordPress.com (hosted, often JS-heavy)
+    'godaddy.com',    # GoDaddy website builder
+    'site123.com',
+    'jimdo.com',
+    'strikingly.com'
+]
 
 # Abacus RouteLLM Integration (OpenAI-compatible)
 AI_AVAILABLE = False
@@ -264,9 +287,47 @@ class FathomProspector:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
+    
+    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
+        """
+        Unified method to call Abacus RouteLLM API
         
-        # Initialize Google Places API
-        if not self.demo_mode:
+        Args:
+            prompt: User prompt
+            system_message: Optional system message for context
+            max_tokens: Max response length
+            temperature: Creativity level (0.0-1.0)
+            
+        Returns:
+            Response text or empty string if failed
+        """
+        if not self.ai_enabled or not self.openai_client:
+            logger.debug("AI not available, skipping AI call")
+            return ""
+        
+        try:
+            messages = []
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            messages.append({"role": "user", "content": prompt})
+            
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=30.0  # Prevent hanging
+            )
+            
+            result = response.choices[0].message.content.strip()
+            logger.debug(f"🤖 AI response received ({len(result)} chars)")
+            return result
+            
+        except Exception as e:
+            logger.error(f"AI API error: {str(e)}")
+            return ""
+        
+        if not demo_mode:
             try:
                 self.gmaps_api = GooglePlacesAPI(self.gmaps_key)
                 test_result = self.gmaps_api.geocode("Austin, TX")
@@ -406,45 +467,6 @@ class FathomProspector:
                 ]
             }
         }
-    
-    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
-        """
-        Unified method to call Abacus RouteLLM API
-        
-        Args:
-            prompt: User prompt
-            system_message: Optional system message for context
-            max_tokens: Max response length
-            temperature: Creativity level (0.0-1.0)
-            
-        Returns:
-            Response text or empty string if failed
-        """
-        if not self.ai_enabled or not self.openai_client:
-            logger.debug("AI not available, skipping AI call")
-            return ""
-        
-        try:
-            messages = []
-            if system_message:
-                messages.append({"role": "system", "content": system_message})
-            messages.append({"role": "user", "content": prompt})
-            
-            response = self.openai_client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=30.0  # Prevent hanging
-            )
-            
-            result = response.choices[0].message.content.strip()
-            logger.debug(f"🤖 AI response received ({len(result)} chars)")
-            return result
-            
-        except Exception as e:
-            logger.error(f"AI API error: {str(e)}")
-            return ""
     
     def load_existing_customers(self, csv_file_path: str):
         """Load existing customers from CSV for exclusion"""
@@ -860,6 +882,275 @@ class FathomProspector:
                 'staff_count': 0
             }
     
+    def is_js_heavy_site(self, url: str) -> bool:
+        """
+        Check if URL is from a known JavaScript-heavy platform
+        
+        Args:
+            url: Website URL to check
+            
+        Returns:
+            True if site is from JS-heavy platform, False otherwise
+        """
+        try:
+            url_lower = url.lower()
+            for domain in JS_HEAVY_DOMAINS:
+                if domain in url_lower:
+                    logger.info(f"Detected JS-heavy platform: {domain} in {url}")
+                    return True
+            return False
+        except Exception:
+            return False
+    
+    def is_scrape_successful(self, result: Dict) -> bool:
+        """
+        Check if scraping returned meaningful content
+        
+        Args:
+            result: Scraping result dictionary
+            
+        Returns:
+            True if scrape was successful, False otherwise
+        """
+        # Check 1: Did we get a real title?
+        title = result.get('title', '')
+        if not title or title in ['Not Available', 'Not Available - No Website', 
+                                  'Not Available - Restricted', 'Not Available - Timeout',
+                                  'Not Available - Error']:
+            return False
+        
+        # Check 2: Did we get meaningful description?
+        description = result.get('description', '')
+        if not description or description in ['Not Available', 'Not Available - No Website',
+                                              'Not Available - Restricted', 'Not Available - Timeout',
+                                              'Not Available - Error']:
+            return False
+        
+        # Check 3: Did we find any content at all?
+        services = result.get('services', [])
+        social_links = result.get('social_links', [])
+        
+        if len(services) == 0 and len(social_links) == 0:
+            logger.debug(f"Scrape unsuccessful: no services or social links found")
+            return False
+        
+        # Looks good!
+        return True
+    
+    def scrape_with_playwright(self, url: str) -> Dict[str, any]:
+        """
+        Scrape website using Playwright for JavaScript-rendered content
+        
+        Args:
+            url: Website URL to scrape
+            
+        Returns:
+            Dictionary with scraped data
+        """
+        if not PLAYWRIGHT_AVAILABLE:
+            logger.warning(f"Playwright not available, falling back to BeautifulSoup for {url}")
+            return self.scrape_website(url)
+        
+        if self.demo_mode:
+            logger.info(f"DEMO MODE: Using mock website data for {url}")
+            return self.get_mock_website_data(url)
+        
+        if not url:
+            return {
+                'title': 'Not Available - No Website',
+                'description': 'Not Available - No Website',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0
+            }
+        
+        try:
+            logger.info(f"🎭 Scraping with Playwright: {url}")
+            time.sleep(random.uniform(0.5, 1.0))
+            
+            with sync_playwright() as p:
+                # Launch headless browser
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                page = context.new_page()
+                
+                # Navigate to page with timeout
+                try:
+                    page.goto(url, wait_until='networkidle', timeout=15000)
+                    
+                    # Wait a bit for dynamic content to load
+                    page.wait_for_timeout(2000)
+                    
+                except PlaywrightTimeout:
+                    logger.warning(f"Timeout loading {url}, using partial content")
+                
+                # Get page content
+                content = page.content()
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                data = {
+                    'title': '',
+                    'description': '',
+                    'services': [],
+                    'social_links': [],
+                    'staff_count': 0
+                }
+                
+                # Get page title
+                try:
+                    data['title'] = page.title() or 'Not Available'
+                except Exception:
+                    if soup.title and soup.title.string:
+                        data['title'] = soup.title.string.strip()
+                    else:
+                        data['title'] = 'Not Available'
+                
+                # Get meta description
+                meta_desc = soup.find('meta', attrs={'name': 'description'})
+                if meta_desc and meta_desc.get('content'):
+                    data['description'] = meta_desc.get('content', '').strip()
+                else:
+                    og_desc = soup.find('meta', attrs={'property': 'og:description'})
+                    if og_desc and og_desc.get('content'):
+                        data['description'] = og_desc.get('content', '').strip()
+                    else:
+                        data['description'] = 'Not Available'
+                
+                # Extract services mentioned
+                text_content = page.text_content('body').lower() if page.query_selector('body') else ''
+                service_keywords = [
+                    'laser hair removal', 'botox', 'fillers', 'coolsculpting',
+                    'body contouring', 'skin tightening', 'photorejuvenation',
+                    'cellulite treatment', 'weight loss', 'ems', 'muscle building'
+                ]
+                
+                services_found = []
+                for keyword in service_keywords:
+                    if keyword in text_content:
+                        services_found.append(keyword)
+                
+                data['services'] = services_found
+                
+                # Find social media links
+                social_platforms = {
+                    'facebook.com': 'Facebook',
+                    'fb.com': 'Facebook',
+                    'instagram.com': 'Instagram',
+                    'twitter.com': 'Twitter',
+                    'x.com': 'Twitter',
+                    'linkedin.com': 'LinkedIn',
+                    'youtube.com': 'YouTube',
+                    'youtu.be': 'YouTube',
+                    'tiktok.com': 'TikTok',
+                    'pinterest.com': 'Pinterest'
+                }
+                
+                social_links = []
+                seen_platforms = set()
+                
+                # Get all links
+                all_links = page.query_selector_all('a[href]')
+                for link_element in all_links:
+                    try:
+                        href = link_element.get_attribute('href')
+                        if href:
+                            href_str = str(href).strip()
+                            href_lower = href_str.lower()
+                            
+                            # Skip empty or invalid hrefs
+                            if not href_str or href_str.startswith('#') or href_str.startswith('javascript:'):
+                                continue
+                            
+                            for domain, platform_name in social_platforms.items():
+                                if domain in href_lower and platform_name not in seen_platforms:
+                                    # Clean up the URL
+                                    full_url = href_str
+                                    if href_str.startswith('//'):
+                                        full_url = 'https:' + href_str
+                                    elif href_str.startswith('/') or not href_str.startswith('http'):
+                                        # Relative URL - skip it as it's not a social link
+                                        continue
+                                    
+                                    social_links.append(full_url)
+                                    seen_platforms.add(platform_name)
+                                    logger.info(f"Found {platform_name} link: {full_url}")
+                                    break
+                    except Exception:
+                        continue
+                
+                data['social_links'] = social_links
+                
+                # Estimate staff count
+                staff_indicators = soup.find_all(text=re.compile(
+                    r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
+                unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
+                data['staff_count'] = min(unique_staff, 20)
+                
+                # Close browser
+                browser.close()
+                
+                logger.info(f"✅ Playwright scrape complete for {url}: {len(data['services'])} services found")
+                
+                return data
+                
+        except Exception as e:
+            logger.error(f"Error in Playwright scraping {url}: {str(e)}")
+            # Fallback to BeautifulSoup
+            logger.info(f"Falling back to BeautifulSoup for {url}")
+            return self.scrape_website(url)
+    
+    def scrape_website_smart(self, url: str) -> Dict[str, any]:
+        """
+        Smart scraping with automatic method selection
+        
+        Strategy:
+        1. Check if URL is from JS-heavy platform (whitelist) → use Playwright
+        2. Try BeautifulSoup first (fast)
+        3. If BeautifulSoup gets poor data → retry with Playwright
+        
+        Args:
+            url: Website URL to scrape
+            
+        Returns:
+            Dictionary with scraped data
+        """
+        if self.demo_mode:
+            logger.info(f"DEMO MODE: Using mock website data for {url}")
+            return self.get_mock_website_data(url)
+        
+        if not url:
+            return {
+                'title': 'Not Available - No Website',
+                'description': 'Not Available - No Website',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0
+            }
+        
+        # Check 1: Is this a known JS-heavy platform?
+        if PLAYWRIGHT_AVAILABLE and self.is_js_heavy_site(url):
+            logger.info(f"JS-heavy platform detected, using Playwright immediately for {url}")
+            return self.scrape_with_playwright(url)
+        
+        # Check 2: Try BeautifulSoup first (fast path)
+        logger.info(f"Trying BeautifulSoup first for {url}")
+        bs_result = self.scrape_website(url)
+        
+        # Check 3: Did BeautifulSoup get good data?
+        if self.is_scrape_successful(bs_result):
+            logger.info(f"✅ BeautifulSoup successful for {url}")
+            return bs_result
+        
+        # Check 4: BeautifulSoup failed, try Playwright if available
+        if PLAYWRIGHT_AVAILABLE:
+            logger.info(f"BeautifulSoup data incomplete for {url}, retrying with Playwright...")
+            return self.scrape_with_playwright(url)
+        else:
+            logger.warning(f"BeautifulSoup data incomplete but Playwright not available for {url}")
+            return bs_result
+    
     def detect_specialty(self, practice_data: Dict) -> str:
         """
         Detect the primary specialty of a practice (keyword-based)
@@ -870,20 +1161,6 @@ class FathomProspector:
         desc = practice_data.get('description', '').lower()
         services = ' '.join(practice_data.get('services', [])).lower()
         all_text = f"{name} {desc} {services}"
-        
-        # Priority order (most specific first)
-        if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
-            return 'dermatology'
-        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
-            return 'plastic_surgery'
-        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
-            return 'obgyn'
-        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
-            return 'medspa'
-        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
-            return 'familypractice'
-        else:
-            return 'general'
 
     def detect_specialty_ai(self, practice_data: Dict) -> str:
         """
@@ -1036,53 +1313,47 @@ Consider factors like competition, market position, current services, and growth
             
             pain_points_text = '\n'.join([f"- {p}" for p in pain_points[:3]])
             
-            prompt = f"""You're crafting HIGH-IMPACT sales outreach for Venus Concepts medical devices. These messages must STAND OUT in crowded inboxes and during live calls. Generic = ignored.
+            # Single prompt to generate all 3 outreach types
+            prompt = f"""Generate personalized sales outreach for a medical device sales team reaching out to this practice. Create 3 different versions optimized for each channel.
 
 Practice: {name}
 Contact: {contact}
 Location: {location}
 Specialty: {specialty}
-Services Offered: {services}
+Services: {services}
+Rating: {rating}/5
 Readiness Score: {readiness_score}/100
 
-Pain Points Identified:
+Key Pain Points:
 {pain_points_text}
 
-Venus Solution: {device_rec} (body contouring, skin tightening, cellulite reduction, wrinkle reduction)
+Product: Venus aesthetic technologies (body contouring, skin tightening, cellulite reduction, wrinkle reduction)
+Recommended Device: {device_rec}
 
-⚠️ STRICT RULES - DO NOT VIOLATE:
-❌ NEVER mention star ratings, reviews, or "great reputation" - every competitor says this
-❌ NEVER use generic openers like "I came across your practice" or "I wanted to reach out"
-❌ NEVER write corporate-speak or salesy language
-✅ DO use specific details about their services, location, or specialty
-✅ DO lead with insights, gaps, or opportunities they're missing
-✅ DO write like a real human having a genuine conversation
-✅ DO create pattern interrupts that make them curious
+Generate exactly 3 outreach versions:
 
-Generate 3 HIGH-CONVERSION outreach versions:
+1. COLD CALL SCRIPT (2-3 minute phone conversation opener)
+- Start with a warm introduction
+- Reference their reputation or specific details
+- Mention 1-2 pain points naturally
+- Position {device_rec} as a solution
+- End with soft ask for 15-min meeting
+- Keep it conversational, not scripted
 
-1. COLD CALL SCRIPT (Live phone call - must hook in first 10 seconds)
-- Open with an unexpected insight or specific observation about their practice
-- Reference a service gap, local competition, or revenue opportunity
-- Mention how {device_rec} solves their specific pain point
-- Use natural speech patterns (contractions, short sentences, casual tone)
-- End with a soft time-bound ask: "Got 15 minutes Thursday to walk through this?"
-- MAKE IT CONVERSATIONAL - a real person would say these exact words
+2. INSTAGRAM DM (casual, social media appropriate, 2-3 sentences max)
+- Brief and friendly
+- Reference their Instagram/social presence
+- Mention Venus and results other practices see
+- Ask if they'd be open to learn more
+- Keep it light and non-salesy
 
-2. INSTAGRAM DM (Must feel personal, not like a sales pitch)
-- Open with something SPECIFIC you noticed (their content, a service, their vibe)
-- Bridge to Venus results in 1 sentence (social proof or revenue data)
-- Casual question to gauge interest
-- NO business jargon - write like you're DMing a colleague
-- 2-3 sentences MAX
-
-3. EMAIL (Must survive the 3-second inbox scan)
-- Subject line: Create curiosity or urgency WITHOUT being clickbait
-- First line: Pattern interrupt - NOT "Hope this email finds you well"
-- Body: Specific to THEIR practice (services, location context, pain point)
-- Include a micro-case study or data point (e.g., "$40K/month revenue boost for 3 practices near you")
-- End with frictionless CTA: "Want to see the numbers?" or "15-min call to walk through this?"
-- 120-150 words max - respect their time
+3. EMAIL (professional, 120-150 words)
+- Compelling subject line
+- Professional but warm tone
+- Reference specific practice details
+- Mention how Venus addresses their challenges
+- Soft call-to-action
+- Real person tone, not corporate
 
 Format your response EXACTLY like this:
 COLD_CALL:
@@ -1099,7 +1370,7 @@ EMAIL_BODY:
 
             system_msg = "You are a top-performing medical device sales professional known for personalized, effective multi-channel outreach."
             
-            response = self.call_ai(prompt, system_msg, max_tokens=1200, temperature=0.9)
+            response = self.call_ai(prompt, system_msg, max_tokens=1200, temperature=0.8)
             
             if not response:
                 return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
@@ -1145,6 +1416,21 @@ EMAIL_BODY:
         except Exception as e:
             logger.error(f"AI outreach generation failed: {str(e)}, using template-based fallback")
             return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
+
+        
+        # Priority order (most specific first)
+        if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
+            return 'dermatology'
+        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
+            return 'plastic_surgery'
+        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
+            return 'obgyn'
+        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
+            return 'medspa'
+        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
+            return 'familypractice'
+        else:
+            return 'general'
     
     def analyze_pain_points_rule_based(self, practice_data: Dict, specialty: str) -> Dict:
         """
@@ -1453,7 +1739,7 @@ Venus Sales Team"""
                         social_links.append(platform_name)
             
             # Find staff mentions
-            staff_indicators = soup.find_all(string=re.compile(
+            staff_indicators = soup.find_all(text=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             
             return {
@@ -1492,8 +1778,8 @@ Venus Sales Team"""
         
         if not self.check_robots_txt(base_url):
             logger.warning(f"Robots.txt disallows scraping: {base_url}")
-            # Fall back to single page
-            return self.scrape_website(base_url)
+            # Fall back to single page with smart detection
+            return self.scrape_website_smart(base_url)
         
         try:
             # First, get homepage for title and description
@@ -1560,8 +1846,8 @@ Venus Sales Team"""
             
         except Exception as e:
             logger.error(f"Error in deep scrape for {base_url}: {str(e)}")
-            # Fall back to single-page scrape
-            return self.scrape_website(base_url)
+            # Fall back to single-page scrape with smart detection
+            return self.scrape_website_smart(base_url)
     
     def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str]:
         """
@@ -1610,9 +1896,9 @@ Venus Sales Team"""
         address = practice_data.get('formatted_address', '').lower()
         all_text = f"{practice_name} {practice_desc} {address}"
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 1. Specialty Match (20 points)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         specialty_keywords = [
             'dermatology', 'dermatologist', 'plastic surgery', 'plastic surgeon',
             'cosmetic', 'aesthetic', 'med spa', 'medical spa', 'medspa',
@@ -1623,10 +1909,10 @@ Venus Sales Team"""
         specialty_matches = sum(1 for keyword in specialty_keywords if keyword in all_text)
         scores['specialty_match'] = min(specialty_matches * 4, 20)
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 2. Decision-Making Autonomy (20 points) 🔥 CRITICAL
         # CORRECTED: Solo/small = HIGH score (single decision maker)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         staff_count = practice_data.get('staff_count', 0)
         
         # Check for hospital affiliation indicators
@@ -1667,9 +1953,9 @@ Venus Sales Team"""
         
         scores['decision_autonomy'] = autonomy_score
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 3. Aesthetic Services (15 points)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         services = practice_data.get('services', [])
         aesthetic_services = [
             'botox', 'fillers', 'laser', 'coolsculpting', 'body contouring',
@@ -1681,9 +1967,9 @@ Venus Sales Team"""
                             if any(service in s.lower() for s in services))
         scores['aesthetic_services'] = min(service_matches * 3, 15)
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 4. Competing Devices (10 points)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         competing_devices = [
             'coolsculpting', 'thermage', 'ultherapy', 'sculptra', 
             'emsculpt', 'vanquish', 'exilis'
@@ -1692,15 +1978,15 @@ Venus Sales Team"""
         device_count = sum(1 for device in competing_devices if device in practice_desc)
         scores['competing_devices'] = min(device_count * 5, 10)
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 5. Social Media Activity (10 points)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         social_links = practice_data.get('social_links', [])
         scores['social_activity'] = min(len(social_links) * 3, 10)
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 6. Reviews & Rating (10 points)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         rating = practice_data.get('rating', 0)
         review_count = practice_data.get('user_ratings_total', 0)
         
@@ -1713,9 +1999,9 @@ Venus Sales Team"""
         else:
             scores['reviews_rating'] = 1
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 7. Search Visibility (10 points)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         website = practice_data.get('website', '')
         if website and 'http' in website:
             scores['search_visibility'] = 10
@@ -1726,10 +2012,10 @@ Venus Sales Team"""
         else:
             scores['search_visibility'] = 1
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 8. Financial Indicators (10 points)
         # Affluent area + cash-pay readiness
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         
         # Check for affluent area indicators
         affluent_indicators = [
@@ -1753,9 +2039,9 @@ Venus Sales Team"""
         
         scores['financial_indicators'] = financial_score
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 9. Weight Loss Services (5 points)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         weight_keywords = [
             'weight loss', 'medical weight', 'hormone therapy', 'iv therapy',
             'body contouring', 'fat reduction', 'inch loss'
@@ -1764,9 +2050,9 @@ Venus Sales Team"""
         weight_matches = sum(1 for keyword in weight_keywords if keyword in all_text)
         scores['weight_loss_services'] = min(weight_matches * 2, 5)
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # 10. Specialty-Specific Keyword Bonus (up to +10 points)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         services = practice_data.get('services', [])
         services_text = ' '.join(services).lower()
         all_text_with_services = f"{practice_name} {practice_desc} {services_text}"
@@ -1777,9 +2063,9 @@ Venus Sales Team"""
                 keyword_bonus += 2
         keyword_bonus = min(keyword_bonus, 10)
         
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         # TOTAL SCORE (out of 110, normalized to 100)
-        # ═══════════════════════════════════════════════════════
+        # ═══════════════════════════════════════════════════════════
         base_score = sum(scores.values())
         total_score = min(base_score + keyword_bonus, 100)
         
