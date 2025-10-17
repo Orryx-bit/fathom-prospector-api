@@ -3,20 +3,21 @@ usePoetry = false
 
 [phases.setup]
 nixPkgs = ['python311', 'pip']
-aptPkgs = ['libgobject-2.0-0', 'libdbus-glib-1-2', 'libgtk-3-0']
+# System dependencies required by Playwright's headless Chromium
+aptPkgs = ['libgobject-2.0-0', 'libdbus-glib-1-2', 'libgtk-3-0', 'libgbm-dev']
 
 [phases.install]
 cmds = [
   'pip install --upgrade pip',
-  'pip install -r requirements.txt',
-  'python -m playwright install --with-deps chromium'
+  'pip install -r requirements.txt'
 ]
 
 [phases.build]
-cmds = ['python --version', 'pip list']
+cmds = ['echo "Build phase complete. Browser installation will happen at start."']
 
 [start]
 cmd = 'bash start.sh'
 
 [variables]
+# This variable is now primarily for reference, as start.sh explicitly exports it.
 PLAYWRIGHT_BROWSERS_PATH = "/opt/playwright"
