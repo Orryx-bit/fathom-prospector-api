@@ -1,5 +1,9 @@
+[providers.python]
+usePoetry = false
+
 [phases.setup]
 nixPkgs = ['python311', 'pip']
+aptPkgs = ['libgobject-2.0-0', 'libdbus-glib-1-2', 'libgtk-3-0']
 
 [phases.install]
 cmds = [
@@ -12,4 +16,7 @@ cmds = [
 cmds = ['python --version', 'pip list']
 
 [start]
-cmd = 'uvicorn api_server:app --host 0.0.0.0 --port $PORT'
+cmd = 'bash start.sh'
+
+[variables]
+PLAYWRIGHT_BROWSERS_PATH = "/opt/playwright"
