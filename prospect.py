@@ -777,7 +777,7 @@ class FathomProspector:
             # Method 2: Email pattern in visible text
             text_content = soup.get_text()
             # Email regex pattern
-            email_pattern = r' [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} '
+            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
             found_emails = re.findall(email_pattern, text_content)
             
             # Filter out common false positives
@@ -1300,10 +1300,7 @@ class FathomProspector:
             
             with sync_playwright() as p:
                 # Launch headless browser
-                browser = p.chromium.launch(
-                    headless=True, 
-                    args=['--no-sandbox', '--disable-dev-shm-usage']
-                )
+                browser = p.chromium.launch(headless=True)
                 context = browser.new_context(
                     user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
                 )
@@ -1313,8 +1310,8 @@ class FathomProspector:
                 try:
                     page.goto(url, wait_until='networkidle', timeout=15000)
                     
-                    # Wait for the body element to ensure the page is mostly loaded
-                    page.wait_for_selector('body', timeout=5000)
+                    # Wait a bit for dynamic content to load
+                    page.wait_for_timeout(2000)
                     
                 except PlaywrightTimeout:
                     logger.warning(f"Timeout loading {url}, using partial content")
@@ -2253,7 +2250,7 @@ Venus Sales Team"""
             'dermatology', 'dermatologist', 'plastic surgery', 'plastic surgeon',
             'cosmetic', 'aesthetic', 'med spa', 'medical spa', 'medspa',
             'skin care', 'skincare', 'beauty', 'obgyn', 'ob/gyn', 'gynecologist',
-            'women\'s health', 'womens health', 'family practice', 'family medicine'
+            'women\'s health', 'family practice', 'family medicine'
         ]
         
         specialty_matches = sum(1 for keyword in specialty_keywords if keyword in all_text)
