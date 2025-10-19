@@ -25,19 +25,6 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
-# ScrapingBee for JavaScript-heavy sites (replaces Playwright)
-try:
-    from scrapingbee_integration import (
-        scrape_with_scrapingbee,
-        is_scrapingbee_available
-    )
-    SCRAPINGBEE_AVAILABLE = is_scrapingbee_available()
-    if SCRAPINGBEE_AVAILABLE:
-        logger.info("✅ ScrapingBee enabled for JavaScript rendering")
-except ImportError:
-    SCRAPINGBEE_AVAILABLE = False
-    logger.warning("⚠️  ScrapingBee not available - JavaScript rendering disabled")
-
 # Load environment variables FIRST
 load_dotenv()
 
@@ -58,6 +45,19 @@ logging.basicConfig(
     handlers=handlers
 )
 logger = logging.getLogger(__name__)
+
+# ScrapingBee for JavaScript-heavy sites (replaces Playwright)
+try:
+    from scrapingbee_integration import (
+        scrape_with_scrapingbee,
+        is_scrapingbee_available
+    )
+    SCRAPINGBEE_AVAILABLE = is_scrapingbee_available()
+    if SCRAPINGBEE_AVAILABLE:
+        logger.info("✅ ScrapingBee enabled for JavaScript rendering")
+except ImportError:
+    SCRAPINGBEE_AVAILABLE = False
+    logger.warning("⚠️  ScrapingBee not available - JavaScript rendering disabled")
 
 # Domain whitelist for known JavaScript-heavy website builders
 # These sites will automatically use Playwright for better scraping
