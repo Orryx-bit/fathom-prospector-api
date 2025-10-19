@@ -3,11 +3,6 @@ set -e
 
 echo "🚀 Starting Fathom API with dependency verification..."
 
-# CRITICAL: Explicitly define and export the path for Playwright browsers.
-# This ensures both the 'install' command and the running Python app use the same directory.
-export PLAYWRIGHT_BROWSERS_PATH="/opt/playwright"
-echo "✅ Browser cache path set to: $PLAYWRIGHT_BROWSERS_PATH"
-
 echo "Checking Python version..."
 python --version
 
@@ -29,14 +24,22 @@ python -m pip install --upgrade pip
 echo "📦 Installing requirements..."
 pip install -r requirements.txt
 
-# Install Playwright browsers to the defined path
+# Install Playwright browsers
 echo "🎭 Installing Playwright browsers..."
 python -m playwright install --with-deps chromium
 
 # Verify critical packages
-echo "🔍 Verifying critical packages..."
+echo "🔍 Verifying pandas installation..."
 python -c "import pandas; print(f'✅ pandas {pandas.__version__} installed')"
-python -c "import playwright; from playwright.sync_api import sync_playwright; print('✅ Playwright installed')"
+
+echo "🔍 Verifying google.generativeai installation..."
+python -c "import google.generativeai; print('✅ google.generativeai installed')"
+
+echo "🔍 Verifying requests installation..."
+python -c "import requests; print(f'✅ requests installed')"
+
+echo "🔍 Verifying scoring_system module..."
+python -c "import scoring_system; print('✅ scoring_system module found!')"
 
 # Start the server with uvicorn (required by Railway)
 echo "🎯 Starting API server on port $PORT..."
