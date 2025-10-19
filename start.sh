@@ -24,6 +24,10 @@ python -m pip install --upgrade pip
 echo "📦 Installing requirements..."
 pip install -r requirements.txt
 
+# Install Playwright browsers
+echo "🎭 Installing Playwright browsers..."
+python -m playwright install --with-deps chromium
+
 # Verify critical packages
 echo "🔍 Verifying pandas installation..."
 python -c "import pandas; print(f'✅ pandas {pandas.__version__} installed')"

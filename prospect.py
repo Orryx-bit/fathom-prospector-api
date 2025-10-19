@@ -26,6 +26,13 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
+# Playwright imports for JavaScript-heavy sites
+try:
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+    PLAYWRIGHT_AVAILABLE = True
+except ImportError:
+    PLAYWRIGHT_AVAILABLE = False
+
 # Load environment variables FIRST
 load_dotenv()
 
@@ -46,6 +53,21 @@ logging.basicConfig(
     handlers=handlers
 )
 logger = logging.getLogger(__name__)
+
+# Domain whitelist for known JavaScript-heavy website builders
+# These sites will automatically use Playwright for better scraping
+JS_HEAVY_DOMAINS = [
+    'squarespace.com',
+    'wix.com',
+    'webflow.com',
+    'weebly.com',
+    'shopify.com',
+    'wordpress.com',  # WordPress.com (hosted, often JS-heavy)
+    'godaddy.com',    # GoDaddy website builder
+    'site123.com',
+    'jimdo.com',
+    'strikingly.com'
+]
 
 # Abacus RouteLLM Integration (OpenAI-compatible)
 AI_AVAILABLE = False
@@ -234,6 +256,8 @@ class FathomProspector:
     """Main prospecting system for medical devices"""
     
     def __init__(self, demo_mode=False, existing_customers_csv=None, progress_callback=None):
+        self.gmaps_api = None  # Initialize early to prevent AttributeError
+        
         self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
         if not self.gmaps_key:
             logger.warning('GOOGLE_PLACES_API_KEY not found - switching to demo mode')
@@ -265,59 +289,23 @@ class FathomProspector:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
-    
-    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
-        """
-        Unified method to call Abacus RouteLLM API
         
-        Args:
-            prompt: User prompt
-            system_message: Optional system message for context
-            max_tokens: Max response length
-            temperature: Creativity level (0.0-1.0)
-            
-        Returns:
-            Response text or empty string if failed
-        """
-        if not self.ai_enabled or not self.openai_client:
-            logger.debug("AI not available, skipping AI call")
-            return ""
-        
-        try:
-            messages = []
-            if system_message:
-                messages.append({"role": "system", "content": system_message})
-            messages.append({"role": "user", "content": prompt})
-            
-            response = self.openai_client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout=30.0  # Prevent hanging
-            )
-            
-            result = response.choices[0].message.content.strip()
-            logger.debug(f"🤖 AI response received ({len(result)} chars)")
-            return result
-            
-        except Exception as e:
-            logger.error(f"AI API error: {str(e)}")
-            return ""
-        
+        # Initialize Google Maps API if not in demo mode
         if not demo_mode:
             try:
                 self.gmaps_api = GooglePlacesAPI(self.gmaps_key)
-                test_result = self.gmaps_api.geocode("Austin, TX")
+                test_result = self.gmaps_api.geocode('Austin, TX')
                 if not test_result:
-                    logger.warning("Google Places API test failed - switching to demo mode")
+                    logger.warning('Google Places API test failed - switching to demo mode')
                     self.demo_mode = True
+                    self.gmaps_api = None
             except Exception as e:
-                logger.warning(f"Google Places API initialization failed: {str(e)} - switching to demo mode")
+                logger.warning(f'Google Places API initialization failed: {str(e)} - switching to demo mode')
                 self.demo_mode = True
+                self.gmaps_api = None
         
         if self.demo_mode:
-            logger.info("Running in DEMO MODE with mock data")
+            logger.info('Running in DEMO MODE with mock data')
         
         # Search templates for different practice types
         self.search_templates = {
@@ -446,6 +434,46 @@ class FathomProspector:
             }
         }
     
+    
+    def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
+        """
+        Unified method to call Abacus RouteLLM API
+        
+        Args:
+            prompt: User prompt
+            system_message: Optional system message for context
+            max_tokens: Max response length
+            temperature: Creativity level (0.0-1.0)
+            
+        Returns:
+            Response text or empty string if failed
+        """
+        if not self.ai_enabled or not self.openai_client:
+            logger.debug("AI not available, skipping AI call")
+            return ""
+        
+        try:
+            messages = []
+            if system_message:
+                messages.append({"role": "system", "content": system_message})
+            messages.append({"role": "user", "content": prompt})
+            
+            response = self.openai_client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=30.0  # Prevent hanging
+            )
+            
+            result = response.choices[0].message.content.strip()
+            logger.debug(f"🤖 AI response received ({len(result)} chars)")
+            return result
+            
+        except Exception as e:
+            logger.error(f"AI API error: {str(e)}")
+            return ""
+    
     def load_existing_customers(self, csv_file_path: str):
         """Load existing customers from CSV for exclusion"""
         try:
@@ -534,6 +562,12 @@ class FathomProspector:
             logger.info(f"DEMO MODE: Generating mock data for {query} near {location}")
             return self.get_mock_data(query, location)
         
+        # Defensive check: ensure gmaps_api is initialized
+        if not self.gmaps_api:
+            logger.error("Google Maps API not initialized - switching to demo mode")
+            self.demo_mode = True
+            return self.get_mock_data(query, location)
+        
         try:
             logger.info(f"Searching Google Places: {query} near {location}")
             
@@ -582,6 +616,11 @@ class FathomProspector:
     
     def get_place_details(self, place_id: str) -> Optional[Dict]:
         """Get detailed information for a specific place"""
+        # Defensive check: ensure gmaps_api is initialized
+        if not self.gmaps_api:
+            logger.debug("Google Maps API not initialized, cannot get place details")
+            return None
+        
         try:
             details = self.gmaps_api.place_details(
                 place_id=place_id,
@@ -712,6 +751,283 @@ class FathomProspector:
     
     @sleep_and_retry
     @limits(calls=30, period=60)
+
+    def extract_emails(self, soup: BeautifulSoup, url: str) -> List[str]:
+        """
+        Extract email addresses from website
+        
+        Args:
+            soup: BeautifulSoup object
+            url: Website URL for context
+            
+        Returns:
+            List of unique email addresses (up to 5)
+        """
+        emails = set()
+        
+        try:
+            # Method 1: mailto: links
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                if href.startswith('mailto:'):
+                    # Extract email from mailto: link
+                    email = href.replace('mailto:', '').split('?')[0].strip()
+                    if '@' in email and '.' in email:
+                        emails.add(email.lower())
+            
+            # Method 2: Email pattern in visible text
+            text_content = soup.get_text()
+            # Email regex pattern
+            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+            found_emails = re.findall(email_pattern, text_content)
+            
+            # Filter out common false positives
+            spam_keywords = ['example', 'test', 'noreply', 'no-reply', 'donotreply']
+            for email in found_emails:
+                email_lower = email.lower()
+                if not any(spam in email_lower for spam in spam_keywords):
+                    if '@' in email_lower and '.' in email_lower:
+                        emails.add(email_lower)
+            
+            # Method 3: Schema.org markup
+            for meta in soup.find_all('meta', attrs={'itemprop': 'email'}):
+                if meta.get('content'):
+                    email = meta['content'].strip().lower()
+                    if '@' in email and '.' in email:
+                        emails.add(email)
+            
+            # Convert to list and limit to top 5
+            email_list = list(emails)[:5]
+            
+            if email_list:
+                logger.info(f"📧 Found {len(email_list)} email(s): {', '.join(email_list)}")
+            
+            return email_list
+            
+        except Exception as e:
+            logger.warning(f"Error extracting emails from {url}: {str(e)}")
+            return []
+    
+    def extract_contact_names(self, soup: BeautifulSoup, business_name: str, url: str) -> List[str]:
+        """
+        Extract doctor/owner names from website
+        
+        Args:
+            soup: BeautifulSoup object
+            business_name: Business name for reference
+            url: Website URL for context
+            
+        Returns:
+            List of contact names (up to 5)
+        """
+        names = []
+        seen_names = set()
+        
+        try:
+            # Pattern 1: Extract from business name itself
+            if business_name:
+                # Match "Dr. FirstName LastName" or "FirstName LastName MD/DDS/etc"
+                name_patterns = [
+                    r'Dr\.?\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',  # Dr. John Smith
+                    r'([A-Z][a-z]+\s+[A-Z][a-z]+)\s+(?:MD|DDS|DMD|DO|DPM)',  # John Smith MD
+                ]
+                
+                for pattern in name_patterns:
+                    matches = re.findall(pattern, business_name)
+                    for match in matches:
+                        clean_name = match.strip()
+                        if clean_name and clean_name not in seen_names and len(clean_name) > 5:
+                            names.append(f"Dr. {clean_name}" if not clean_name.startswith('Dr') else clean_name)
+                            seen_names.add(clean_name)
+            
+            # Pattern 2: Check headings for staff names
+            for heading in soup.find_all(['h1', 'h2', 'h3', 'h4']):
+                text = heading.get_text().strip()
+                
+                # Look for doctor/physician indicators
+                if any(keyword in text.lower() for keyword in ['dr.', 'doctor', 'meet', 'physician', 'about']):
+                    # Try to extract name
+                    name_match = re.search(r'(Dr\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)', text)
+                    if name_match:
+                        clean_name = name_match.group(1).strip()
+                        if clean_name not in seen_names and len(clean_name) > 5:
+                            names.append(clean_name)
+                            seen_names.add(clean_name)
+            
+            # Pattern 3: Look for "Meet Dr." or "About Dr." sections
+            text_content = soup.get_text()
+            meet_patterns = [
+                r'Meet\s+(Dr\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
+                r'About\s+(Dr\.?\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)',
+            ]
+            
+            for pattern in meet_patterns:
+                matches = re.findall(pattern, text_content)
+                for match in matches:
+                    clean_name = match.strip()
+                    if clean_name not in seen_names and len(clean_name) > 5:
+                        names.append(clean_name)
+                        seen_names.add(clean_name)
+            
+            # Pattern 4: Schema.org Person markup
+            for person_div in soup.find_all(attrs={'itemtype': re.compile(r'schema.org/Person')}):
+                name_span = person_div.find(attrs={'itemprop': 'name'})
+                if name_span:
+                    clean_name = name_span.get_text().strip()
+                    if clean_name not in seen_names and len(clean_name) > 5:
+                        if 'dr' in clean_name.lower() or 'doctor' in clean_name.lower():
+                            names.append(clean_name)
+                            seen_names.add(clean_name)
+            
+            # Limit to top 5 names
+            names = names[:5]
+            
+            if names:
+                logger.info(f"👤 Found {len(names)} contact name(s): {', '.join(names)}")
+            
+            return names
+            
+        except Exception as e:
+            logger.warning(f"Error extracting contact names from {url}: {str(e)}")
+            return []
+    
+    def extract_additional_phones(self, soup: BeautifulSoup, primary_phone: str, url: str) -> List[str]:
+        """
+        Extract additional phone numbers from website
+        
+        Args:
+            soup: BeautifulSoup object
+            primary_phone: Primary phone from Google Places (to avoid duplicates)
+            url: Website URL for context
+            
+        Returns:
+            List of additional phone numbers (up to 3)
+        """
+        phones = set()
+        
+        try:
+            # Normalize primary phone for comparison
+            primary_normalized = re.sub(r'[^0-9]', '', primary_phone) if primary_phone else ''
+            
+            text_content = soup.get_text()
+            
+            # Phone number patterns
+            phone_patterns = [
+                r'\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}',  # (123) 456-7890 or 123-456-7890
+                r'\d{3}[-.\s]\d{3}[-.\s]\d{4}',           # 123.456.7890
+                r'1[-.\s]\d{3}[-.\s]\d{3}[-.\s]\d{4}',    # 1-123-456-7890
+            ]
+            
+            for pattern in phone_patterns:
+                matches = re.findall(pattern, text_content)
+                for match in matches:
+                    # Normalize phone for comparison
+                    normalized = re.sub(r'[^0-9]', '', match)
+                    
+                    # Must be exactly 10 or 11 digits
+                    if len(normalized) in [10, 11]:
+                        # Skip if it's the primary phone
+                        if normalized != primary_normalized and normalized[-10:] != primary_normalized[-10:]:
+                            phones.add(match.strip())
+            
+            # Also check tel: links
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                if href.startswith('tel:'):
+                    phone = href.replace('tel:', '').strip()
+                    normalized = re.sub(r'[^0-9]', '', phone)
+                    
+                    if len(normalized) in [10, 11]:
+                        if normalized != primary_normalized and normalized[-10:] != primary_normalized[-10:]:
+                            phones.add(phone)
+            
+            # Limit to top 3 additional phones
+            phone_list = list(phones)[:3]
+            
+            if phone_list:
+                logger.info(f"📞 Found {len(phone_list)} additional phone(s): {', '.join(phone_list)}")
+            
+            return phone_list
+            
+        except Exception as e:
+            logger.warning(f"Error extracting additional phones from {url}: {str(e)}")
+            return []
+    
+    def extract_contact_form_url(self, soup: BeautifulSoup, base_url: str) -> str:
+        """
+        Extract contact form URL from website
+        
+        Args:
+            soup: BeautifulSoup object
+            base_url: Base URL of the website
+            
+        Returns:
+            Contact form URL or empty string
+        """
+        try:
+            # Look for contact/schedule/appointment links
+            contact_keywords = ['contact', 'schedule', 'appointment', 'book', 'consult']
+            
+            for link in soup.find_all('a', href=True):
+                href = link['href'].lower()
+                link_text = link.get_text().lower()
+                
+                # Check if link or text contains contact keywords
+                if any(keyword in href or keyword in link_text for keyword in contact_keywords):
+                    # Build full URL
+                    if href.startswith('http'):
+                        return link['href']
+                    elif href.startswith('/'):
+                        return urljoin(base_url, href)
+            
+            return ''
+            
+        except Exception as e:
+            logger.warning(f"Error extracting contact form URL: {str(e)}")
+            return ''
+    
+    def extract_team_members(self, soup: BeautifulSoup, url: str) -> List[str]:
+        """
+        Extract team member names from website
+        
+        Args:
+            soup: BeautifulSoup object
+            url: Website URL for context
+            
+        Returns:
+            List of team member names with titles (up to 10)
+        """
+        team_members = []
+        seen_members = set()
+        
+        try:
+            # Look for team/staff sections
+            team_sections = soup.find_all(['div', 'section'], class_=re.compile(r'team|staff|doctor|provider', re.I))
+            
+            for section in team_sections:
+                # Look for names with titles
+                for heading in section.find_all(['h2', 'h3', 'h4', 'h5']):
+                    text = heading.get_text().strip()
+                    
+                    # Match patterns like "Dr. John Smith - Board Certified Surgeon"
+                    if any(keyword in text.lower() for keyword in ['dr.', 'doctor', 'md', 'dds', 'dmd']):
+                        if text not in seen_members and len(text) > 5 and len(text) < 100:
+                            team_members.append(text)
+                            seen_members.add(text)
+            
+            # Limit to top 10 team members
+            team_members = team_members[:10]
+            
+            if team_members:
+                logger.info(f"👥 Found {len(team_members)} team member(s)")
+            
+            return team_members
+            
+        except Exception as e:
+            logger.warning(f"Error extracting team members from {url}: {str(e)}")
+            return []
+
+
     def scrape_website(self, url: str) -> Dict[str, any]:
         """Scrape practice website for additional information"""
         
@@ -725,7 +1041,12 @@ class FathomProspector:
                 'description': 'Not Available - No Website',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
         
         if not self.check_robots_txt(url):
@@ -735,7 +1056,12 @@ class FathomProspector:
                 'description': 'Not Available - Restricted',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
             
         try:
@@ -751,7 +1077,12 @@ class FathomProspector:
                 'description': '',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
             
             # Get page title
@@ -837,7 +1168,14 @@ class FathomProspector:
             unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
             data['staff_count'] = min(unique_staff, 20)
             
-            logger.info(f"Website scrape complete for {url}: {len(data['services'])} services found")
+            # Extract contact intelligence
+            data['emails'] = self.extract_emails(soup, url)
+            data['contact_names'] = self.extract_contact_names(soup, '', url)
+            data['additional_phones'] = self.extract_additional_phones(soup, '', url)
+            data['contact_form_url'] = self.extract_contact_form_url(soup, url)
+            data['team_members'] = self.extract_team_members(soup, url)
+            
+            logger.info(f"Website scrape complete for {url}: {len(data['services'])} services, {len(data['emails'])} emails, {len(data['contact_names'])} contacts found")
             
             return data
             
@@ -848,7 +1186,12 @@ class FathomProspector:
                 'description': 'Not Available - Timeout',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
         except Exception as e:
             logger.error(f"Error scraping website {url}: {str(e)}")
@@ -857,8 +1200,299 @@ class FathomProspector:
                 'description': 'Not Available - Error',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
+    
+    def is_js_heavy_site(self, url: str) -> bool:
+        """
+        Check if URL is from a known JavaScript-heavy platform
+        
+        Args:
+            url: Website URL to check
+            
+        Returns:
+            True if site is from JS-heavy platform, False otherwise
+        """
+        try:
+            url_lower = url.lower()
+            for domain in JS_HEAVY_DOMAINS:
+                if domain in url_lower:
+                    logger.info(f"Detected JS-heavy platform: {domain} in {url}")
+                    return True
+            return False
+        except Exception:
+            return False
+    
+    def is_scrape_successful(self, result: Dict) -> bool:
+        """
+        Check if scraping returned meaningful content
+        
+        Args:
+            result: Scraping result dictionary
+            
+        Returns:
+            True if scrape was successful, False otherwise
+        """
+        # Check 1: Did we get a real title?
+        title = result.get('title', '')
+        if not title or title in ['Not Available', 'Not Available - No Website', 
+                                  'Not Available - Restricted', 'Not Available - Timeout',
+                                  'Not Available - Error']:
+            return False
+        
+        # Check 2: Did we get meaningful description?
+        description = result.get('description', '')
+        if not description or description in ['Not Available', 'Not Available - No Website',
+                                              'Not Available - Restricted', 'Not Available - Timeout',
+                                              'Not Available - Error']:
+            return False
+        
+        # Check 3: Did we find any content at all?
+        services = result.get('services', [])
+        social_links = result.get('social_links', [])
+        
+        if len(services) == 0 and len(social_links) == 0:
+            logger.debug(f"Scrape unsuccessful: no services or social links found")
+            return False
+        
+        # Looks good!
+        return True
+    
+    def scrape_with_playwright(self, url: str) -> Dict[str, any]:
+        """
+        Scrape website using Playwright for JavaScript-rendered content
+        
+        Args:
+            url: Website URL to scrape
+            
+        Returns:
+            Dictionary with scraped data
+        """
+        if not PLAYWRIGHT_AVAILABLE:
+            logger.warning(f"Playwright not available, falling back to BeautifulSoup for {url}")
+            return self.scrape_website(url)
+        
+        if self.demo_mode:
+            logger.info(f"DEMO MODE: Using mock website data for {url}")
+            return self.get_mock_website_data(url)
+        
+        if not url:
+            return {
+                'title': 'Not Available - No Website',
+                'description': 'Not Available - No Website',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
+            }
+        
+        try:
+            logger.info(f"🎭 Scraping with Playwright: {url}")
+            time.sleep(random.uniform(0.5, 1.0))
+            
+            with sync_playwright() as p:
+                # Launch headless browser
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(
+                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                )
+                page = context.new_page()
+                
+                # Navigate to page with timeout
+                try:
+                    page.goto(url, wait_until='networkidle', timeout=15000)
+                    
+                    # Wait a bit for dynamic content to load
+                    page.wait_for_timeout(2000)
+                    
+                except PlaywrightTimeout:
+                    logger.warning(f"Timeout loading {url}, using partial content")
+                
+                # Get page content
+                content = page.content()
+                soup = BeautifulSoup(content, 'html.parser')
+                
+                data = {
+                    'title': '',
+                    'description': '',
+                    'services': [],
+                    'social_links': [],
+                    'staff_count': 0
+                }
+                
+                # Get page title
+                try:
+                    data['title'] = page.title() or 'Not Available'
+                except Exception:
+                    if soup.title and soup.title.string:
+                        data['title'] = soup.title.string.strip()
+                    else:
+                        data['title'] = 'Not Available'
+                
+                # Get meta description
+                meta_desc = soup.find('meta', attrs={'name': 'description'})
+                if meta_desc and meta_desc.get('content'):
+                    data['description'] = meta_desc.get('content', '').strip()
+                else:
+                    og_desc = soup.find('meta', attrs={'property': 'og:description'})
+                    if og_desc and og_desc.get('content'):
+                        data['description'] = og_desc.get('content', '').strip()
+                    else:
+                        data['description'] = 'Not Available'
+                
+                # Extract services mentioned
+                text_content = page.text_content('body').lower() if page.query_selector('body') else ''
+                service_keywords = [
+                    'laser hair removal', 'botox', 'fillers', 'coolsculpting',
+                    'body contouring', 'skin tightening', 'photorejuvenation',
+                    'cellulite treatment', 'weight loss', 'ems', 'muscle building'
+                ]
+                
+                services_found = []
+                for keyword in service_keywords:
+                    if keyword in text_content:
+                        services_found.append(keyword)
+                
+                data['services'] = services_found
+                
+                # Find social media links
+                social_platforms = {
+                    'facebook.com': 'Facebook',
+                    'fb.com': 'Facebook',
+                    'instagram.com': 'Instagram',
+                    'twitter.com': 'Twitter',
+                    'x.com': 'Twitter',
+                    'linkedin.com': 'LinkedIn',
+                    'youtube.com': 'YouTube',
+                    'youtu.be': 'YouTube',
+                    'tiktok.com': 'TikTok',
+                    'pinterest.com': 'Pinterest'
+                }
+                
+                social_links = []
+                seen_platforms = set()
+                
+                # Get all links
+                all_links = page.query_selector_all('a[href]')
+                for link_element in all_links:
+                    try:
+                        href = link_element.get_attribute('href')
+                        if href:
+                            href_str = str(href).strip()
+                            href_lower = href_str.lower()
+                            
+                            # Skip empty or invalid hrefs
+                            if not href_str or href_str.startswith('#') or href_str.startswith('javascript:'):
+                                continue
+                            
+                            for domain, platform_name in social_platforms.items():
+                                if domain in href_lower and platform_name not in seen_platforms:
+                                    # Clean up the URL
+                                    full_url = href_str
+                                    if href_str.startswith('//'):
+                                        full_url = 'https:' + href_str
+                                    elif href_str.startswith('/') or not href_str.startswith('http'):
+                                        # Relative URL - skip it as it's not a social link
+                                        continue
+                                    
+                                    social_links.append(full_url)
+                                    seen_platforms.add(platform_name)
+                                    logger.info(f"Found {platform_name} link: {full_url}")
+                                    break
+                    except Exception:
+                        continue
+                
+                data['social_links'] = social_links
+                
+                # Estimate staff count
+                staff_indicators = soup.find_all(text=re.compile(
+                    r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
+                unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
+                data['staff_count'] = min(unique_staff, 20)
+                
+                # Extract contact intelligence
+                data['emails'] = self.extract_emails(soup, url)
+                data['contact_names'] = self.extract_contact_names(soup, '', url)
+                data['additional_phones'] = self.extract_additional_phones(soup, '', url)
+                data['contact_form_url'] = self.extract_contact_form_url(soup, url)
+                data['team_members'] = self.extract_team_members(soup, url)
+                
+                # Close browser
+                browser.close()
+                
+                logger.info(f"✅ Playwright scrape complete for {url}: {len(data['services'])} services, {len(data['emails'])} emails, {len(data['contact_names'])} contacts found")
+                
+                return data
+                
+        except Exception as e:
+            logger.error(f"Error in Playwright scraping {url}: {str(e)}")
+            # Fallback to BeautifulSoup
+            logger.info(f"Falling back to BeautifulSoup for {url}")
+            return self.scrape_website(url)
+    
+    def scrape_website_smart(self, url: str) -> Dict[str, any]:
+        """
+        Smart scraping with automatic method selection
+        
+        Strategy:
+        1. Check if URL is from JS-heavy platform (whitelist) → use Playwright
+        2. Try BeautifulSoup first (fast)
+        3. If BeautifulSoup gets poor data → retry with Playwright
+        
+        Args:
+            url: Website URL to scrape
+            
+        Returns:
+            Dictionary with scraped data
+        """
+        if self.demo_mode:
+            logger.info(f"DEMO MODE: Using mock website data for {url}")
+            return self.get_mock_website_data(url)
+        
+        if not url:
+            return {
+                'title': 'Not Available - No Website',
+                'description': 'Not Available - No Website',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
+            }
+        
+        # Check 1: Is this a known JS-heavy platform?
+        if PLAYWRIGHT_AVAILABLE and self.is_js_heavy_site(url):
+            logger.info(f"JS-heavy platform detected, using Playwright immediately for {url}")
+            return self.scrape_with_playwright(url)
+        
+        # Check 2: Try BeautifulSoup first (fast path)
+        logger.info(f"Trying BeautifulSoup first for {url}")
+        bs_result = self.scrape_website(url)
+        
+        # Check 3: Did BeautifulSoup get good data?
+        if self.is_scrape_successful(bs_result):
+            logger.info(f"✅ BeautifulSoup successful for {url}")
+            return bs_result
+        
+        # Check 4: BeautifulSoup failed, try Playwright if available
+        if PLAYWRIGHT_AVAILABLE:
+            logger.info(f"BeautifulSoup data incomplete for {url}, retrying with Playwright...")
+            return self.scrape_with_playwright(url)
+        else:
+            logger.warning(f"BeautifulSoup data incomplete but Playwright not available for {url}")
+            return bs_result
     
     def detect_specialty(self, practice_data: Dict) -> str:
         """
@@ -1482,13 +2116,18 @@ Venus Sales Team"""
                 'description': 'Not Available - No Website',
                 'services': [],
                 'social_links': [],
-                'staff_count': 0
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
             }
         
         if not self.check_robots_txt(base_url):
             logger.warning(f"Robots.txt disallows scraping: {base_url}")
-            # Fall back to single page
-            return self.scrape_website(base_url)
+            # Fall back to single page with smart detection
+            return self.scrape_website_smart(base_url)
         
         try:
             # First, get homepage for title and description
@@ -1555,8 +2194,8 @@ Venus Sales Team"""
             
         except Exception as e:
             logger.error(f"Error in deep scrape for {base_url}: {str(e)}")
-            # Fall back to single-page scrape
-            return self.scrape_website(base_url)
+            # Fall back to single-page scrape with smart detection
+            return self.scrape_website_smart(base_url)
     
     def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str]:
         """
@@ -1876,42 +2515,9 @@ Venus Sales Team"""
         # Calculate AI score with specialty detection
         ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
         
-        # Rule-based enrichment (AI disabled)
-        logger.info(f"📊 Running rule-based analysis for {practice_name}")
-        
-        # Get pain point analysis (rule-based)
-        # Use AI-enhanced pain analysis (falls back to rule-based automatically)
-        pain_analysis = self.analyze_pain_points_ai(practice_record, specialty)
-        
-        # Generate personalized outreach (template-based)
-        # Use AI-enhanced outreach generation (falls back to template-based automatically)
-        logger.info(f"🤖 Generating AI outreach for {practice_name}...")
-        outreach_content = self.generate_outreach_ai(practice_record, specialty, pain_analysis)
-        
-        # Store insights
-        ai_insights = {
-            'pain_points': pain_analysis.get('pain_points', []),
-            'revenue_opportunity': pain_analysis.get('revenue_opportunity', ''),
-            'ai_readiness_score': pain_analysis.get('readiness_score', 0),
-            'competing_services': pain_analysis.get('competing_services', []),
-            'gap_analysis': pain_analysis.get('gap_analysis', ''),
-            'decision_maker_profile': pain_analysis.get('decision_maker_profile', ''),
-            'best_approach': pain_analysis.get('best_approach', ''),
-            'talking_points': outreach_content.get('talking_points', []),
-            'follow_up_days': outreach_content.get('follow_up_days', 7),
-            'call_to_action': outreach_content.get('call_to_action', ''),
-            # Frontend expects these exact field names
-            'outreachColdCall': outreach_content.get('outreachColdCall'),
-            'outreachInstagram': outreach_content.get('outreachInstagram'),
-            'outreachEmail': outreach_content.get('outreachEmail'),
-            'outreachEmailSubject': outreach_content.get('outreachEmailSubject')
-        }
-        
-        # Boost score based on readiness (rule-based)
-        readiness_boost = pain_analysis.get('readiness_score', 0) * 0.2  # Up to 20 point boost
-        ai_score = min(100, ai_score + int(readiness_boost))
-        
-        logger.info(f"✅ Rule-based analysis complete - Readiness: {pain_analysis.get('readiness_score', 0)}, Boosted Score: {ai_score}")
+        # ON-DEMAND OUTREACH: AI outreach generation moved to separate API call
+        # This makes search faster and more reliable
+        logger.info(f"📊 Scoring complete for {practice_name} - AI outreach available on-demand")
         
         # Get device recommendations
         device_recommendations = self.recommend_device(practice_record, score_breakdown)
@@ -1933,7 +2539,7 @@ Venus Sales Team"""
         else:
             confidence = "Low"
         
-        # Compile final record
+        # Compile final record (without AI outreach - generated on-demand)
         final_record = {
             **practice_record,
             'specialty': specialty,
@@ -1945,10 +2551,67 @@ Venus Sales Team"""
             'outreach_opener': outreach_opener,
             'confidence_level': confidence,
             'data_completeness': completeness,
-            **ai_insights  # Merge AI insights into final record
+            # AI outreach fields set to None - will be populated on-demand via API
+            'outreachColdCall': None,
+            'outreachInstagram': None,
+            'outreachEmail': None,
+            'outreachEmailSubject': None
         }
         
         return final_record
+    
+    def generate_outreach_for_prospect_standalone(self, prospect_data: Dict) -> Dict:
+        """
+        Generate AI-powered outreach for a single prospect ON-DEMAND
+        
+        This is called AFTER search completes, when a sales rep clicks "Generate AI Outreach"
+        Uses all the business intelligence gathered during prospecting to create personalized messages
+        
+        Args:
+            prospect_data: Complete prospect record from database/CSV with all fields
+        
+        Returns:
+            Dict with outreachColdCall, outreachInstagram, outreachEmail, outreachEmailSubject
+        """
+        try:
+            practice_name = prospect_data.get('name', 'Unknown')
+            specialty = prospect_data.get('specialty', 'general')
+            
+            logger.info(f"🤖 Generating on-demand AI outreach for {practice_name} ({specialty})")
+            
+            # Step 1: Analyze pain points using AI (or rule-based fallback)
+            pain_analysis = self.analyze_pain_points_ai(prospect_data, specialty)
+            
+            # Step 2: Generate AI outreach using all available data
+            outreach_content = self.generate_outreach_ai(prospect_data, specialty, pain_analysis)
+            
+            logger.info(f"✅ On-demand outreach generated for {practice_name}")
+            
+            return {
+                'success': True,
+                'outreach': {
+                    'outreachColdCall': outreach_content.get('outreachColdCall', ''),
+                    'outreachInstagram': outreach_content.get('outreachInstagram', ''),
+                    'outreachEmail': outreach_content.get('outreachEmail', ''),
+                    'outreachEmailSubject': outreach_content.get('outreachEmailSubject', ''),
+                    'talkingPoints': outreach_content.get('talking_points', []),
+                    'painPoints': pain_analysis.get('pain_points', []),
+                    'readinessScore': pain_analysis.get('readiness_score', 0)
+                }
+            }
+        
+        except Exception as e:
+            logger.error(f"Error generating on-demand outreach: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'outreach': {
+                    'outreachColdCall': 'Error generating outreach',
+                    'outreachInstagram': 'Error generating outreach',
+                    'outreachEmail': 'Error generating outreach',
+                    'outreachEmailSubject': 'Error generating outreach'
+                }
+            }
     
     def export_to_csv(self, results: List[Dict], filename: str):
         """Export results to CSV"""
