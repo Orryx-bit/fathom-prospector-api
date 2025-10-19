@@ -26,12 +26,18 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
-# Playwright imports for JavaScript-heavy sites
+# ScrapingBee for JavaScript-heavy sites (replaces Playwright)
 try:
-    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
-    PLAYWRIGHT_AVAILABLE = True
+    from scrapingbee_integration import (
+        scrape_with_scrapingbee,
+        is_scrapingbee_available
+    )
+    SCRAPINGBEE_AVAILABLE = is_scrapingbee_available()
+    if SCRAPINGBEE_AVAILABLE:
+        logger.info("✅ ScrapingBee enabled for JavaScript rendering")
 except ImportError:
-    PLAYWRIGHT_AVAILABLE = False
+    SCRAPINGBEE_AVAILABLE = False
+    logger.warning("⚠️  ScrapingBee not available - JavaScript rendering disabled")
 
 # Load environment variables FIRST
 load_dotenv()
@@ -1263,9 +1269,9 @@ class FathomProspector:
         # Looks good!
         return True
     
-    def scrape_with_playwright(self, url: str) -> Dict[str, any]:
+    def scrape_with_scrapingbee_wrapper(self, url: str) -> Dict[str, any]:
         """
-        Scrape website using Playwright for JavaScript-rendered content
+        Scrape website using ScrapingBee for JavaScript-rendered content
         
         Args:
             url: Website URL to scrape
@@ -1273,8 +1279,8 @@ class FathomProspector:
         Returns:
             Dictionary with scraped data
         """
-        if not PLAYWRIGHT_AVAILABLE:
-            logger.warning(f"Playwright not available, falling back to BeautifulSoup for {url}")
+        if not SCRAPINGBEE_AVAILABLE:
+            logger.warning(f"ScrapingBee not available, falling back to BeautifulSoup for {url}")
             return self.scrape_website(url)
         
         if self.demo_mode:
@@ -1296,148 +1302,29 @@ class FathomProspector:
             }
         
         try:
-            logger.info(f"🎭 Scraping with Playwright: {url}")
-            time.sleep(random.uniform(0.5, 1.0))
+            # Call ScrapingBee with extraction functions
+            result = scrape_with_scrapingbee(
+                url,
+                self.extract_emails,
+                self.extract_contact_names,
+                self.extract_additional_phones,
+                self.extract_contact_form_url,
+                self.extract_team_members
+            )
             
-            with sync_playwright() as p:
-                # Launch headless browser
-                browser = p.chromium.launch(headless=True)
-                context = browser.new_context(
-                    user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                )
-                page = context.new_page()
-                
-                # Navigate to page with timeout
-                try:
-                    page.goto(url, wait_until='networkidle', timeout=15000)
-                    
-                    # Wait a bit for dynamic content to load
-                    page.wait_for_timeout(2000)
-                    
-                except PlaywrightTimeout:
-                    logger.warning(f"Timeout loading {url}, using partial content")
-                
-                # Get page content
-                content = page.content()
-                soup = BeautifulSoup(content, 'html.parser')
-                
-                data = {
-                    'title': '',
-                    'description': '',
-                    'services': [],
-                    'social_links': [],
-                    'staff_count': 0
-                }
-                
-                # Get page title
-                try:
-                    data['title'] = page.title() or 'Not Available'
-                except Exception:
-                    if soup.title and soup.title.string:
-                        data['title'] = soup.title.string.strip()
-                    else:
-                        data['title'] = 'Not Available'
-                
-                # Get meta description
-                meta_desc = soup.find('meta', attrs={'name': 'description'})
-                if meta_desc and meta_desc.get('content'):
-                    data['description'] = meta_desc.get('content', '').strip()
-                else:
-                    og_desc = soup.find('meta', attrs={'property': 'og:description'})
-                    if og_desc and og_desc.get('content'):
-                        data['description'] = og_desc.get('content', '').strip()
-                    else:
-                        data['description'] = 'Not Available'
-                
-                # Extract services mentioned
-                text_content = page.text_content('body').lower() if page.query_selector('body') else ''
-                service_keywords = [
-                    'laser hair removal', 'botox', 'fillers', 'coolsculpting',
-                    'body contouring', 'skin tightening', 'photorejuvenation',
-                    'cellulite treatment', 'weight loss', 'ems', 'muscle building'
-                ]
-                
-                services_found = []
-                for keyword in service_keywords:
-                    if keyword in text_content:
-                        services_found.append(keyword)
-                
-                data['services'] = services_found
-                
-                # Find social media links
-                social_platforms = {
-                    'facebook.com': 'Facebook',
-                    'fb.com': 'Facebook',
-                    'instagram.com': 'Instagram',
-                    'twitter.com': 'Twitter',
-                    'x.com': 'Twitter',
-                    'linkedin.com': 'LinkedIn',
-                    'youtube.com': 'YouTube',
-                    'youtu.be': 'YouTube',
-                    'tiktok.com': 'TikTok',
-                    'pinterest.com': 'Pinterest'
-                }
-                
-                social_links = []
-                seen_platforms = set()
-                
-                # Get all links
-                all_links = page.query_selector_all('a[href]')
-                for link_element in all_links:
-                    try:
-                        href = link_element.get_attribute('href')
-                        if href:
-                            href_str = str(href).strip()
-                            href_lower = href_str.lower()
-                            
-                            # Skip empty or invalid hrefs
-                            if not href_str or href_str.startswith('#') or href_str.startswith('javascript:'):
-                                continue
-                            
-                            for domain, platform_name in social_platforms.items():
-                                if domain in href_lower and platform_name not in seen_platforms:
-                                    # Clean up the URL
-                                    full_url = href_str
-                                    if href_str.startswith('//'):
-                                        full_url = 'https:' + href_str
-                                    elif href_str.startswith('/') or not href_str.startswith('http'):
-                                        # Relative URL - skip it as it's not a social link
-                                        continue
-                                    
-                                    social_links.append(full_url)
-                                    seen_platforms.add(platform_name)
-                                    logger.info(f"Found {platform_name} link: {full_url}")
-                                    break
-                    except Exception:
-                        continue
-                
-                data['social_links'] = social_links
-                
-                # Estimate staff count
-                staff_indicators = soup.find_all(text=re.compile(
-                    r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
-                unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
-                data['staff_count'] = min(unique_staff, 20)
-                
-                # Extract contact intelligence
-                data['emails'] = self.extract_emails(soup, url)
-                data['contact_names'] = self.extract_contact_names(soup, '', url)
-                data['additional_phones'] = self.extract_additional_phones(soup, '', url)
-                data['contact_form_url'] = self.extract_contact_form_url(soup, url)
-                data['team_members'] = self.extract_team_members(soup, url)
-                
-                # Close browser
-                browser.close()
-                
-                logger.info(f"✅ Playwright scrape complete for {url}: {len(data['services'])} services, {len(data['emails'])} emails, {len(data['contact_names'])} contacts found")
-                
-                return data
+            if result:
+                return result
+            else:
+                # ScrapingBee failed, fallback
+                logger.warning(f"ScrapingBee failed for {url}, falling back to BeautifulSoup")
+                return self.scrape_website(url)
                 
         except Exception as e:
-            logger.error(f"Error in Playwright scraping {url}: {str(e)}")
+            logger.error(f"Error in ScrapingBee scraping {url}: {str(e)}")
             # Fallback to BeautifulSoup
             logger.info(f"Falling back to BeautifulSoup for {url}")
             return self.scrape_website(url)
+
     
     def scrape_website_smart(self, url: str) -> Dict[str, any]:
         """
@@ -1473,9 +1360,9 @@ class FathomProspector:
             }
         
         # Check 1: Is this a known JS-heavy platform?
-        if PLAYWRIGHT_AVAILABLE and self.is_js_heavy_site(url):
+        if SCRAPINGBEE_AVAILABLE and self.is_js_heavy_site(url):
             logger.info(f"JS-heavy platform detected, using Playwright immediately for {url}")
-            return self.scrape_with_playwright(url)
+            return self.scrape_with_scrapingbee_wrapper(url)
         
         # Check 2: Try BeautifulSoup first (fast path)
         logger.info(f"Trying BeautifulSoup first for {url}")
@@ -1487,9 +1374,9 @@ class FathomProspector:
             return bs_result
         
         # Check 4: BeautifulSoup failed, try Playwright if available
-        if PLAYWRIGHT_AVAILABLE:
+        if SCRAPINGBEE_AVAILABLE:
             logger.info(f"BeautifulSoup data incomplete for {url}, retrying with Playwright...")
-            return self.scrape_with_playwright(url)
+            return self.scrape_with_scrapingbee_wrapper(url)
         else:
             logger.warning(f"BeautifulSoup data incomplete but Playwright not available for {url}")
             return bs_result

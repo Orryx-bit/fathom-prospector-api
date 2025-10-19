@@ -24,13 +24,11 @@ python -m pip install --upgrade pip
 echo "📦 Installing requirements..."
 pip install -r requirements.txt
 
-# Install Playwright browsers
-echo "🎭 Installing Playwright browsers..."
-python -m playwright install --with-deps chromium
-
 # Verify critical packages
-echo "🔍 Verifying pandas installation..."
+echo "🔍 Verifying installations..."
 python -c "import pandas; print(f'✅ pandas {pandas.__version__} installed')"
+python -c "import scrapingbee; print(f'✅ ScrapingBee installed')"
+echo "🐝 ScrapingBee will handle JavaScript rendering"
 
 echo "🔍 Verifying google.generativeai installation..."
 python -c "import google.generativeai; print('✅ google.generativeai installed')"
