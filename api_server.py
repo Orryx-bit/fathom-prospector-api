@@ -805,15 +805,14 @@ async def generate_outreach(
         logger.error(f"Error in generate_outreach endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-@app.post("/api/prospect/deep-dive", response_model=DeepDiveResponse)
+@app.post("/api/prospect/deep-dive")
 @limiter.limit("5/minute")  # Rate limit: 5 deep dives per minute (more resource intensive)
 async def start_deep_dive(
     request: Request,
-    background_tasks: BackgroundTasks,
     x_api_key: str = Header(..., alias="X-API-Key")
 ):
     """
-    Start an on-demand deep dive intelligence gathering for a specific facility
+    Start an on-demand deep dive intelligence gathering for a specific prospect
     
     This performs comprehensive research beyond the initial prospect data:
     - Multi-platform review aggregation
@@ -822,82 +821,69 @@ async def start_deep_dive(
     - Media coverage and news
     - Technology stack detection
     - Competitive positioning
+    
+    Expects request body:
+    {
+        "prospect": {
+            "id": "...",
+            "name": "...",
+            "address": "...",
+            "website": "...",
+            "socialLinks": [...],
+            "services": [...]
+        }
+    }
     """
     verify_api_key(x_api_key)
     
     if not DEEP_DIVE_AVAILABLE:
-        raise HTTPException(
-            status_code=503,
-            detail="Deep dive service temporarily unavailable"
-        )
+        return {
+            "status": "error",
+            "error": "Deep dive service requires ScrapingBee API key. Please configure SCRAPINGBEE_API_KEY environment variable."
+        }
     
     try:
         # Parse request body
         body = await request.json()
-        facility_name = body.get('facility_name')
-        facility_url = body.get('facility_url')
+        prospect = body.get('prospect')
         
-        if not facility_name:
-            raise HTTPException(status_code=400, detail="Missing 'facility_name' in request body")
+        if not prospect:
+            raise HTTPException(status_code=400, detail="Missing 'prospect' data in request body")
         
-        job_id = str(uuid.uuid4())
+        if not prospect.get('name'):
+            raise HTTPException(status_code=400, detail="Prospect name is required")
         
-        # Initialize job status
-        job_statuses[job_id] = {
-            "status": "running",
-            "progress": 0,
-            "facility_name": facility_name,
-            "started_at": datetime.now().isoformat(),
-            "message": "Starting deep dive intelligence gathering..."
-        }
+        prospect_name = prospect.get('name')
+        logger.info(f"🚀 Starting deep dive for: {prospect_name}")
         
-        logger.info(f"Starting deep dive for: {facility_name} (job_id: {job_id})")
-        
-        # Run deep dive in background
-        background_tasks.add_task(
-            _run_deep_dive_async,
-            job_id,
-            facility_name,
-            facility_url
-        )
-        
-        return DeepDiveResponse(
-            job_id=job_id,
-            status="started",
-            message=f"Deep dive started for {facility_name}"
-        )
+        # Perform deep dive synchronously (runs fast enough with ScrapingBee)
+        try:
+            result = await perform_deep_dive(prospect)
+            
+            logger.info(f"✅ Deep dive completed for {prospect_name}")
+            
+            return {
+                "status": "success",
+                "data": result,
+                "message": f"Deep dive completed for {prospect_name}"
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Deep dive failed for {prospect_name}: {str(e)}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "message": f"Deep dive failed: {str(e)}"
+            }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error starting deep dive: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-async def _run_deep_dive_async(job_id: str, facility_name: str, facility_url: Optional[str]):
-    """Run deep dive in background and update job status"""
-    try:
-        logger.info(f"Running deep dive for {facility_name}...")
-        result = await perform_deep_dive(facility_name, facility_url)
-        
-        job_statuses[job_id] = {
-            "status": "completed",
-            "progress": 100,
-            "facility_name": facility_name,
-            "completed_at": datetime.now().isoformat(),
-            "message": "Deep dive completed successfully",
-            "data": result
-        }
-        logger.info(f"✅ Deep dive completed for {facility_name}")
-        
-    except Exception as e:
-        logger.error(f"❌ Deep dive failed for {facility_name}: {str(e)}")
-        job_statuses[job_id] = {
-            "status": "failed",
-            "progress": 0,
-            "facility_name": facility_name,
+        logger.error(f"Error in deep dive endpoint: {str(e)}")
+        return {
+            "status": "error",
             "error": str(e),
-            "failed_at": datetime.now().isoformat(),
-            "message": f"Deep dive failed: {str(e)}"
+            "message": "Internal server error"
         }
 
 if __name__ == "__main__":
