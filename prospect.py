@@ -2508,6 +2508,7 @@ Venus Sales Team"""
         
         csv_columns = [
             'name', 'specialty', 'address', 'phone', 'website', 'rating', 'review_count',
+            'emails', 'contact_names',  # Contact Intelligence fields
             'ai_score', 'confidence_level', 'primary_device_rec', 'device_rationale',
             'outreach_opener', 'services', 'social_links', 'staff_count',
             'specialty_match_score', 'decision_autonomy_score', 'aesthetic_services_score', 
@@ -2527,7 +2528,7 @@ Venus Sales Team"""
                 if col.endswith('_score') and col != 'ai_score' and col != 'ai_readiness_score':
                     score_key = col.replace('_score', '')
                     row[col] = result.get('score_breakdown', {}).get(score_key, 0)
-                elif col in ['services', 'social_links', 'pain_points', 'competing_services', 'talking_points']:
+                elif col in ['services', 'social_links', 'pain_points', 'competing_services', 'talking_points', 'emails', 'contact_names']:
                     # Join list fields with semicolons
                     row[col] = '; '.join(str(x) for x in result.get(col, []))
                 else:
