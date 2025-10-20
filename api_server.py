@@ -32,20 +32,21 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+# Load environment variables from .env file
+load_dotenv()
+
+# Setup logging FIRST (before any imports that might need it)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Import deep dive module for on-demand intelligence gathering
 try:
     from deep_dive import perform_deep_dive, is_deep_dive_available
     DEEP_DIVE_AVAILABLE = True
+    logger.info("Deep dive module loaded successfully")
 except ImportError:
-    logger.warning("deep_dive module not available")
+    logger.warning("Deep dive module not available - feature will be disabled")
     DEEP_DIVE_AVAILABLE = False
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Fathom Prospector API", version="2.0.0")
 
