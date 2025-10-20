@@ -1,3 +1,4 @@
+
 # Python API Server Dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
@@ -12,7 +13,7 @@ lxml==4.9.3
 python-dotenv==1.0.0
 ratelimit==2.2.1
 tldextract==5.1.1
-scrapingbee==2.0.2
+scrapingbee==2.1.0
 
 # AI/LLM Integration
 openai==1.55.3
