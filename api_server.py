@@ -32,6 +32,14 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
+# Import deep dive module for on-demand intelligence gathering
+try:
+    from deep_dive import perform_deep_dive, is_deep_dive_available
+    DEEP_DIVE_AVAILABLE = True
+except ImportError:
+    logger.warning("deep_dive module not available")
+    DEEP_DIVE_AVAILABLE = False
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -190,6 +198,11 @@ class SearchStatus(BaseModel):
     csv_file: Optional[str] = None
     report_file: Optional[str] = None
     error: Optional[str] = None
+
+class DeepDiveResponse(BaseModel):
+    job_id: str
+    status: str
+    message: str
 
 def verify_api_key(x_api_key: str = Header(...)):
     """Verify API key from request header"""
@@ -527,16 +540,16 @@ async def run_prospect_search(job_id: str, request: SearchRequest):
             loop = asyncio.get_event_loop()
             await asyncio.wait_for(
                 loop.run_in_executor(executor, _run_prospect_search_sync, job_id, request),
-                timeout=1800  # 30 minute max per search
+                timeout=300  # 5 minute max per search
             )
         except asyncio.TimeoutError:
-            logger.error(f"Job {job_id}: Search timed out after 30 minutes")
+            logger.error(f"Job {job_id}: Search timed out after 5 minutes")
             with search_jobs_lock:
                 search_jobs[job_id].update({
                     "status": "failed",
                     "progress": 0,
                     "message": "Search timed out",
-                    "error": "Search exceeded 30 minute time limit",
+                    "error": "Search exceeded 5 minute time limit",
                     "completed_at": datetime.now().isoformat()
                 })
             update_metrics("search_failed", error_type="timeout")
@@ -708,6 +721,101 @@ async def generate_outreach(
     except Exception as e:
         logger.error(f"Error in generate_outreach endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+@app.post("/api/prospect/deep-dive", response_model=DeepDiveResponse)
+@limiter.limit("5/minute")  # Rate limit: 5 deep dives per minute (more resource intensive)
+async def start_deep_dive(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_api_key: str = Header(..., alias="X-API-Key")
+):
+    """
+    Start an on-demand deep dive intelligence gathering for a specific facility
+    
+    This performs comprehensive research beyond the initial prospect data:
+    - Multi-platform review aggregation
+    - Social media intelligence
+    - Staff credentials and expertise
+    - Media coverage and news
+    - Technology stack detection
+    - Competitive positioning
+    """
+    verify_api_key(x_api_key)
+    
+    if not DEEP_DIVE_AVAILABLE:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep dive service temporarily unavailable"
+        )
+    
+    try:
+        # Parse request body
+        body = await request.json()
+        facility_name = body.get('facility_name')
+        facility_url = body.get('facility_url')
+        
+        if not facility_name:
+            raise HTTPException(status_code=400, detail="Missing 'facility_name' in request body")
+        
+        job_id = str(uuid.uuid4())
+        
+        # Initialize job status
+        job_statuses[job_id] = {
+            "status": "running",
+            "progress": 0,
+            "facility_name": facility_name,
+            "started_at": datetime.now().isoformat(),
+            "message": "Starting deep dive intelligence gathering..."
+        }
+        
+        logger.info(f"Starting deep dive for: {facility_name} (job_id: {job_id})")
+        
+        # Run deep dive in background
+        background_tasks.add_task(
+            _run_deep_dive_async,
+            job_id,
+            facility_name,
+            facility_url
+        )
+        
+        return DeepDiveResponse(
+            job_id=job_id,
+            status="started",
+            message=f"Deep dive started for {facility_name}"
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error starting deep dive: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+async def _run_deep_dive_async(job_id: str, facility_name: str, facility_url: Optional[str]):
+    """Run deep dive in background and update job status"""
+    try:
+        logger.info(f"Running deep dive for {facility_name}...")
+        result = await perform_deep_dive(facility_name, facility_url)
+        
+        job_statuses[job_id] = {
+            "status": "completed",
+            "progress": 100,
+            "facility_name": facility_name,
+            "completed_at": datetime.now().isoformat(),
+            "message": "Deep dive completed successfully",
+            "data": result
+        }
+        logger.info(f"✅ Deep dive completed for {facility_name}")
+        
+    except Exception as e:
+        logger.error(f"❌ Deep dive failed for {facility_name}: {str(e)}")
+        job_statuses[job_id] = {
+            "status": "failed",
+            "progress": 0,
+            "facility_name": facility_name,
+            "error": str(e),
+            "failed_at": datetime.now().isoformat(),
+            "message": f"Deep dive failed: {str(e)}"
+        }
 
 if __name__ == "__main__":
     import uvicorn
