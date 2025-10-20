@@ -15,6 +15,9 @@ ratelimit==2.2.1
 tldextract==5.1.1
 scrapingbee==2.1.0
 
+# AI/LLM Integration
+openai==1.55.3
+
 # Google APIs
 googlemaps==4.10.0
 google-cloud-aiplatform==1.38.1
