@@ -75,6 +75,10 @@ API_KEY = os.getenv("FATHOM_API_KEY", "your-secret-api-key-change-this")
 search_jobs = {}
 search_jobs_lock = threading.Lock()
 
+# Store for tracking deep dive jobs  
+job_statuses = {}
+job_statuses_lock = threading.Lock()
+
 # Thread pool for running blocking operations
 # This prevents blocking the asyncio event loop
 executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="search_worker")
@@ -409,7 +413,12 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
     """
     Synchronous version of prospect search to run in thread pool
     This prevents blocking the asyncio event loop
+    
+    CRITICAL FIX: Now includes subprocess termination on timeout/failure
+    to prevent wasting API credits on abandoned searches
     """
+    process = None  # Initialize process reference for cleanup
+    
     try:
         # Update status
         with search_jobs_lock:
@@ -449,6 +458,10 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             }
         )
         
+        # CRITICAL: Store process reference for potential termination
+        with search_jobs_lock:
+            search_jobs[job_id]["process"] = process
+        
         # Monitor output
         output = []
         for line in iter(process.stdout.readline, ''):
@@ -459,6 +472,19 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             
             # Update progress based on output
             update_progress_from_output(job_id, line)
+            
+            # Check if search was cancelled by frontend timeout
+            with search_jobs_lock:
+                if search_jobs[job_id].get("status") == "cancelled":
+                    logger.warning(f"Job {job_id}: Search cancelled by user/timeout, terminating subprocess")
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    logger.info(f"Job {job_id}: Subprocess terminated successfully")
+                    return  # Exit early
         
         # Wait for completion
         process.wait()
@@ -515,6 +541,18 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             
     except Exception as e:
         logger.error(f"Job {job_id}: Exception - {str(e)}")
+        
+        # CRITICAL: Terminate subprocess if it's still running
+        if process and process.poll() is None:
+            logger.warning(f"Job {job_id}: Exception occurred, terminating subprocess to prevent API waste")
+            try:
+                process.terminate()
+                process.wait(timeout=5)
+            except:
+                process.kill()
+                process.wait()
+            logger.info(f"Job {job_id}: Subprocess terminated after exception")
+        
         with search_jobs_lock:
             search_jobs[job_id].update({
                 "status": "failed",
@@ -527,37 +565,81 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
         # Update failure metrics
         error_type = type(e).__name__
         update_metrics("search_failed", error_type=error_type)
+    
+    finally:
+        # CRITICAL: Final cleanup - ensure process is terminated
+        if process and process.poll() is None:
+            logger.warning(f"Job {job_id}: Process still running in finally block, terminating")
+            try:
+                process.terminate()
+                process.wait(timeout=5)
+            except:
+                process.kill()
+                process.wait()
+            logger.info(f"Job {job_id}: Process terminated in finally block")
 
 async def run_prospect_search(job_id: str, request: SearchRequest):
     """
     Async wrapper for prospect search
     Uses semaphore to limit concurrent searches and thread pool to prevent blocking
+    
+    CRITICAL FIX: Now properly handles timeouts by marking search as cancelled,
+    which triggers subprocess termination in _run_prospect_search_sync
     """
     async with search_semaphore:
         logger.info(f"Job {job_id}: Starting search (concurrency: {MAX_CONCURRENT_SEARCHES - search_semaphore._value}/{MAX_CONCURRENT_SEARCHES})")
         
         try:
-            # Run synchronous search in thread pool with timeout
+            # Run synchronous search in thread pool with timeout (90 minutes for large searches)
             loop = asyncio.get_event_loop()
             await asyncio.wait_for(
                 loop.run_in_executor(executor, _run_prospect_search_sync, job_id, request),
-                timeout=300  # 5 minute max per search
+                timeout=5400  # 90 minute max per search (increased from 5 min)
             )
         except asyncio.TimeoutError:
-            logger.error(f"Job {job_id}: Search timed out after 5 minutes")
+            logger.error(f"Job {job_id}: Search timed out after 90 minutes")
+            
+            # CRITICAL: Mark as cancelled to trigger subprocess termination
             with search_jobs_lock:
+                search_jobs[job_id]["status"] = "cancelled"
+                
+                # Terminate subprocess if it exists
+                process = search_jobs[job_id].get("process")
+                if process and process.poll() is None:
+                    logger.warning(f"Job {job_id}: Terminating subprocess due to timeout")
+                    try:
+                        process.terminate()
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                        process.wait()
+                    logger.info(f"Job {job_id}: Subprocess terminated successfully")
+                
                 search_jobs[job_id].update({
                     "status": "failed",
                     "progress": 0,
                     "message": "Search timed out",
-                    "error": "Search exceeded 5 minute time limit",
+                    "error": "Search exceeded 90 minute time limit",
                     "completed_at": datetime.now().isoformat()
                 })
             update_metrics("search_failed", error_type="timeout")
             
         except Exception as e:
             logger.error(f"Job {job_id}: Async wrapper exception - {str(e)}")
+            
+            # CRITICAL: Terminate subprocess if exception occurs
             with search_jobs_lock:
+                process = search_jobs[job_id].get("process")
+                if process and process.poll() is None:
+                    logger.warning(f"Job {job_id}: Terminating subprocess due to async exception")
+                    try:
+                        process.terminate()
+                        process.wait(timeout=5)
+                    except:
+                        process.kill()
+                        process.wait()
+                    logger.info(f"Job {job_id}: Subprocess terminated after async exception")
+                
                 search_jobs[job_id].update({
                     "status": "failed",
                     "progress": 0,
