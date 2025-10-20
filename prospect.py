@@ -1168,7 +1168,7 @@ class FathomProspector:
             data['social_links'] = social_links
             
             # Estimate staff count
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))
             data['staff_count'] = min(unique_staff, 20)
@@ -1968,7 +1968,7 @@ Venus Sales Team"""
                         social_links.append(platform_name)
             
             # Find staff mentions
-            staff_indicators = soup.find_all(text=re.compile(
+            staff_indicators = soup.find_all(string=re.compile(
                 r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
             
             return {
@@ -2068,6 +2068,10 @@ Venus Sales Team"""
             unique_staff = len(set(all_staff_mentions))
             staff_count = min(unique_staff, 20)
             
+            # Extract contact intelligence from homepage
+            emails = self.extract_emails(soup, base_url)
+            contact_names = self.extract_contact_names(soup, '', base_url)
+            
             logger.info(f"Deep scrape complete for {base_url}: {pages_scraped} pages, {len(all_services)} services found")
             
             return {
@@ -2075,7 +2079,9 @@ Venus Sales Team"""
                 'description': description,
                 'services': list(all_services),
                 'social_links': list(all_social_links),
-                'staff_count': staff_count
+                'staff_count': staff_count,
+                'emails': emails,
+                'contact_names': contact_names
             }
             
         except Exception as e:
