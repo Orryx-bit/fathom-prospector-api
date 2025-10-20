@@ -1544,6 +1544,12 @@ Consider factors like competition, market position, current services, and growth
             contact_display = contact_name if contact_name else 'the doctor'
             email_display = contact_email if contact_email else '[Email address]'
             
+            # Build gatekeeper bypass technique #5 (outside f-string to avoid backslash issue)
+            if contact_name:
+                technique_5 = f'Name Drop: "Following up on information for Dr. {contact_name}..."'
+            else:
+                technique_5 = f'Educational Angle: "New FDA-cleared technology for {specialty}..."'
+            
             # ========================================
             # COLD CALL PROMPT (Gatekeeper-focused)
             # ========================================
@@ -1569,7 +1575,7 @@ GATEKEEPER BYPASS TECHNIQUES TO USE:
 2. Exclusivity: "Reaching out to top-rated practices..." (use their {rating} rating)
 3. FOMO: "Other {specialty} practices in {location} are booking slots..."
 4. Referral Implication: "Reaching out to practices that were recommended..."
-5. {"Name Drop: \"Following up on information for Dr. " + contact_name + "...\"" if contact_name else "Educational Angle: \"New FDA-cleared technology for " + specialty + "...\""}
+5. {technique_5}
 6. Competitive Intelligence: "Competitive market insights for practices in {location}..."
 
 GENERATE A COLD CALL SCRIPT THAT:
