@@ -559,10 +559,10 @@ async def run_prospect_search(job_id: str, request: SearchRequest):
             loop = asyncio.get_event_loop()
             await asyncio.wait_for(
                 loop.run_in_executor(executor, _run_prospect_search_sync, job_id, request),
-                timeout=300  # 5 minute max per search
+                timeout=3600  # 60 minute max per search (allows very large searches to complete)
             )
         except asyncio.TimeoutError:
-            logger.error(f"Job {job_id}: Search timed out after 5 minutes")
+            logger.error(f"Job {job_id}: Search timed out after 60 minutes")
             
             # Update job state to failed
             with search_jobs_lock:
@@ -570,7 +570,7 @@ async def run_prospect_search(job_id: str, request: SearchRequest):
                     search_jobs[job_id]["status"] = "failed"
                     search_jobs[job_id]["progress"] = 0
                     search_jobs[job_id]["message"] = "Search timed out"
-                    search_jobs[job_id]["error"] = "Search exceeded 5 minute time limit"
+                    search_jobs[job_id]["error"] = "Search exceeded 60 minute time limit"
                     search_jobs[job_id]["completed_at"] = datetime.now().isoformat()
             
             update_metrics("search_failed", error_type="timeout")
@@ -688,6 +688,67 @@ async def get_search_results(
         "completed_at": job.get("completed_at")
     }
 
+@app.post("/api/generate-outreach")
+@limiter.limit("30/minute")  # Rate limit: 30 outreach generations per minute per IP
+async def generate_outreach(
+    request: Request,
+    api_key: str = Header(..., alias="X-API-Key")
+):
+    """
+    Generate AI-powered outreach for a single prospect ON-DEMAND
+    
+    This is called when a sales rep clicks "Generate AI Outreach" on a prospect card
+    Uses all the business intelligence gathered during prospecting to create personalized messages
+    """
+    verify_api_key(api_key)
+    
+    try:
+        # Parse request body
+        body = await request.json()
+        prospect_data = body.get('prospect', {})
+        
+        if not prospect_data:
+            raise HTTPException(status_code=400, detail="Missing 'prospect' data in request body")
+        
+        # Validate required fields
+        required_fields = ['name', 'specialty']
+        missing_fields = [field for field in required_fields if not prospect_data.get(field)]
+        if missing_fields:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Missing required fields: {', '.join(missing_fields)}"
+            )
+        
+        logger.info(f"Generating on-demand outreach for: {prospect_data.get('name')}")
+        
+        # Import prospect module and initialize FathomProspector
+        script_path = os.path.join(os.path.dirname(__file__), "prospect.py")
+        
+        # Import as module to access FathomProspector class
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("prospect", script_path)
+        prospect_module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(prospect_module)
+        
+        # Initialize prospector
+        prospector = prospect_module.FathomProspector(demo_mode=False)
+        
+        # Generate outreach using the standalone method
+        result = prospector.generate_outreach_for_prospect_standalone(prospect_data)
+        
+        if result.get('success'):
+            logger.info(f"✅ Outreach generated successfully for: {prospect_data.get('name')}")
+            return result
+        else:
+            logger.error(f"❌ Outreach generation failed: {result.get('error')}")
+            raise HTTPException(status_code=500, detail=result.get('error', 'Unknown error'))
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in generate_outreach endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     
@@ -708,7 +769,7 @@ if __name__ == "__main__":
     print(f"  • Thread Pool Workers: 10")
     print(f"  • Daily Quota Per User: {PER_USER_DAILY_LIMIT} searches")
     print(f"  • Rate Limit: 10 searches/minute per IP")
-    print(f"  • Search Timeout: 5 minutes")
+    print(f"  • Search Timeout: 60 minutes")
     print(f"  • API Key: {API_KEY[:20]}...")
     print("=" * 80)
     print("PHASE 1 FIXES (Applied):")
