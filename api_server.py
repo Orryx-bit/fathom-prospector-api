@@ -1,3 +1,4 @@
+
 """
 Fathom Prospector - Python API Server (Phase 2: Production Hardened)
 Wraps prospect.py in a FastAPI server for remote calls from Next.js app
@@ -35,18 +36,9 @@ from slowapi.errors import RateLimitExceeded
 # Load environment variables from .env file
 load_dotenv()
 
-# Setup logging FIRST (before any imports that might need it)
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# Import deep dive module for on-demand intelligence gathering
-try:
-    from deep_dive import perform_deep_dive, is_deep_dive_available
-    DEEP_DIVE_AVAILABLE = True
-    logger.info("Deep dive module loaded successfully")
-except ImportError:
-    logger.warning("Deep dive module not available - feature will be disabled")
-    DEEP_DIVE_AVAILABLE = False
 
 app = FastAPI(title="Fathom Prospector API", version="2.0.0")
 
@@ -71,13 +63,18 @@ app.add_middleware(
 # API Key for security (set via environment variable)
 API_KEY = os.getenv("FATHOM_API_KEY", "your-secret-api-key-change-this")
 
-# Store for tracking search jobs
-search_jobs = {}
-search_jobs_lock = threading.Lock()
+# Import job state manager for multi-replica support
+from job_state_manager import (
+    save_job_state,
+    load_job_state,
+    update_job_state,
+    list_all_jobs,
+    cleanup_old_jobs
+)
 
-# Store for tracking deep dive jobs  
-job_statuses = {}
-job_statuses_lock = threading.Lock()
+# DEPRECATED: Keep for backward compatibility with existing code
+# Now using file-based persistence via job_state_manager
+search_jobs_lock = threading.Lock()
 
 # Thread pool for running blocking operations
 # This prevents blocking the asyncio event loop
@@ -204,11 +201,6 @@ class SearchStatus(BaseModel):
     report_file: Optional[str] = None
     error: Optional[str] = None
 
-class DeepDiveResponse(BaseModel):
-    job_id: str
-    status: str
-    message: str
-
 def verify_api_key(x_api_key: str = Header(...)):
     """Verify API key from request header"""
     if x_api_key != API_KEY:
@@ -238,7 +230,8 @@ async def health_check():
     all_healthy = all(checks.values())
     
     # Calculate active searches
-    active_searches = sum(1 for job in search_jobs.values() if job["status"] == "running")
+    all_jobs = list_all_jobs()
+    active_searches = sum(1 for job in all_jobs.values() if job["status"] == "running")
     
     with metrics_lock:
         current_metrics = {
@@ -263,8 +256,9 @@ async def get_metrics(api_key: str = Header(..., alias="X-API-Key")):
     """Get detailed performance metrics"""
     verify_api_key(api_key)
     
-    active_searches = sum(1 for job in search_jobs.values() if job["status"] == "running")
-    queued_searches = sum(1 for job in search_jobs.values() if job["status"] == "queued")
+    all_jobs = list_all_jobs()
+    active_searches = sum(1 for job in all_jobs.values() if job["status"] == "running")
+    queued_searches = sum(1 for job in all_jobs.values() if job["status"] == "queued")
     
     with metrics_lock:
         detailed_metrics = {
@@ -378,13 +372,14 @@ async def start_search(
     job_id = str(uuid.uuid4())
     
     # Calculate current concurrent searches
-    active_searches = sum(1 for job in search_jobs.values() if job["status"] in ["running", "queued"])
+    all_jobs = list_all_jobs()
+    active_searches = sum(1 for job in all_jobs.values() if job["status"] in ["running", "queued"])
     
     # Update metrics
     update_metrics("search_started", concurrent=active_searches + 1)
     
     # Initialize job status
-    search_jobs[job_id] = {
+    job_state = {
         "status": "queued",
         "progress": 0,
         "message": "Search queued",
@@ -393,6 +388,7 @@ async def start_search(
         "user_id": user_id,
         "start_time": time.time()
     }
+    save_job_state(job_id, job_state)
     
     # Start search in background
     background_tasks.add_task(run_prospect_search, job_id, search_request)
@@ -413,18 +409,15 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
     """
     Synchronous version of prospect search to run in thread pool
     This prevents blocking the asyncio event loop
-    
-    CRITICAL FIX: Now includes subprocess termination on timeout/failure
-    to prevent wasting API credits on abandoned searches
     """
-    process = None  # Initialize process reference for cleanup
-    
+    process = None
     try:
         # Update status
-        with search_jobs_lock:
-            search_jobs[job_id]["status"] = "running"
-            search_jobs[job_id]["progress"] = 5
-            search_jobs[job_id]["message"] = "Initializing search..."
+        update_job_state(job_id, {
+            "status": "running",
+            "progress": 5,
+            "message": "Initializing search..."
+        })
         
         # Build command
         script_path = os.path.join(
@@ -458,33 +451,29 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             }
         )
         
-        # CRITICAL: Store process reference for potential termination
-        with search_jobs_lock:
-            search_jobs[job_id]["process"] = process
+        # Store process reference so it can be terminated on timeout
+        # NOTE: Process objects can't be serialized to JSON, so we don't store them in state
+        # We'll handle process termination via timeout in the async wrapper
         
         # Monitor output
         output = []
         for line in iter(process.stdout.readline, ''):
             if not line:
                 break
+            
+            # Check if job has been cancelled/timed out
+            job_state = load_job_state(job_id)
+            if job_state and job_state.get("status") == "failed":
+                logger.info(f"Job {job_id}: Detected cancellation, terminating process")
+                process.terminate()
+                process.wait(timeout=5)
+                return
+            
             output.append(line)
             logger.info(f"Job {job_id}: {line.strip()}")
             
             # Update progress based on output
             update_progress_from_output(job_id, line)
-            
-            # Check if search was cancelled by frontend timeout
-            with search_jobs_lock:
-                if search_jobs[job_id].get("status") == "cancelled":
-                    logger.warning(f"Job {job_id}: Search cancelled by user/timeout, terminating subprocess")
-                    process.terminate()
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait()
-                    logger.info(f"Job {job_id}: Subprocess terminated successfully")
-                    return  # Exit early
         
         # Wait for completion
         process.wait()
@@ -500,20 +489,20 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             csv_file, report_file = extract_file_paths(full_output)
             
             # Calculate search duration
-            start_time = search_jobs[job_id].get("start_time", time.time())
+            job_state = load_job_state(job_id)
+            start_time = job_state.get("start_time", time.time()) if job_state else time.time()
             duration = time.time() - start_time
             
-            with search_jobs_lock:
-                search_jobs[job_id].update({
-                    "status": "completed",
-                    "progress": 100,
-                    "message": "Search completed successfully",
-                    "completed_at": datetime.now().isoformat(),
-                    "csv_file": csv_file,
-                    "report_file": report_file,
-                    "results": parse_csv_results(csv_file) if csv_file else [],
-                    "duration": duration
-                })
+            update_job_state(job_id, {
+                "status": "completed",
+                "progress": 100,
+                "message": "Search completed successfully",
+                "completed_at": datetime.now().isoformat(),
+                "csv_file": csv_file,
+                "report_file": report_file,
+                "results": parse_csv_results(csv_file) if csv_file else [],
+                "duration": duration
+            })
             
             # Update success metrics
             update_metrics("search_completed", duration=duration)
@@ -525,14 +514,13 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             if stderr:
                 error_msg += f": {stderr[:500]}"
             
-            with search_jobs_lock:
-                search_jobs[job_id].update({
-                    "status": "failed",
-                    "progress": 0,
-                    "message": "Search failed",
-                    "error": error_msg,
-                    "completed_at": datetime.now().isoformat()
-                })
+            update_job_state(job_id, {
+                "status": "failed",
+                "progress": 0,
+                "message": "Search failed",
+                "error": error_msg,
+                "completed_at": datetime.now().isoformat()
+            })
             
             # Update failure metrics
             update_metrics("search_failed", error_type="process_error")
@@ -541,132 +529,99 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             
     except Exception as e:
         logger.error(f"Job {job_id}: Exception - {str(e)}")
+        update_job_state(job_id, {
+            "status": "failed",
+            "progress": 0,
+            "message": "Search failed with exception",
+            "error": str(e),
+            "completed_at": datetime.now().isoformat()
+        })
         
-        # CRITICAL: Terminate subprocess if it's still running
+        # Terminate process if still running
         if process and process.poll() is None:
-            logger.warning(f"Job {job_id}: Exception occurred, terminating subprocess to prevent API waste")
+            logger.info(f"Job {job_id}: Terminating process due to exception")
             try:
                 process.terminate()
                 process.wait(timeout=5)
-            except:
-                process.kill()
-                process.wait()
-            logger.info(f"Job {job_id}: Subprocess terminated after exception")
-        
-        with search_jobs_lock:
-            search_jobs[job_id].update({
-                "status": "failed",
-                "progress": 0,
-                "message": "Search failed with exception",
-                "error": str(e),
-                "completed_at": datetime.now().isoformat()
-            })
+            except Exception as term_error:
+                logger.error(f"Job {job_id}: Error terminating process - {str(term_error)}")
+                try:
+                    process.kill()
+                except:
+                    pass
         
         # Update failure metrics
         error_type = type(e).__name__
         update_metrics("search_failed", error_type=error_type)
-    
-    finally:
-        # CRITICAL: Final cleanup - ensure process is terminated
-        if process and process.poll() is None:
-            logger.warning(f"Job {job_id}: Process still running in finally block, terminating")
-            try:
-                process.terminate()
-                process.wait(timeout=5)
-            except:
-                process.kill()
-                process.wait()
-            logger.info(f"Job {job_id}: Process terminated in finally block")
 
 async def run_prospect_search(job_id: str, request: SearchRequest):
     """
     Async wrapper for prospect search
     Uses semaphore to limit concurrent searches and thread pool to prevent blocking
-    
-    CRITICAL FIX: Now properly handles timeouts by marking search as cancelled,
-    which triggers subprocess termination in _run_prospect_search_sync
     """
     async with search_semaphore:
         logger.info(f"Job {job_id}: Starting search (concurrency: {MAX_CONCURRENT_SEARCHES - search_semaphore._value}/{MAX_CONCURRENT_SEARCHES})")
         
         try:
-            # Run synchronous search in thread pool with timeout (90 minutes for large searches)
+            # Run synchronous search in thread pool with timeout
             loop = asyncio.get_event_loop()
             await asyncio.wait_for(
                 loop.run_in_executor(executor, _run_prospect_search_sync, job_id, request),
-                timeout=5400  # 90 minute max per search (increased from 5 min)
+                timeout=300  # 5 minute max per search
             )
         except asyncio.TimeoutError:
-            logger.error(f"Job {job_id}: Search timed out after 90 minutes")
+            logger.error(f"Job {job_id}: Search timed out after 5 minutes")
             
-            # CRITICAL: Mark as cancelled to trigger subprocess termination
-            with search_jobs_lock:
-                search_jobs[job_id]["status"] = "cancelled"
-                
-                # Terminate subprocess if it exists
-                process = search_jobs[job_id].get("process")
-                if process and process.poll() is None:
-                    logger.warning(f"Job {job_id}: Terminating subprocess due to timeout")
-                    try:
-                        process.terminate()
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
-                        process.wait()
-                    logger.info(f"Job {job_id}: Subprocess terminated successfully")
-                
-                search_jobs[job_id].update({
-                    "status": "failed",
-                    "progress": 0,
-                    "message": "Search timed out",
-                    "error": "Search exceeded 90 minute time limit",
-                    "completed_at": datetime.now().isoformat()
-                })
+            # Update job state to failed
+            update_job_state(job_id, {
+                "status": "failed",
+                "progress": 0,
+                "message": "Search timed out",
+                "error": "Search exceeded 5 minute time limit",
+                "completed_at": datetime.now().isoformat()
+            })
+            
+            # Note: Process termination happens in _run_prospect_search_sync when it detects status=failed
             update_metrics("search_failed", error_type="timeout")
             
         except Exception as e:
             logger.error(f"Job {job_id}: Async wrapper exception - {str(e)}")
-            
-            # CRITICAL: Terminate subprocess if exception occurs
-            with search_jobs_lock:
-                process = search_jobs[job_id].get("process")
-                if process and process.poll() is None:
-                    logger.warning(f"Job {job_id}: Terminating subprocess due to async exception")
-                    try:
-                        process.terminate()
-                        process.wait(timeout=5)
-                    except:
-                        process.kill()
-                        process.wait()
-                    logger.info(f"Job {job_id}: Subprocess terminated after async exception")
-                
-                search_jobs[job_id].update({
-                    "status": "failed",
-                    "progress": 0,
-                    "message": "Search failed",
-                    "error": f"Async error: {str(e)}",
-                    "completed_at": datetime.now().isoformat()
-                })
+            update_job_state(job_id, {
+                "status": "failed",
+                "progress": 0,
+                "message": "Search failed",
+                "error": f"Async error: {str(e)}",
+                "completed_at": datetime.now().isoformat()
+            })
             update_metrics("search_failed", error_type="async_error")
 
 def update_progress_from_output(job_id: str, output: str):
     """Update job progress based on script output"""
-    with search_jobs_lock:
-        if "Searching for:" in output:
-            search_jobs[job_id]["progress"] = 20
-            search_jobs[job_id]["message"] = "Finding practices..."
-        elif "Found" in output and "prospects" in output:
-            search_jobs[job_id]["progress"] = 40
-            search_jobs[job_id]["message"] = "Analyzing practices..."
-        elif "Processing practice:" in output:
-            search_jobs[job_id]["progress"] = 60
-            search_jobs[job_id]["message"] = "Scraping practice data..."
-        elif "Processed:" in output and "Score:" in output:
-            search_jobs[job_id]["progress"] = 80
-            search_jobs[job_id]["message"] = "AI scoring in progress..."
-        elif "Export results" in output:
-            search_jobs[job_id]["progress"] = 90
-            search_jobs[job_id]["message"] = "Generating reports..."
+    if "Searching for:" in output:
+        update_job_state(job_id, {
+            "progress": 20,
+            "message": "Finding practices..."
+        })
+    elif "Found" in output and "prospects" in output:
+        update_job_state(job_id, {
+            "progress": 40,
+            "message": "Analyzing practices..."
+        })
+    elif "Processing practice:" in output:
+        update_job_state(job_id, {
+            "progress": 60,
+            "message": "Scraping practice data..."
+        })
+    elif "Processed:" in output and "Score:" in output:
+        update_job_state(job_id, {
+            "progress": 80,
+            "message": "AI scoring in progress..."
+        })
+    elif "Export results" in output:
+        update_job_state(job_id, {
+            "progress": 90,
+            "message": "Generating reports..."
+        })
 
 def extract_file_paths(output: str):
     """Extract CSV and report file paths from output"""
@@ -701,10 +656,9 @@ async def get_search_status(
     """Get status of a search job"""
     verify_api_key(api_key)
     
-    if job_id not in search_jobs:
+    job = load_job_state(job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    
-    job = search_jobs[job_id]
     
     return SearchStatus(
         job_id=job_id,
@@ -724,10 +678,9 @@ async def get_search_results(
     """Get detailed results of a completed search"""
     verify_api_key(api_key)
     
-    if job_id not in search_jobs:
+    job = load_job_state(job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    
-    job = search_jobs[job_id]
     
     if job["status"] != "completed":
         raise HTTPException(
@@ -743,148 +696,6 @@ async def get_search_results(
         "report_file": job.get("report_file"),
         "completed_at": job.get("completed_at")
     }
-
-@app.post("/api/generate-outreach")
-@limiter.limit("30/minute")  # Rate limit: 30 outreach generations per minute per IP
-async def generate_outreach(
-    request: Request,
-    api_key: str = Header(..., alias="X-API-Key")
-):
-    """
-    Generate AI-powered outreach for a single prospect ON-DEMAND
-    
-    This is called when a sales rep clicks "Generate AI Outreach" on a prospect card
-    Uses all the business intelligence gathered during prospecting to create personalized messages
-    """
-    verify_api_key(api_key)
-    
-    try:
-        # Parse request body
-        body = await request.json()
-        prospect_data = body.get('prospect', {})
-        
-        if not prospect_data:
-            raise HTTPException(status_code=400, detail="Missing 'prospect' data in request body")
-        
-        # Validate required fields
-        required_fields = ['name', 'specialty']
-        missing_fields = [field for field in required_fields if not prospect_data.get(field)]
-        if missing_fields:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Missing required fields: {', '.join(missing_fields)}"
-            )
-        
-        logger.info(f"Generating on-demand outreach for: {prospect_data.get('name')}")
-        
-        # Import prospect module and initialize FathomProspector
-        script_path = os.path.join(os.path.dirname(__file__), "prospect.py")
-        
-        # Import as module to access FathomProspector class
-        import importlib.util
-        spec = importlib.util.spec_from_file_location("prospect", script_path)
-        prospect_module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(prospect_module)
-        
-        # Initialize prospector
-        prospector = prospect_module.FathomProspector(demo_mode=False)
-        
-        # Generate outreach using the standalone method
-        result = prospector.generate_outreach_for_prospect_standalone(prospect_data)
-        
-        if result.get('success'):
-            logger.info(f"✅ Outreach generated successfully for: {prospect_data.get('name')}")
-            return result
-        else:
-            logger.error(f"❌ Outreach generation failed: {result.get('error')}")
-            raise HTTPException(status_code=500, detail=result.get('error', 'Unknown error'))
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in generate_outreach endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
-
-@app.post("/api/prospect/deep-dive")
-@limiter.limit("5/minute")  # Rate limit: 5 deep dives per minute (more resource intensive)
-async def start_deep_dive(
-    request: Request,
-    x_api_key: str = Header(..., alias="X-API-Key")
-):
-    """
-    Start an on-demand deep dive intelligence gathering for a specific prospect
-    
-    This performs comprehensive research beyond the initial prospect data:
-    - Multi-platform review aggregation
-    - Social media intelligence
-    - Staff credentials and expertise
-    - Media coverage and news
-    - Technology stack detection
-    - Competitive positioning
-    
-    Expects request body:
-    {
-        "prospect": {
-            "id": "...",
-            "name": "...",
-            "address": "...",
-            "website": "...",
-            "socialLinks": [...],
-            "services": [...]
-        }
-    }
-    """
-    verify_api_key(x_api_key)
-    
-    if not DEEP_DIVE_AVAILABLE:
-        return {
-            "status": "error",
-            "error": "Deep dive service requires ScrapingBee API key. Please configure SCRAPINGBEE_API_KEY environment variable."
-        }
-    
-    try:
-        # Parse request body
-        body = await request.json()
-        prospect = body.get('prospect')
-        
-        if not prospect:
-            raise HTTPException(status_code=400, detail="Missing 'prospect' data in request body")
-        
-        if not prospect.get('name'):
-            raise HTTPException(status_code=400, detail="Prospect name is required")
-        
-        prospect_name = prospect.get('name')
-        logger.info(f"🚀 Starting deep dive for: {prospect_name}")
-        
-        # Perform deep dive synchronously (runs fast enough with ScrapingBee)
-        try:
-            result = await perform_deep_dive(prospect)
-            
-            logger.info(f"✅ Deep dive completed for {prospect_name}")
-            
-            return {
-                "status": "success",
-                "data": result,
-                "message": f"Deep dive completed for {prospect_name}"
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ Deep dive failed for {prospect_name}: {str(e)}")
-            return {
-                "status": "error",
-                "error": str(e),
-                "message": f"Deep dive failed: {str(e)}"
-            }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error in deep dive endpoint: {str(e)}")
-        return {
-            "status": "error",
-            "error": str(e),
-            "message": "Internal server error"
-        }
 
 if __name__ == "__main__":
     import uvicorn
