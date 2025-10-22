@@ -112,22 +112,22 @@ kaiserpermanente.org
 # ===================================================================
 
 # High-frequency failures (10+ errors)
-texasdls.com
-themedspawaco.com
-cdmedicalaestheticswaco.com
-enigmamedispa.com
-thealternativetouch.com
+texasdls.com                    # 17 failures, avg 134s load time
+themedspawaco.com               # 12 failures, avg 140s load time
+cdmedicalaestheticswaco.com     # 12 failures, avg 140s load time  
+enigmamedispa.com               # 11 failures, avg 134s load time
+thealternativetouch.com         # 10 failures, avg 140s load time
 
 # Medium-frequency failures (5-9 errors)
-southabilenefm.com
-lipogymonthlyspecials.com
-cirilloinstitute.com
-healthgrades.com
-drj.nextcare.com
-shapetricities.com
-treasurevalleyholisticcare.com
-vitallmed.com
-instituteforfunctionalhealth.com
+southabilenefm.com              # 6 failures, avg 36s load time
+lipogymonthlyspecials.com       # 6 failures, avg 39s load time
+cirilloinstitute.com            # 6 failures, avg 140s load time
+healthgrades.com                # 6 404 errors (directory site)
+drj.nextcare.com                # 5 404 errors (urgent care directory)
+shapetricities.com              # 5 failures, avg 41s load time
+treasurevalleyholisticcare.com  # 5 failures, avg 39s load time
+vitallmed.com                   # 5 failures
+instituteforfunctionalhealth.com # 5 failures, avg 140s load time
 
 # Repeated failures (2-4 errors)
 advancedneuropathycenter.com
@@ -202,7 +202,7 @@ benevidawellness.com
 midlandtxdermatology.com
 
 # Obvious non-medical sites
-hilton.com
+hilton.com                      # Hotel chain, not medical
 
 # ===================================================================
 # END OF SCRAPINGBEE LOG ADDITIONS
