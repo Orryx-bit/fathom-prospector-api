@@ -47,14 +47,16 @@ def scrape_with_scrapingbee(url: str, extract_emails_fn, extract_names_fn,
         
         # ScrapingBee request with JavaScript rendering
         response = scrapingbee_client.get(
-            url,
-            params={
-                'render_js': True,  # Enable JavaScript rendering
-                'premium_proxy': True,  # Use premium proxies
-                'country_code': 'us',  # US proxies
-                'wait': 2000,  # Wait 2 seconds for JS to load
-            }
-        )
+        url,
+        params={
+            'render_js': True,
+            'premium_proxy': True,
+            'country_code': 'us',
+            'wait': 2000,
+    },
+    retries=2,      # ✅ ADD THIS LINE
+    timeout=30      # ✅ ADD THIS LINE
+)
         
         if response.status_code != 200:
             logger.error(f"ScrapingBee error for {url}: Status {response.status_code}")
