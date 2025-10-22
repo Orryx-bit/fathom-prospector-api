@@ -25,6 +25,9 @@ from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
+# Import blacklist manager for filtering problematic sites
+from blacklist_manager import get_blacklist_manager
+
 # Load environment variables FIRST
 load_dotenv()
 
@@ -294,6 +297,14 @@ class FathomProspector:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
+        
+        # Initialize blacklist manager for filtering problematic sites
+        try:
+            self.blacklist_manager = get_blacklist_manager()
+            logger.info(f"✅ Blacklist system loaded: {self.blacklist_manager.get_stats()['total_domains']} domains, {self.blacklist_manager.get_stats()['total_patterns']} patterns")
+        except Exception as e:
+            logger.warning(f"⚠️  Blacklist system not available: {str(e)} - continuing without filtering")
+            self.blacklist_manager = None
         
         # Initialize Google Maps API if not in demo mode
         if not demo_mode:
@@ -2563,9 +2574,33 @@ Venus Sales Team"""
         
         # Scrape website if available (using deep multi-page scraping)
         if practice_record['website']:
-            logger.info(f"Deep scraping website: {practice_record['website']}")
-            website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
-            practice_record.update(website_data)
+            # Check if website is blacklisted before scraping
+            is_blacklisted = False
+            blacklist_reason = None
+            
+            if self.blacklist_manager:
+                is_blacklisted, blacklist_reason = self.blacklist_manager.is_blacklisted(practice_record['website'])
+            
+            if is_blacklisted:
+                logger.info(f"⚫ SKIPPING blacklisted website: {practice_record['website']} - Reason: {blacklist_reason}")
+                # Set minimal data for blacklisted sites
+                website_data = {
+                    'title': 'Skipped - Blacklisted Site',
+                    'description': f'Site filtered by blacklist: {blacklist_reason}',
+                    'services': [],
+                    'social_links': [],
+                    'staff_count': 0,
+                    'emails': [],
+                    'contact_names': [],
+                    'additional_phones': [],
+                    'contact_form_url': '',
+                    'team_members': []
+                }
+                practice_record.update(website_data)
+            else:
+                logger.info(f"Deep scraping website: {practice_record['website']}")
+                website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
+                practice_record.update(website_data)
         
         # Calculate AI score with specialty detection
         ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
