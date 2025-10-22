@@ -1,4 +1,3 @@
-
 """
 Fathom Prospector - Python API Server (Phase 2: Production Hardened)
 Wraps prospect.py in a FastAPI server for remote calls from Next.js app
@@ -63,17 +62,8 @@ app.add_middleware(
 # API Key for security (set via environment variable)
 API_KEY = os.getenv("FATHOM_API_KEY", "your-secret-api-key-change-this")
 
-# Import job state manager for multi-replica support
-from job_state_manager import (
-    save_job_state,
-    load_job_state,
-    update_job_state,
-    list_all_jobs,
-    cleanup_old_jobs
-)
-
-# DEPRECATED: Keep for backward compatibility with existing code
-# Now using file-based persistence via job_state_manager
+# In-memory job storage (simple and reliable)
+search_jobs = {}
 search_jobs_lock = threading.Lock()
 
 # Thread pool for running blocking operations
@@ -230,8 +220,8 @@ async def health_check():
     all_healthy = all(checks.values())
     
     # Calculate active searches
-    all_jobs = list_all_jobs()
-    active_searches = sum(1 for job in all_jobs.values() if job["status"] == "running")
+    with search_jobs_lock:
+        active_searches = sum(1 for job in search_jobs.values() if job["status"] == "running")
     
     with metrics_lock:
         current_metrics = {
@@ -256,9 +246,9 @@ async def get_metrics(api_key: str = Header(..., alias="X-API-Key")):
     """Get detailed performance metrics"""
     verify_api_key(api_key)
     
-    all_jobs = list_all_jobs()
-    active_searches = sum(1 for job in all_jobs.values() if job["status"] == "running")
-    queued_searches = sum(1 for job in all_jobs.values() if job["status"] == "queued")
+    with search_jobs_lock:
+        active_searches = sum(1 for job in search_jobs.values() if job["status"] == "running")
+        queued_searches = sum(1 for job in search_jobs.values() if job["status"] == "queued")
     
     with metrics_lock:
         detailed_metrics = {
@@ -372,8 +362,8 @@ async def start_search(
     job_id = str(uuid.uuid4())
     
     # Calculate current concurrent searches
-    all_jobs = list_all_jobs()
-    active_searches = sum(1 for job in all_jobs.values() if job["status"] in ["running", "queued"])
+    with search_jobs_lock:
+        active_searches = sum(1 for job in search_jobs.values() if job["status"] in ["running", "queued"])
     
     # Update metrics
     update_metrics("search_started", concurrent=active_searches + 1)
@@ -388,7 +378,9 @@ async def start_search(
         "user_id": user_id,
         "start_time": time.time()
     }
-    save_job_state(job_id, job_state)
+    
+    with search_jobs_lock:
+        search_jobs[job_id] = job_state
     
     # Start search in background
     background_tasks.add_task(run_prospect_search, job_id, search_request)
@@ -413,11 +405,11 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
     process = None
     try:
         # Update status
-        update_job_state(job_id, {
-            "status": "running",
-            "progress": 5,
-            "message": "Initializing search..."
-        })
+        with search_jobs_lock:
+            if job_id in search_jobs:
+                search_jobs[job_id]["status"] = "running"
+                search_jobs[job_id]["progress"] = 5
+                search_jobs[job_id]["message"] = "Initializing search..."
         
         # Build command
         script_path = os.path.join(
@@ -451,10 +443,6 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             }
         )
         
-        # Store process reference so it can be terminated on timeout
-        # NOTE: Process objects can't be serialized to JSON, so we don't store them in state
-        # We'll handle process termination via timeout in the async wrapper
-        
         # Monitor output
         output = []
         for line in iter(process.stdout.readline, ''):
@@ -462,12 +450,13 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
                 break
             
             # Check if job has been cancelled/timed out
-            job_state = load_job_state(job_id)
-            if job_state and job_state.get("status") == "failed":
-                logger.info(f"Job {job_id}: Detected cancellation, terminating process")
-                process.terminate()
-                process.wait(timeout=5)
-                return
+            with search_jobs_lock:
+                job_state = search_jobs.get(job_id)
+                if job_state and job_state.get("status") == "failed":
+                    logger.info(f"Job {job_id}: Detected cancellation, terminating process")
+                    process.terminate()
+                    process.wait(timeout=5)
+                    return
             
             output.append(line)
             logger.info(f"Job {job_id}: {line.strip()}")
@@ -489,20 +478,22 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             csv_file, report_file = extract_file_paths(full_output)
             
             # Calculate search duration
-            job_state = load_job_state(job_id)
-            start_time = job_state.get("start_time", time.time()) if job_state else time.time()
+            with search_jobs_lock:
+                job_state = search_jobs.get(job_id, {})
+                start_time = job_state.get("start_time", time.time())
+            
             duration = time.time() - start_time
             
-            update_job_state(job_id, {
-                "status": "completed",
-                "progress": 100,
-                "message": "Search completed successfully",
-                "completed_at": datetime.now().isoformat(),
-                "csv_file": csv_file,
-                "report_file": report_file,
-                "results": parse_csv_results(csv_file) if csv_file else [],
-                "duration": duration
-            })
+            with search_jobs_lock:
+                if job_id in search_jobs:
+                    search_jobs[job_id]["status"] = "completed"
+                    search_jobs[job_id]["progress"] = 100
+                    search_jobs[job_id]["message"] = "Search completed successfully"
+                    search_jobs[job_id]["completed_at"] = datetime.now().isoformat()
+                    search_jobs[job_id]["csv_file"] = csv_file
+                    search_jobs[job_id]["report_file"] = report_file
+                    search_jobs[job_id]["results"] = parse_csv_results(csv_file) if csv_file else []
+                    search_jobs[job_id]["duration"] = duration
             
             # Update success metrics
             update_metrics("search_completed", duration=duration)
@@ -514,13 +505,13 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             if stderr:
                 error_msg += f": {stderr[:500]}"
             
-            update_job_state(job_id, {
-                "status": "failed",
-                "progress": 0,
-                "message": "Search failed",
-                "error": error_msg,
-                "completed_at": datetime.now().isoformat()
-            })
+            with search_jobs_lock:
+                if job_id in search_jobs:
+                    search_jobs[job_id]["status"] = "failed"
+                    search_jobs[job_id]["progress"] = 0
+                    search_jobs[job_id]["message"] = "Search failed"
+                    search_jobs[job_id]["error"] = error_msg
+                    search_jobs[job_id]["completed_at"] = datetime.now().isoformat()
             
             # Update failure metrics
             update_metrics("search_failed", error_type="process_error")
@@ -529,13 +520,14 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             
     except Exception as e:
         logger.error(f"Job {job_id}: Exception - {str(e)}")
-        update_job_state(job_id, {
-            "status": "failed",
-            "progress": 0,
-            "message": "Search failed with exception",
-            "error": str(e),
-            "completed_at": datetime.now().isoformat()
-        })
+        
+        with search_jobs_lock:
+            if job_id in search_jobs:
+                search_jobs[job_id]["status"] = "failed"
+                search_jobs[job_id]["progress"] = 0
+                search_jobs[job_id]["message"] = "Search failed with exception"
+                search_jobs[job_id]["error"] = str(e)
+                search_jobs[job_id]["completed_at"] = datetime.now().isoformat()
         
         # Terminate process if still running
         if process and process.poll() is None:
@@ -573,55 +565,50 @@ async def run_prospect_search(job_id: str, request: SearchRequest):
             logger.error(f"Job {job_id}: Search timed out after 5 minutes")
             
             # Update job state to failed
-            update_job_state(job_id, {
-                "status": "failed",
-                "progress": 0,
-                "message": "Search timed out",
-                "error": "Search exceeded 5 minute time limit",
-                "completed_at": datetime.now().isoformat()
-            })
+            with search_jobs_lock:
+                if job_id in search_jobs:
+                    search_jobs[job_id]["status"] = "failed"
+                    search_jobs[job_id]["progress"] = 0
+                    search_jobs[job_id]["message"] = "Search timed out"
+                    search_jobs[job_id]["error"] = "Search exceeded 5 minute time limit"
+                    search_jobs[job_id]["completed_at"] = datetime.now().isoformat()
             
-            # Note: Process termination happens in _run_prospect_search_sync when it detects status=failed
             update_metrics("search_failed", error_type="timeout")
             
         except Exception as e:
             logger.error(f"Job {job_id}: Async wrapper exception - {str(e)}")
-            update_job_state(job_id, {
-                "status": "failed",
-                "progress": 0,
-                "message": "Search failed",
-                "error": f"Async error: {str(e)}",
-                "completed_at": datetime.now().isoformat()
-            })
+            
+            with search_jobs_lock:
+                if job_id in search_jobs:
+                    search_jobs[job_id]["status"] = "failed"
+                    search_jobs[job_id]["progress"] = 0
+                    search_jobs[job_id]["message"] = "Search failed"
+                    search_jobs[job_id]["error"] = f"Async error: {str(e)}"
+                    search_jobs[job_id]["completed_at"] = datetime.now().isoformat()
+            
             update_metrics("search_failed", error_type="async_error")
 
 def update_progress_from_output(job_id: str, output: str):
     """Update job progress based on script output"""
-    if "Searching for:" in output:
-        update_job_state(job_id, {
-            "progress": 20,
-            "message": "Finding practices..."
-        })
-    elif "Found" in output and "prospects" in output:
-        update_job_state(job_id, {
-            "progress": 40,
-            "message": "Analyzing practices..."
-        })
-    elif "Processing practice:" in output:
-        update_job_state(job_id, {
-            "progress": 60,
-            "message": "Scraping practice data..."
-        })
-    elif "Processed:" in output and "Score:" in output:
-        update_job_state(job_id, {
-            "progress": 80,
-            "message": "AI scoring in progress..."
-        })
-    elif "Export results" in output:
-        update_job_state(job_id, {
-            "progress": 90,
-            "message": "Generating reports..."
-        })
+    with search_jobs_lock:
+        if job_id not in search_jobs:
+            return
+            
+        if "Searching for:" in output:
+            search_jobs[job_id]["progress"] = 20
+            search_jobs[job_id]["message"] = "Finding practices..."
+        elif "Found" in output and "prospects" in output:
+            search_jobs[job_id]["progress"] = 40
+            search_jobs[job_id]["message"] = "Analyzing practices..."
+        elif "Processing practice:" in output:
+            search_jobs[job_id]["progress"] = 60
+            search_jobs[job_id]["message"] = "Scraping practice data..."
+        elif "Processed:" in output and "Score:" in output:
+            search_jobs[job_id]["progress"] = 80
+            search_jobs[job_id]["message"] = "AI scoring in progress..."
+        elif "Export results" in output:
+            search_jobs[job_id]["progress"] = 90
+            search_jobs[job_id]["message"] = "Generating reports..."
 
 def extract_file_paths(output: str):
     """Extract CSV and report file paths from output"""
@@ -656,7 +643,9 @@ async def get_search_status(
     """Get status of a search job"""
     verify_api_key(api_key)
     
-    job = load_job_state(job_id)
+    with search_jobs_lock:
+        job = search_jobs.get(job_id)
+    
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     
@@ -678,7 +667,9 @@ async def get_search_results(
     """Get detailed results of a completed search"""
     verify_api_key(api_key)
     
-    job = load_job_state(job_id)
+    with search_jobs_lock:
+        job = search_jobs.get(job_id)
+    
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     
