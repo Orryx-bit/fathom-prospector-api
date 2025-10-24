@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash terminal
 set -e
 
 echo "🚀 Starting Fathom API with dependency verification..."
