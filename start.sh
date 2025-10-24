@@ -10,36 +10,13 @@ python --version
 export PYTHONPATH="${PYTHONPATH}:$(pwd)"
 echo "✅ PYTHONPATH set to: $PYTHONPATH"
 
-# Activate virtual environment if it exists
-if [ -d ".venv" ]; then
-    echo "Activating virtual environment..."
-    source .venv/bin/activate
-fi
-
-# Upgrade pip
-echo "📦 Upgrading pip..."
-python -m pip install --upgrade pip
-
-# Install requirements
-echo "📦 Installing requirements..."
-pip install -r requirements.txt
-
-# Verify critical packages
+# Verify critical packages (quick checks - no reinstall)
 echo "🔍 Verifying installations..."
 python -c "import pandas; print(f'✅ pandas {pandas.__version__} installed')"
-python -c "import scrapingbee; print(f'✅ ScrapingBee installed')"
-echo "🐝 ScrapingBee will handle JavaScript rendering"
-
-echo "🔍 Verifying aiohttp installation..."
 python -c "import aiohttp; print(f'✅ aiohttp {aiohttp.__version__} installed - concurrent scraping enabled')"
-
-echo "🔍 Verifying google.generativeai installation..."
+python -c "import scrapingbee; print(f'✅ ScrapingBee installed')"
 python -c "import google.generativeai; print('✅ google.generativeai installed')"
-
-echo "🔍 Verifying requests installation..."
 python -c "import requests; print(f'✅ requests installed')"
-
-echo "🔍 Verifying scoring_system module..."
 python -c "import scoring_system; print('✅ scoring_system module found!')"
 
 # Start the server with uvicorn (required by Railway)
