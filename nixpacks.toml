@@ -1,14 +1,11 @@
 [phases.setup]
-nixPkgs = ['python311', 'pip']
+nixPkgs = ['python311', 'gcc', 'libffi', 'openssl']
 
 [phases.install]
 cmds = [
-  'pip install --upgrade pip',
-  'pip install -r requirements.txt'
+    'pip install --upgrade pip',
+    'pip install -r requirements.txt'
 ]
 
-[phases.build]
-cmds = ['python --version', 'pip list']
-
 [start]
-cmd = 'uvicorn api_server:app --host 0.0.0.0 --port $PORT'
+cmd = 'uvicorn api_server:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 300'
