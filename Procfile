@@ -1,1 +1,1 @@
-web: python diagnostic_start.py
+web: Bash Terminal start.sh
