@@ -2156,30 +2156,26 @@ Venus Sales Team"""
             # Discover pages to scrape
             pages_to_scrape = self.discover_site_pages(base_url)[:max_pages]
             
-            # Aggregate data from multiple pages
+            # ===== CONCURRENT SCRAPING ENABLED =====
+            logger.info(f"🚀 Scraping {len(pages_to_scrape)} pages CONCURRENTLY")
+            scraped_results = self.scrape_multiple_sync_wrapper(pages_to_scrape, max_concurrent=5)
+            # ===== END CONCURRENT SCRAPING =====
+            
+            # Aggregate data from all scraped pages
             all_services = set()
             all_social_links = set()
             all_staff_mentions = []
             all_text = []
             pages_scraped = 0
             
-            for page_url in pages_to_scrape:
-                if pages_scraped >= max_pages:
-                    break
-                
-                try:
-                    time.sleep(1.0)  # Respectful delay
-                    page_data = self.scrape_single_page(page_url)
-                    
-                    all_services.update(page_data['services'])
-                    all_social_links.update(page_data['social_links'])
-                    all_staff_mentions.extend(page_data['staff_mentions'])
-                    all_text.append(page_data['text'])
+            for result in scraped_results:
+                if result.get('success'):
+                    page_data = result.get('data', {})
+                    all_services.update(page_data.get('services', []))
+                    all_social_links.update(page_data.get('social_links', []))
+                    all_staff_mentions.extend(page_data.get('staff_mentions', []))
+                    all_text.append(page_data.get('text', ''))
                     pages_scraped += 1
-                    
-                except Exception as e:
-                    logger.debug(f"Skipping page {page_url}: {str(e)}")
-                    continue
             
             # Calculate staff count from all mentions
             unique_staff = len(set(all_staff_mentions))
