@@ -1,4 +1,3 @@
-
 #!/usr/bin/env python3
 """
 Fathom Medical Device Prospecting System
@@ -25,6 +24,14 @@ import requests
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
+
+# Import blacklist manager for filtering problematic sites
+from blacklist_manager import get_blacklist_manager
+
+# Async HTTP for concurrent scraping
+import asyncio
+import aiohttp
+from aiohttp import ClientTimeout, TCPConnector
 
 # Load environment variables FIRST
 load_dotenv()
@@ -295,6 +302,14 @@ class FathomProspector:
         self.session.headers.update({
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
+        
+        # Initialize blacklist manager for filtering problematic sites
+        try:
+            self.blacklist_manager = get_blacklist_manager()
+            logger.info(f"✅ Blacklist system loaded: {self.blacklist_manager.get_stats()['total_domains']} domains, {self.blacklist_manager.get_stats()['total_patterns']} patterns")
+        except Exception as e:
+            logger.warning(f"⚠️  Blacklist system not available: {str(e)} - continuing without filtering")
+            self.blacklist_manager = None
         
         # Initialize Google Maps API if not in demo mode
         if not demo_mode:
@@ -1524,10 +1539,9 @@ Consider factors like competition, market position, current services, and growth
     
     def generate_outreach_ai(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
         """
-        Meeting-focused AI outreach generation using Abacus RouteLLM
-        Creates personalized cold call script, Instagram DM, and email
-        CRITICAL: All outreach focuses on SETTING A MEETING, not pitching products
-        Falls back to template-based if AI unavailable
+        CREATIVE AI outreach generation using Abacus RouteLLM
+        Creates personalized cold call script, Instagram DM, and email with creative approaches
+        All outreach focuses on SETTING MEETINGS with creative engagement
         """
         if not self.ai_enabled:
             return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
@@ -1540,261 +1554,200 @@ Consider factors like competition, market position, current services, and growth
             location = practice_data.get('location', '')
             rating = practice_data.get('rating', 0)
             phone_number = practice_data.get('phone', '')
+            services = practice_data.get('services', [])
+            review_count = practice_data.get('review_count', 0)
             
             # Handle missing contact info gracefully
-            contact_display = contact_name if contact_name else 'the doctor'
-            email_display = contact_email if contact_email else '[Email address]'
+            contact_display = contact_name if contact_name else 'the practice'
             
-            # Build gatekeeper bypass technique #5 (outside f-string to avoid backslash issue)
-            if contact_name:
-                technique_5 = f'Name Drop: "Following up on information for Dr. {contact_name}..."'
-            else:
-                technique_5 = f'Educational Angle: "New FDA-cleared technology for {specialty}..."'
+            # Creative frameworks
+            creative_frameworks = [
+                "curiosity_gap", "puzzle_solver", "trend_spotter", "results_tease"
+            ]
+            selected_framework = random.choice(creative_frameworks)
+            
+            # Specialty analogies
+            specialty_analogies = {
+                'dermatology': [
+                    "Like finding the perfect skincare regimen, but for your practice's revenue",
+                    "Similar to how laser treatments target specific skin concerns, this targets specific revenue gaps"
+                ],
+                'plastic_surgery': [
+                    "Like precision surgery for your practice's revenue streams", 
+                    "Similar to how reconstructive surgery restores function, this restores practice growth"
+                ],
+                'obgyn': [
+                    "Like prenatal care for your practice's new service lines",
+                    "Similar to how hormone therapy balances systems, this balances your service portfolio"
+                ],
+                'medspa': [
+                    "Like the perfect chemical peel for your revenue - reveals what's underneath",
+                    "Similar to how Botox smooths wrinkles, this smooths out revenue fluctuations"
+                ],
+                'familypractice': [
+                    "Like preventive care for your practice's financial health",
+                    "Similar to how family medicine treats the whole person, this treats the whole practice"
+                ]
+            }
+            
+            analogy = random.choice(specialty_analogies.get(specialty, [
+                "Like finding the right diagnostic tool for your practice's growth potential",
+                "Similar to how the right treatment plan transforms patient outcomes, this transforms practice revenue"
+            ]))
             
             # ========================================
-            # COLD CALL PROMPT (Gatekeeper-focused)
+            # CREATIVE EMAIL PROMPT 
             # ========================================
-            cold_call_prompt = f"""You are a professional medical device sales rep with Venus Concepts making a cold call to {practice_name}.
+            email_prompt = f"""
+You are "Alex Rivera," a top-performing medical device consultant known for:
+- Creating irresistible curiosity gaps
+- Using unexpected analogies that make doctors stop and think  
+- Building immediate rapport through personalized insights
+- Crafting emails that get 3x higher response rates than industry average
 
-CRITICAL MISSION: The ONLY goal is to SET A MEETING with the decision-maker. This is NOT a product pitch. You DO NOT talk about product features, specifications, or try to sell anything on this call.
+YOUR CREATIVE MISSION:
+Transform boring sales email into something a busy doctor would actually WANT to read.
 
-AUDIENCE: You are speaking to a RECEPTIONIST or OFFICE MANAGER (GATEKEEPER) whose job is to BLOCK sales reps from reaching the doctor. They will NOT transfer you or schedule a meeting unless you give them a compelling, time-sensitive reason that makes them think "the doctor would be upset if I didn't pass this along."
+PRACTICE CONTEXT:
+- Practice: {practice_name} in {location}
+- Specialty: {specialty} 
+- Rating: {rating}/5 ({review_count} reviews)
+- Recent Services: {services[:3] if services else 'General services'}
 
-AVAILABLE PRACTICE DATA:
-- Practice Name: {practice_name}
-- Location: {location}
-- Rating: {rating}/5
-- Specialty: {specialty}
-- Decision-Maker: {contact_display}
-- Phone: {phone_number}
+USE CREATIVE FRAMEWORK: {selected_framework}
 
-YOUR STRATEGY:
-Use the practice data above to create urgency, exclusivity, or FOMO. Make this sound like a time-sensitive opportunity that's specific to their high-performing practice, not a generic sales call.
+PSYCHOLOGICAL TRIGGERS: Use scarcity, social proof, curiosity, and reciprocity naturally.
 
-GATEKEEPER BYPASS TECHNIQUES TO USE:
-1. Time-Sensitive Opportunity: "Scheduling demos in {location} this week/month..."
-2. Exclusivity: "Reaching out to top-rated practices..." (use their {rating} rating)
-3. FOMO: "Other {specialty} practices in {location} are booking slots..."
-4. Referral Implication: "Reaching out to practices that were recommended..."
-5. {technique_5}
-6. Competitive Intelligence: "Competitive market insights for practices in {location}..."
+SPECIALTY ANALOGY: {analogy}
 
-GENERATE A COLD CALL SCRIPT THAT:
-1. Opens with confidence and states your name and company (Venus Concepts)
-2. Uses ONE of the practice data points ({rating}, {location}, {specialty}) in the first sentence to show research
-3. Creates urgency/exclusivity/FOMO using one of the bypass techniques above
-4. Asks for the doctor's PREFERRED MEETING METHOD - choose one:
-   - "Does the doctor do lunch meetings with reps?"
-   - "When does the doctor typically meet with vendors?"
-   - "Would a brief 15-minute consultation work this week?"
-   - "What's the best way to get 15 minutes on the doctor's calendar?"
-5. If gatekeeper says "send information," respond with: "I'd be happy to, but I'm scheduling meetings in {location} this week. Does [day] or [day] work better for a brief consultation?"
-6. Keeps the entire script UNDER 30 SECONDS when spoken aloud
-7. Sounds confident, professional, and time-sensitive (NOT desperate or pushy)
+CREATIVE CONSTRAINTS:
+- MUST create an "Aha!" moment in first 15 words
+- MUST use the specialty analogy above
+- MUST include one curiosity-building question
+- CAN use humor, storytelling, or industry insights
+- CAN break conventional email structure if it creates engagement
+- CANNOT sound like a typical sales email
+- CANNOT use corporate jargon like "leverage," "synergy," etc.
 
-MEETING-SETTING HOOKS (Choose and integrate naturally):
-- High Rating Hook: "I'm reaching out to top-performing {specialty} practices in {location}, and I noticed {practice_name}'s excellent {rating}/5 rating..."
-- Competitive Market Hook: "Given the competitive aesthetic market in {location}, other practices have been requesting demos..."
-- Specialty Hook: "{specialty} is a high-growth segment, and we're seeing practices like yours expand service offerings..."
-- Scarcity Hook: "I have limited demo slots available in {location} this month..."
+FORMAT:
+- Subject line (intriguing, 5-8 words)
+- Body (conversational, 80-120 words)
+- CTA (specific but low-pressure)
 
-DO:
-✓ Address the receptionist directly (not the doctor)
-✓ Create urgency or exclusivity using practice data
-✓ Ask for specific meeting format (lunch, vendor time, brief consultation)
-✓ Use gatekeeper bypass language from the techniques above
-✓ Make it sound time-sensitive and exclusive
-✓ Sound confident and professional
-✓ Keep it under 30 seconds
+Generate the email in the following format:
 
-DON'T:
-✗ Mention product names, features, or specifications
-✗ Accept "send us information" as the final answer without pushing for meeting
-✗ Sound like a generic sales call
-✗ Ask "Can I speak to the doctor?" directly
-✗ Dive into what Venus Concepts products do
-✗ Sound desperate, pushy, or overly aggressive
-✗ Forget to ask for specific meeting format
-
-TONE: Professional, confident, time-sensitive (like you have limited availability)
-
-FORMAT: Write the script as natural conversation with clear beats:
-[Opening + Company] → [Data-Driven Hook] → [Meeting Method Question]
-
-OUTPUT: Generate a complete cold call script ready to use."""
-
-            # ========================================
-            # EMAIL PROMPT (Decision-maker focused)
-            # ========================================
-            email_prompt = f"""You are a professional medical device sales rep with Venus Concepts writing an email to {practice_name}.
-
-CRITICAL MISSION: The ONLY goal is to GET A RESPONSE and SET A MEETING with the decision-maker. This is NOT a product pitch email. You DO NOT describe product features or specifications.
-
-AUDIENCE: The decision-maker at the practice (doctor, practice owner, or medical director). They receive dozens of sales emails daily. They will DELETE your email unless it's:
-1. Clearly personalized to their practice
-2. Brief and scannable
-3. Offers meeting value (not product value)
-
-AVAILABLE PRACTICE DATA:
-- Practice Name: {practice_name}
-- Location: {location}
-- Rating: {rating}/5
-- Specialty: {specialty}
-- Decision-Maker Name: {contact_display}
-- Email: {email_display}
-
-YOUR STRATEGY:
-Use the practice data to show you've done research. Create urgency or exclusivity by referencing competitive market dynamics. Position the meeting as valuable for THEM (market insights, competitive intelligence, revenue opportunities) - NOT as a product demo.
-
-REQUIRED EMAIL STRUCTURE:
-1. SUBJECT LINE (5-8 words max):
-   - Must mention their {practice_name} or {location}
-   - Create curiosity without being clickbait
-   - Examples: "Brief consultation for {practice_name}?", "Quick meeting in {location}?", "Competitive insights for {practice_name}"
-
-2. OPENING (1 sentence):
-   - Use practice data ({rating}, {location}, {specialty}) to show research
-   - Establish credibility and relevance
-
-3. BODY PARAGRAPH 1 (2-3 sentences):
-   - Create urgency/exclusivity with competitive market angle
-   - Reference what OTHER practices are doing (FOMO)
-   - Make them curious about staying competitive
-
-4. BODY PARAGRAPH 2 (2-3 sentences):
-   - State the VALUE PROPOSITION for taking the meeting (NOT product features)
-   - Focus on business outcomes: differentiation, revenue growth, market insights
-   - Choose from: market insights, revenue options, competitive intelligence, service expansion
-
-5. CALL-TO-ACTION (1-2 sentences):
-   - Specific meeting ask with EASY response options
-   - Offer 2-3 specific time options or meeting formats
-   - Examples: "Would you be available for a brief lunch meeting next Tuesday or Thursday?"
-
-6. CLOSING:
-   - Professional sign-off with placeholders: "[Your Name]", "[Your Title]", "[Contact Information]"
-
-GENERATE AN EMAIL THAT:
-1. Has a brief, intriguing subject line mentioning {practice_name} or {location}
-2. Opens with data-driven hook showing research ({rating}, {location}, or {specialty})
-3. Creates urgency or FOMO by referencing competitive market or other practices
-4. Positions the meeting value (business insights, not product features)
-5. Ends with specific meeting options that are easy to respond to
-6. Is under 150 words total (brief and scannable)
-7. Feels personalized to their practice (not a generic template)
-
-DO:
-✓ Personalize with practice name and data
-✓ Keep it brief and scannable (150 words max)
-✓ Provide specific meeting time options
-✓ Focus on meeting value, not product features
-✓ Sound professional but not stuffy
-
-DON'T:
-✗ List product features or specifications
-✗ Make it too long (over 200 words)
-✗ Use vague CTAs like "Let me know if interested"
-✗ Describe what Venus Concepts devices do
-
-TONE: Professional, consultative, confident (you're offering valuable market insights)
-
-FORMAT: Complete email with subject line and body. Format your response EXACTLY like this:
-
-SUBJECT: [subject line here]
+SUBJECT: [subject line]
 
 BODY:
-[email body here]
+[email body]
 
-OUTPUT: Generate a complete email ready to send."""
+Remember: Sound like a helpful colleague, not a salesperson.
+"""
 
             # ========================================
-            # INSTAGRAM DM PROMPT (Social media focused)
+            # CREATIVE COLD CALL PROMPT
             # ========================================
-            instagram_dm_prompt = f"""You are a professional medical device sales rep with Venus Concepts sending an Instagram DM to {practice_name}'s account.
+            cold_call_prompt = f"""
+You are "Alex Rivera," a top-performing medical device consultant making a cold call to {practice_name}.
 
-CRITICAL MISSION: The ONLY goal is to CREATE CURIOSITY and GET A RESPONSE that leads to a casual meeting or call. This is NOT a sales pitch. You DO NOT mention products.
+CREATIVE MISSION: Create a 30-second opening that makes the gatekeeper WANT to connect you.
 
-AUDIENCE: This could be a social media manager, marketing coordinator, or the doctor themselves. They are on Instagram for CONTENT and ENGAGEMENT, not to receive sales pitches. They will IGNORE or BLOCK obvious sales messages.
-
-AVAILABLE PRACTICE DATA:
-- Practice Name: {practice_name}
-- Location: {location}
-- Rating: {rating}/5
+PRACTICE CONTEXT:
+- Practice: {practice_name} in {location}
 - Specialty: {specialty}
+- Rating: {rating}/5
 
-YOUR STRATEGY:
-Sound like a REAL PERSON, not a bot or corporate sales rep. Compliment their Instagram presence. Create curiosity about what other practices are doing. Suggest a low-pressure, casual meeting (coffee, quick call).
+USE PSYCHOLOGY:
+- Scarcity: "Only 2 consultation slots left in {location} this month"
+- Social Proof: "Other {specialty} practices in the area are seeing amazing results"
+- Curiosity: "There's a specific pattern I'm seeing with successful {specialty} practices"
+- Reciprocity: "I analyzed your practice and have one quick insight to share"
+
+CREATIVE APPROACH:
+- Start with a curiosity gap that makes them wonder
+- Use the {specialty} analogy: {analogy}
+- Sound like you're offering valuable market intelligence, not selling
+- Keep it under 30 seconds when spoken
+
+GENERATE A COLD CALL SCRIPT THAT:
+1. Opens with a surprising industry insight about {specialty}
+2. Creates immediate curiosity about what you know
+3. Positions you as a valuable resource, not a salesperson
+4. Asks for a specific meeting format (lunch, brief call, etc.)
+5. Sounds confident and professional but not corporate
+
+OUTPUT: A natural, conversational script ready to use.
+"""
+
+            # ========================================
+            # CREATIVE INSTAGRAM DM PROMPT
+            # ========================================
+            instagram_dm_prompt = f"""
+You are "Alex Rivera," sending an Instagram DM to {practice_name}.
+
+CREATIVE MISSION: Craft a DM that doesn't get ignored or blocked.
+
+PRACTICE CONTEXT:
+- Practice: {practice_name} 
+- Specialty: {specialty}
+- Location: {location}
+
+CREATIVE STRATEGY:
+- Compliment their Instagram presence authentically
+- Create curiosity about market trends in {specialty}
+- Use 1-2 emojis maximum
+- Sound like a real person, not a bot
+- Keep it under 40 words total
+
+PSYCHOLOGICAL HOOKS:
+- "Noticed something interesting about {specialty} practices in {location}..."
+- "Other top-rated practices are shifting their approach to..."
+- "There's a trend in {specialty} that's creating huge opportunity..."
 
 GENERATE AN INSTAGRAM DM THAT:
-1. Opens with a friendly greeting + emoji (👋 or 😊)
-2. Compliments their Instagram content or presence
-3. Mentions you work with Venus Concepts and connect with {specialty} practices
-4. Creates curiosity by mentioning {location} market or what's trending
-5. Suggests LOW-PRESSURE meeting/call: "coffee chat", "quick call", "brief lunch meeting"
-6. Keeps it VERY SHORT (2-3 sentences max, under 50 words)
-7. Uses 1-3 appropriate emojis (not excessive)
-8. Feels like a real person having a conversation
+1. Opens with a genuine compliment or observation
+2. Creates curiosity about industry insights
+3. Suggests low-pressure connection (coffee, quick call)
+4. Uses 1-2 relevant emojis
+5. Feels like a human conversation
 
-MEETING ASK OPTIONS (Choose one):
-- "Any chance you'd be open to a quick coffee chat about what's working for practices in {location}?"
-- "Would a brief lunch meeting work?"
-- "Free for a quick call this week?"
+TONE: Friendly, curious, professional-but-not-stuffy
 
-DO:
-✓ Compliment their content or Instagram presence
-✓ Keep it very short (2-3 sentences, under 50 words)
-✓ Use 1-3 appropriate emojis
-✓ Sound like a real person
-✓ Suggest low-pressure meeting
-
-DON'T:
-✗ Mention product names
-✗ Sound corporate or formal
-✗ Write long paragraphs
-✗ Use excessive emojis (more than 3)
-
-TONE: Friendly, casual, complimentary (like a peer, not a salesperson)
-
-EMOJI GUIDANCE:
-- Use 1-3 emojis max
-- Good: 👋 😊 ✨ 🎯 🔥 ☕
-- Avoid: 💰 📈 💵
-
-OUTPUT: Generate a complete Instagram DM ready to send (2-3 sentences max)."""
+OUTPUT: A short, engaging DM ready to send.
+"""
 
             # ========================================
-            # Generate all three outreach types
+            # Generate all three outreach types with creative approach
             # ========================================
-            system_msg = "You are a top-performing medical device sales professional with 10 years of experience. Your specialty is setting high-value meetings with medical practice decision-makers. You never pitch products on first contact—you focus entirely on creating compelling reasons for busy doctors to take a meeting."
+            system_msg = "You are a creative medical device consultant who specializes in crafting outreach that actually gets responses. You avoid corporate jargon and focus on creating genuine curiosity and value."
             
-            # Generate cold call script
-            cold_call_response = self.call_ai(cold_call_prompt, system_msg, max_tokens=400, temperature=0.7)
-            cold_call = cold_call_response.strip() if cold_call_response else ""
-            
-            # Generate email
-            email_response = self.call_ai(email_prompt, system_msg, max_tokens=350, temperature=0.7)
+            # Generate creative email
+            email_response = self.call_ai(email_prompt, system_msg, max_tokens=400, temperature=0.8)
             email_subject = ""
             email_body = ""
+            
             if email_response:
-                # Parse email subject and body
                 if 'SUBJECT:' in email_response and 'BODY:' in email_response:
                     parts = email_response.split('BODY:', 1)
                     email_subject = parts[0].replace('SUBJECT:', '').strip()
                     email_body = parts[1].strip()
                 else:
-                    # Fallback: use entire response as body
                     email_body = email_response.strip()
             
-            # Generate Instagram DM
-            instagram_response = self.call_ai(instagram_dm_prompt, system_msg, max_tokens=150, temperature=0.8)
+            # Generate creative cold call script
+            cold_call_response = self.call_ai(cold_call_prompt, system_msg, max_tokens=300, temperature=0.7)
+            cold_call = cold_call_response.strip() if cold_call_response else ""
+            
+            # Generate creative Instagram DM
+            instagram_response = self.call_ai(instagram_dm_prompt, system_msg, max_tokens=200, temperature=0.8)
             instagram = instagram_response.strip() if instagram_response else ""
             
-            # Validation - ensure we got at least email
+            # Validation
             if not email_body:
-                logger.warning("AI outreach generation incomplete, using template-based fallback")
+                logger.warning("Creative AI outreach generation incomplete, using template-based fallback")
                 return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
             
-            logger.info(f"🤖 Meeting-focused AI outreach generated successfully for {practice_name}")
+            logger.info(f"🎨 CREATIVE AI outreach generated for {practice_name} using {selected_framework} framework")
             
             return {
                 'outreachColdCall': cold_call if cold_call else None,
@@ -1802,13 +1755,13 @@ OUTPUT: Generate a complete Instagram DM ready to send (2-3 sentences max)."""
                 'outreachEmail': email_body if email_body else None,
                 'outreachEmailSubject': email_subject if email_subject else None,
                 'talking_points': pain_analysis.get('pain_points', [])[:3],
-                'ai_generated': True
+                'ai_generated': True,
+                'creative_framework': selected_framework
             }
             
         except Exception as e:
-            logger.error(f"AI outreach generation failed: {str(e)}, using template-based fallback")
+            logger.error(f"Creative AI outreach generation failed: {str(e)}, using template-based fallback")
             return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
-
 
         
         # Priority order (most specific first)
@@ -2564,9 +2517,33 @@ Venus Sales Team"""
         
         # Scrape website if available (using deep multi-page scraping)
         if practice_record['website']:
-            logger.info(f"Deep scraping website: {practice_record['website']}")
-            website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
-            practice_record.update(website_data)
+            # Check if website is blacklisted before scraping
+            is_blacklisted = False
+            blacklist_reason = None
+            
+            if self.blacklist_manager:
+                is_blacklisted, blacklist_reason = self.blacklist_manager.is_blacklisted(practice_record['website'])
+            
+            if is_blacklisted:
+                logger.info(f"⚫ SKIPPING blacklisted website: {practice_record['website']} - Reason: {blacklist_reason}")
+                # Set minimal data for blacklisted sites
+                website_data = {
+                    'title': 'Skipped - Blacklisted Site',
+                    'description': f'Site filtered by blacklist: {blacklist_reason}',
+                    'services': [],
+                    'social_links': [],
+                    'staff_count': 0,
+                    'emails': [],
+                    'contact_names': [],
+                    'additional_phones': [],
+                    'contact_form_url': '',
+                    'team_members': []
+                }
+                practice_record.update(website_data)
+            else:
+                logger.info(f"Deep scraping website: {practice_record['website']}")
+                website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
+                practice_record.update(website_data)
         
         # Calculate AI score with specialty detection
         ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
@@ -2712,6 +2689,217 @@ Venus Sales Team"""
         
         logger.info(f"Results exported to {filename}")
     
+    # ============================================================================
+    # CONCURRENT SCRAPING METHODS (Added for Performance)
+    # ============================================================================
+    
+    async def scrape_website_async(self, session: aiohttp.ClientSession, url: str) -> Dict[str, any]:
+        """
+        Async version of scrape_website for concurrent scraping
+        Falls back to sync version on error
+        """
+        if not url or self.demo_mode:
+            return self.scrape_website(url)
+        
+        if not self.check_robots_txt(url):
+            logger.warning(f"Robots.txt disallows scraping: {url}")
+            return {
+                'title': 'Not Available - Restricted',
+                'description': 'Not Available - Restricted',
+                'services': [],
+                'social_links': [],
+                'staff_count': 0,
+                'emails': [],
+                'contact_names': [],
+                'additional_phones': [],
+                'contact_form_url': '',
+                'team_members': []
+            }
+        
+        try:
+            await asyncio.sleep(random.uniform(0.5, 1.0))
+            
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                response.raise_for_status()
+                html = await response.text()
+                
+                soup = BeautifulSoup(html, 'html.parser')
+                
+                data = {
+                    'title': '',
+                    'description': '',
+                    'services': [],
+                    'social_links': [],
+                    'staff_count': 0,
+                    'emails': [],
+                    'contact_names': [],
+                    'additional_phones': [],
+                    'contact_form_url': '',
+                    'team_members': []
+                }
+                
+                # Extract title
+                if soup.title and soup.title.string:
+                    data['title'] = soup.title.string.strip()
+                else:
+                    data['title'] = 'Not Available'
+                
+                # Extract description
+                meta_desc = soup.find('meta', attrs={'name': 'description'})
+                if meta_desc and meta_desc.get('content'):
+                    data['description'] = meta_desc.get('content', '').strip()
+                else:
+                    og_desc = soup.find('meta', attrs={'property': 'og:description'})
+                    if og_desc and og_desc.get('content'):
+                        data['description'] = og_desc.get('content', '').strip()
+                    else:
+                        data['description'] = 'Not Available'
+                
+                # Extract services
+                data['services'] = self._extract_services_from_soup(soup)
+                
+                # Extract social links
+                data['social_links'] = self._extract_social_links_from_soup(soup, url)
+                
+                # Extract emails
+                data['emails'] = self.extract_emails(soup, url)
+                
+                # Extract contact names
+                data['contact_names'] = self.extract_contact_names(soup, '', url)
+                
+                # Count staff
+                data['staff_count'] = self._count_staff_from_soup(soup)
+                
+                logger.info(f"✓ Async scraped {url}: {len(data['services'])} services")
+                return data
+                
+        except asyncio.TimeoutError:
+            logger.warning(f"Async timeout for {url}, falling back to sync")
+            return self.scrape_website(url)
+        except Exception as e:
+            logger.warning(f"Async error for {url}: {str(e)}, falling back to sync")
+            return self.scrape_website(url)
+    
+    async def scrape_multiple_concurrent(self, urls: List[str], max_concurrent: int = 5) -> List[Dict[str, any]]:
+        """
+        Scrape multiple URLs concurrently - MASSIVE performance improvement
+        
+        Args:
+            urls: List of URLs to scrape
+            max_concurrent: Maximum concurrent requests (default 5)
+        
+        Returns:
+            List of scraped data in same order as URLs
+        
+        Example:
+            # Instead of 10 seconds sequential, this takes ~2 seconds
+            urls = [url1, url2, url3, url4, url5]
+            results = await prospector.scrape_multiple_concurrent(urls)
+        """
+        if not urls:
+            return []
+        
+        connector = TCPConnector(
+            limit=max_concurrent,
+            limit_per_host=2,
+            ttl_dns_cache=300
+        )
+        
+        timeout = ClientTimeout(total=30, connect=10)
+        
+        async with aiohttp.ClientSession(
+            connector=connector,
+            timeout=timeout,
+            headers={'User-Agent': self.session.headers.get('User-Agent', 'FathomProspector/3.0')}
+        ) as session:
+            tasks = [self.scrape_website_async(session, url) for url in urls]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            processed_results = []
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Error scraping {urls[i]}: {str(result)}")
+                    processed_results.append({
+                        'title': 'Error',
+                        'description': 'Error',
+                        'services': [],
+                        'social_links': [],
+                        'staff_count': 0,
+                        'emails': [],
+                        'contact_names': [],
+                        'additional_phones': [],
+                        'contact_form_url': '',
+                        'team_members': []
+                    })
+                else:
+                    processed_results.append(result)
+            
+            return processed_results
+    
+    def scrape_multiple_sync_wrapper(self, urls: List[str], max_concurrent: int = 5) -> List[Dict[str, any]]:
+        """
+        Synchronous wrapper for concurrent scraping
+        Use this in existing code - it handles the async event loop for you
+        
+        Example:
+            prospector = FathomProspector()
+            urls = [result['website'] for result in results if result.get('website')]
+            scraped_data = prospector.scrape_multiple_sync_wrapper(urls)
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                logger.warning("Event loop running, falling back to sequential")
+                return [self.scrape_website(url) for url in urls]
+            else:
+                return loop.run_until_complete(self.scrape_multiple_concurrent(urls, max_concurrent))
+        except RuntimeError:
+            return asyncio.run(self.scrape_multiple_concurrent(urls, max_concurrent))
+        except Exception as e:
+            logger.error(f"Concurrent scraping failed: {str(e)}, falling back")
+            return [self.scrape_website(url) for url in urls]
+    
+    # Helper methods for async scraping
+    def _extract_services_from_soup(self, soup) -> List[str]:
+        """Extract services from BeautifulSoup object"""
+        services = []
+        service_keywords = [
+            'botox', 'filler', 'laser', 'facial', 'peel', 'dermabrasion',
+            'microneedling', 'prp', 'coolsculpting', 'body contouring',
+            'skin tightening', 'hair removal', 'vein treatment', 'skin care',
+            'anti-aging', 'rejuvenation', 'aesthetic', 'cosmetic'
+        ]
+        
+        text_content = soup.get_text().lower()
+        for keyword in service_keywords:
+            if keyword in text_content:
+                services.append(keyword.title())
+        
+        return list(set(services))
+    
+    def _extract_social_links_from_soup(self, soup, base_url: str) -> List[str]:
+        """Extract social media links"""
+        social_links = []
+        social_domains = ['facebook.com', 'instagram.com', 'twitter.com', 'linkedin.com', 'youtube.com']
+        
+        for link in soup.find_all('a', href=True):
+            href = link['href']
+            if any(domain in href for domain in social_domains):
+                social_links.append(href)
+        
+        return list(set(social_links))
+    
+    def _count_staff_from_soup(self, soup) -> int:
+        """Count staff mentions"""
+        staff_keywords = ['dr.', 'doctor', 'physician', 'surgeon', 'rn', 'pa', 'np', 'provider']
+        text_content = soup.get_text().lower()
+        
+        staff_count = 0
+        for keyword in staff_keywords:
+            staff_count += text_content.count(keyword)
+        
+        return min(staff_count, 20)
+
     def generate_summary_report(self, results: List[Dict], filename: str):
         """Generate summary report"""
         
