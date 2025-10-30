@@ -1,19 +1,22 @@
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "python311Packages.venv"]
+nixPkgs = ["python311"]
 
 [phases.install]
 cmds = [
-  "pip install --upgrade pip",
-  "pip install -r requirements.txt", 
-  "python -m playwright install --with-deps chromium"
+  "python -m venv /opt/venv",
+  "source /opt/venv/bin/activate && pip install --upgrade pip",
+  "source /opt/venv/bin/activate && pip install -r requirements.txt",
+  "source /opt/venv/bin/activate && python -m playwright install --with-deps chromium"
 ]
 
 [phases.build]
 cmds = [
   "python --version",
-  "pip --version",
-  "pip list"
+  "source /opt/venv/bin/activate && pip list"
 ]
 
 [start]
 cmd = "bash start.sh"
+
+[variables]
+PATH = "/opt/venv/bin:$PATH"
