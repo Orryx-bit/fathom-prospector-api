@@ -1,0 +1,105 @@
+# URL PATTERN BLACKLIST
+# Patterns that indicate problematic pages
+# Format: regex patterns, one per line
+
+# Login/Authentication pages
+.*\/login.*
+.*\/signin.*
+.*\/auth.*
+.*\/portal.*
+.*\/patient-portal.*
+.*\/secure.*
+
+# Administrative pages
+.*\/admin.*
+.*\/dashboard.*
+.*\/wp-admin.*
+
+# Payment/Checkout pages
+.*\/checkout.*
+.*\/cart.*
+.*\/payment.*
+.*\/billing.*
+
+# Privacy/Legal pages
+.*\/privacy.*
+.*\/terms.*
+.*\/legal.*
+.*\/disclaimer.*
+
+# Social media redirects
+.*\/share.*
+.*\/follow.*
+.*\/social.*
+
+# CDN/Asset URLs
+.*\.jpg.*
+.*\.png.*
+.*\.gif.*
+.*\.pdf.*
+.*\.css.*
+.*\.js.*
+
+# Dynamic/API endpoints
+.*\/api\/.*
+.*\/ajax\/.*
+.*\/json\/.*
+
+# Email/Newsletter
+.*\/subscribe.*
+.*\/newsletter.*
+.*\/unsubscribe.*
+
+# Job postings
+.*\/careers.*
+.*\/jobs.*
+.*\/employment.*
+
+# Blog archives (slow pagination)
+.*\/page\/\d+.*
+.*\/\d{4}\/\d{2}\/.*
+
+# Search results pages
+.*\/search\?.*
+.*\/\?s=.*
+
+# ===================================================================
+# ADDED FROM SCRAPINGBEE LOG ANALYSIS - October 22, 2025
+# ===================================================================
+
+# Patient portals (specific systems seen in logs)
+.*portal\.athenahealth\.com.*
+.*\.portal\.athenahealth\.com.*
+.*\.athenahealth\.com.*
+
+# Booking system URLs
+.*\.vagaro\.com.*
+.*vagaro\.com.*
+.*\.myaestheticrecord\.com.*
+
+# Directory/aggregator sites
+.*nextcare\.com.*
+.*healthgrades\.com.*
+
+# UTM tracking parameters (often aggregator redirects)
+.*utm_campaign=listing-yext.*
+.*utm_source=GoogleMaps.*
+.*utm_medium=Local.*
+
+# 4life MLM redirects
+.*4life\.com.*
+
+# Canva sites (template sites, not actual practice sites)
+.*\.canva\.site.*
+
+# Instagram direct links (social media)
+.*instagram\.com.*
+
+# Wix/Weebly/Squarespace subdomains often problematic
+.*\.wixsite\.com.*
+.*\.weebly\.com.*
+.*\.squarespace\.com.*
+
+# ===================================================================
+# END OF SCRAPINGBEE LOG PATTERN ADDITIONS
+# ===================================================================
