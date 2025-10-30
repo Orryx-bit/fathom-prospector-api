@@ -2780,7 +2780,7 @@ Venus Sales Team"""
             logger.warning(f"Async error for {url}: {str(e)}, falling back to sync")
             return self.scrape_website(url)
     
-    async def scrape_multiple_concurrent(self, urls: List[str], max_concurrent: int = 5) -> List[Dict[str, any]]:
+    async def scrape_multiple_concurrent(self, urls: List[str], max_concurrent: int = 50) -> List[Dict[str, any]]:
         """
         Scrape multiple URLs concurrently - MASSIVE performance improvement
         
@@ -2836,7 +2836,7 @@ Venus Sales Team"""
             
             return processed_results
     
-    def scrape_multiple_sync_wrapper(self, urls: List[str], max_concurrent: int = 5) -> List[Dict[str, any]]:
+    def scrape_multiple_sync_wrapper(self, urls: List[str], max_concurrent: int = 50) -> List[Dict[str, any]]:
         """
         Synchronous wrapper for concurrent scraping
         Use this in existing code - it handles the async event loop for you
@@ -2961,16 +2961,33 @@ TOP 10 HIGH-PRIORITY PROSPECTS
             
             places = self.google_places_search(keyword, location, radius * 1000)
             
-            for place in places[:max_results]:
+            # PARALLEL PROCESSING: Process up to 50 prospects concurrently
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            
+            places_to_process = places[:max_results]
+            logger.info(f"Processing {len(places_to_process)} places in parallel (max 50 concurrent)")
+            
+            def process_single_place(place):
+                """Wrapper for thread pool processing"""
                 try:
-                    processed_practice = self.process_practice(place)
-                    if processed_practice:
-                        all_results.append(processed_practice)
-                        logger.info(f"Processed: {processed_practice.get('name', 'Unknown')} - Score: {processed_practice.get('ai_score', 0)}")
-                    
+                    return self.process_practice(place)
                 except Exception as e:
                     logger.error(f"Error processing practice: {str(e)}")
-                    continue
+                    return None
+            
+            # Process prospects in parallel with up to 50 workers
+            with ThreadPoolExecutor(max_workers=50) as executor:
+                future_to_place = {executor.submit(process_single_place, place): place for place in places_to_process}
+                
+                for future in as_completed(future_to_place):
+                    try:
+                        processed_practice = future.result()
+                        if processed_practice:
+                            all_results.append(processed_practice)
+                            logger.info(f"Processed: {processed_practice.get('name', 'Unknown')} - Score: {processed_practice.get('ai_score', 0)}")
+                    except Exception as e:
+                        logger.error(f"Error getting result: {str(e)}")
+                        continue
         
         # Remove duplicates
         unique_results = []
