@@ -1,4 +1,3 @@
-
 # Python API Server Dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
@@ -17,6 +16,7 @@ scrapingbee==2.1.0
 
 # AI/LLM Integration
 openai==1.55.3
+google-generativeai==0.3.0  # ADD THIS LINE
 
 # Google APIs
 googlemaps==4.10.0
