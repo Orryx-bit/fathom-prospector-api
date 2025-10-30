@@ -443,6 +443,31 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
         
         logger.info(f"Job {job_id}: Running command: {' '.join(cmd)}")
         
+        # --- FIX for ModuleNotFoundError ---
+        # Construct the correct environment for the subprocess
+        
+        # Get the path to the venv's site-packages directory
+        # sys.executable is /opt/venv/bin/python
+        # site-packages is /opt/venv/lib/python3.11/site-packages
+        venv_lib_path = os.path.join(os.path.dirname(sys.executable), '..', 'lib', f'python{sys.version_info.major}.{sys.version_info.minor}', 'site-packages')
+        
+        # Get the current PYTHONPATH from os.environ, which was set by railway.toml to /app
+        current_pythonpath = os.environ.get('PYTHONPATH', '/app')
+        
+        # Create the new PYTHONPATH, ensuring /app (for local modules) and site-packages (for pip) are included
+        new_pythonpath = f"/app:{venv_lib_path}:{current_pythonpath}"
+        
+        subprocess_env = {
+            **os.environ,
+            "GOOGLE_PLACES_API_KEY": os.getenv("GOOGLE_PLACES_API_KEY", ""),
+            "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
+            "PYTHONUNBUFFERED": "1",
+            "PYTHONPATH": new_pythonpath  # Explicitly set the full PYTHONPATH
+        }
+        
+        logger.info(f"Job {job_id}: Setting PYTHONPATH for subprocess: {new_pythonpath}")
+        # --- END FIX ---
+        
         # Run prospect.py
         process = subprocess.Popen(
             cmd,
@@ -450,12 +475,7 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
-            env={
-                **os.environ,
-                "GOOGLE_PLACES_API_KEY": os.getenv("GOOGLE_PLACES_API_KEY", ""),
-                "GEMINI_API_KEY": os.getenv("GEMINI_API_KEY", ""),
-                "PYTHONUNBUFFERED": "1"
-            }
+            env=subprocess_env # Use the new explicit environment
         )
         
         # CRITICAL: Store process reference for potential termination
