@@ -84,7 +84,7 @@ job_statuses_lock = threading.Lock()
 executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="search_worker")
 
 # Semaphore to limit concurrent searches (prevent resource exhaustion)
-MAX_CONCURRENT_SEARCHES = 5
+MAX_CONCURRENT_SEARCHES = 20
 search_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SEARCHES)
 
 # ============================================================================
