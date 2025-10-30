@@ -13,6 +13,7 @@ python-dotenv==1.0.0
 ratelimit==2.2.1
 tldextract==5.1.1
 scrapingbee==2.0.2
+aiohttp==3.9.1
 
 # AI/LLM Integration
 openai==1.55.3
