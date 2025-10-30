@@ -15,7 +15,8 @@ cmds = [
 ]
 
 [start]
-cmd = "bash start.sh"
+cmd = "python -m uvicorn api_server:app --host 0.0.0.0 --port $PORT --timeout-keep-alive 300"
 
 [variables]
 PATH = "/opt/venv/bin:$PATH"
+PYTHONPATH = "/app:$PYTHONPATH"
