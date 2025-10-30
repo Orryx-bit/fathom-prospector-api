@@ -799,7 +799,7 @@ class FathomProspector:
             # Method 2: Email pattern in visible text
             text_content = soup.get_text()
             # Email regex pattern
-            email_pattern = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+            email_pattern = r' [a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,} '
             found_emails = re.findall(email_pattern, text_content)
             
             # Filter out common false positives
@@ -2104,9 +2104,13 @@ Venus Sales Team"""
                 'social_links': []
             }
     
+    # --------------------------------------------------------------------------
+    # --- SURGICAL FIX: Replacing scrape_website_deep with concurrent version ---
+    # --------------------------------------------------------------------------
+
     def scrape_website_deep(self, base_url: str, max_pages: int = 5) -> Dict[str, any]:
         """
-        Intelligently scrape multiple pages from a medical practice website
+        Intelligently scrape multiple pages from a medical practice website CONCURRENTLY
         Returns aggregated data from all pages
         """
         if self.demo_mode:
@@ -2117,14 +2121,8 @@ Venus Sales Team"""
             return {
                 'title': 'Not Available - No Website',
                 'description': 'Not Available - No Website',
-                'services': [],
-                'social_links': [],
-                'staff_count': 0,
-                'emails': [],
-                'contact_names': [],
-                'additional_phones': [],
-                'contact_form_url': '',
-                'team_members': []
+                'services': [], 'social_links': [], 'staff_count': 0, 'emails': [],
+                'contact_names': [], 'additional_phones': [], 'contact_form_url': '', 'team_members': []
             }
         
         if not self.check_robots_txt(base_url):
@@ -2133,63 +2131,44 @@ Venus Sales Team"""
             return self.scrape_website_smart(base_url)
         
         try:
-            # First, get homepage for title and description
-            time.sleep(random.uniform(0.5, 1.0))
-            response = self.session.get(base_url, timeout=10)
-            response.raise_for_status()
-            
-            soup = BeautifulSoup(response.content, 'html.parser')
-            
-            # Get title
-            title = soup.title.string.strip() if soup.title and soup.title.string else 'Not Available'
-            
-            # Get description
-            meta_desc = soup.find('meta', attrs={'name': 'description'})
-            description = 'Not Available'
-            if meta_desc and meta_desc.get('content'):
-                description = meta_desc.get('content', '').strip()
-            else:
-                og_desc = soup.find('meta', attrs={'property': 'og:description'})
-                if og_desc and og_desc.get('content'):
-                    description = og_desc.get('content', '').strip()
-            
-            # Discover pages to scrape
+            # Step 1: Discover pages to scrape
             pages_to_scrape = self.discover_site_pages(base_url)[:max_pages]
-            
-            # Aggregate data from multiple pages
+            logger.info(f"Deep scrape (concurrent) found {len(pages_to_scrape)} pages to check for {base_url}")
+
+            # Step 2: Scrape all pages concurrently
+            # Use the synchronous wrapper that handles the event loop
+            results = self.scrape_multiple_sync_wrapper(pages_to_scrape, max_concurrent=10) # Limit to 10 concurrent per site
+
+            # Step 3: Aggregate data from all scraped pages
             all_services = set()
             all_social_links = set()
-            all_staff_mentions = []
-            all_text = []
-            pages_scraped = 0
+            all_emails = set()
+            all_contact_names = set()
+            all_additional_phones = set()
+            all_team_members = set()
+            all_staff_counts = []
             
-            for page_url in pages_to_scrape:
-                if pages_scraped >= max_pages:
-                    break
-                
-                try:
-                    time.sleep(1.0)  # Respectful delay
-                    page_data = self.scrape_single_page(page_url)
+            homepage_result = results[0] if results else {} # Homepage is always first
+            title = homepage_result.get('title', 'Not Available')
+            description = homepage_result.get('description', 'Not Available')
+            contact_form_url = homepage_result.get('contact_form_url', '') # Get from homepage
+
+            for page_data in results:
+                if not page_data or page_data.get('title') == 'Error':
+                    continue # Skip failed pages
                     
-                    all_services.update(page_data['services'])
-                    all_social_links.update(page_data['social_links'])
-                    all_staff_mentions.extend(page_data['staff_mentions'])
-                    all_text.append(page_data['text'])
-                    pages_scraped += 1
-                    
-                except Exception as e:
-                    logger.debug(f"Skipping page {page_url}: {str(e)}")
-                    continue
+                all_services.update(page_data.get('services', []))
+                all_social_links.update(page_data.get('social_links', []))
+                all_emails.update(page_data.get('emails', []))
+                all_contact_names.update(page_data.get('contact_names', []))
+                all_additional_phones.update(page_data.get('additional_phones', []))
+                all_team_members.update(page_data.get('team_members', []))
+                all_staff_counts.append(page_data.get('staff_count', 0))
+
+            # Aggregate staff count (use the max found)
+            staff_count = max(all_staff_counts) if all_staff_counts else 0
             
-            # Calculate staff count from all mentions
-            unique_staff = len(set(all_staff_mentions))
-            staff_count = min(unique_staff, 20)
-            
-            # Extract contact intelligence from homepage
-            emails = self.extract_emails(soup, base_url)
-            contact_names = self.extract_contact_names(soup, '', base_url)
-            
-            logger.info(f"Deep scrape complete for {base_url}: {pages_scraped} pages, {len(all_services)} services found")
+            logger.info(f"Deep scrape complete for {base_url}: {len(results)} pages, {len(all_services)} services, {len(all_emails)} emails")
             
             return {
                 'title': title,
@@ -2197,14 +2176,21 @@ Venus Sales Team"""
                 'services': list(all_services),
                 'social_links': list(all_social_links),
                 'staff_count': staff_count,
-                'emails': emails,
-                'contact_names': contact_names
+                'emails': list(all_emails)[:5], # Limit emails
+                'contact_names': list(all_contact_names)[:5], # Limit contacts
+                'additional_phones': list(all_additional_phones)[:3],
+                'contact_form_url': contact_form_url,
+                'team_members': list(all_team_members)[:10]
             }
             
         except Exception as e:
             logger.error(f"Error in deep scrape for {base_url}: {str(e)}")
             # Fall back to single-page scrape with smart detection
             return self.scrape_website_smart(base_url)
+
+    # --------------------------------------------------------------------------
+    # --- END OF SURGICAL FIX ---
+    # --------------------------------------------------------------------------
     
     def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str]:
         """
@@ -2542,6 +2528,7 @@ Venus Sales Team"""
                 practice_record.update(website_data)
             else:
                 logger.info(f"Deep scraping website: {practice_record['website']}")
+                # --- THIS NOW USES THE FIXED CONCURRENT VERSION ---
                 website_data = self.scrape_website_deep(practice_record['website'], max_pages=5)
                 practice_record.update(website_data)
         
@@ -2693,13 +2680,21 @@ Venus Sales Team"""
     # CONCURRENT SCRAPING METHODS (Added for Performance)
     # ============================================================================
     
+    # --------------------------------------------------------------------------
+    # --- SURGICAL FIX: Upgrading scrape_website_async with all extractors ---
+    # --------------------------------------------------------------------------
     async def scrape_website_async(self, session: aiohttp.ClientSession, url: str) -> Dict[str, any]:
         """
         Async version of scrape_website for concurrent scraping
         Falls back to sync version on error
         """
         if not url or self.demo_mode:
-            return self.scrape_website(url)
+            # Return full dict structure even for demo
+            return self.get_mock_website_data(url) if self.demo_mode else {
+                'title': 'Not Available - No Website', 'description': 'Not Available - No Website',
+                'services': [], 'social_links': [], 'staff_count': 0, 'emails': [],
+                'contact_names': [], 'additional_phones': [], 'contact_form_url': '', 'team_members': []
+            }
         
         if not self.check_robots_txt(url):
             logger.warning(f"Robots.txt disallows scraping: {url}")
@@ -2770,15 +2765,25 @@ Venus Sales Team"""
                 # Count staff
                 data['staff_count'] = self._count_staff_from_soup(soup)
                 
-                logger.info(f"✓ Async scraped {url}: {len(data['services'])} services")
+                # --- ADDED FOR COMPLETENESS ---
+                data['additional_phones'] = self.extract_additional_phones(soup, '', url)
+                data['contact_form_url'] = self.extract_contact_form_url(soup, url)
+                data['team_members'] = self.extract_team_members(soup, url)
+                # --- END OF ADDITION ---
+                
+                logger.info(f"✓ Async scraped {url}: {len(data['services'])} services, {len(data['emails'])} emails")
                 return data
                 
         except asyncio.TimeoutError:
             logger.warning(f"Async timeout for {url}, falling back to sync")
-            return self.scrape_website(url)
+            return self.scrape_website(url) # Fallback returns the full dict
         except Exception as e:
             logger.warning(f"Async error for {url}: {str(e)}, falling back to sync")
-            return self.scrape_website(url)
+            return self.scrape_website(url) # Fallback returns the full dict
+
+    # --------------------------------------------------------------------------
+    # --- END OF SURGICAL FIX ---
+    # --------------------------------------------------------------------------
     
     async def scrape_multiple_concurrent(self, urls: List[str], max_concurrent: int = 50) -> List[Dict[str, any]]:
         """
