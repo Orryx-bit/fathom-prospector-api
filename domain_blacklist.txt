@@ -1,0 +1,210 @@
+
+# DOMAIN BLACKLIST FOR FATHOM PROSPECTOR
+# Sites that cause timeouts, slowdowns, or excessive costs
+# Format: one domain per line, supports wildcards with *
+
+# Social Media Platforms (infinite scroll, heavy JS)
+facebook.com
+fb.com
+instagram.com
+twitter.com
+x.com
+linkedin.com
+tiktok.com
+pinterest.com
+snapchat.com
+reddit.com
+
+# Video Platforms (heavy content, slow loading)
+youtube.com
+youtu.be
+vimeo.com
+dailymotion.com
+twitch.tv
+
+# Review/Directory Sites (complex JS, anti-scraping)
+yelp.com
+healthgrades.com
+vitals.com
+zocdoc.com
+ratemds.com
+wellness.com
+sharecare.com
+
+# Booking/Scheduling Platforms
+calendly.com
+acuityscheduling.com
+squareup.com
+appointmentplus.com
+booksy.com
+vagaro.com
+styleseat.com
+
+# Marketing/Sales Platforms
+hubspot.com
+mailchimp.com
+constantcontact.com
+salesforce.com
+
+# Content Delivery/CDN (redirects, not actual sites)
+cloudflare.com
+amazonaws.com
+googleusercontent.com
+fbcdn.net
+cdninstagram.com
+
+# Job/Career Sites
+indeed.com
+glassdoor.com
+ziprecruiter.com
+monster.com
+linkedin.com/jobs
+
+# Problematic CMS/Page Builders (heavy JS)
+wix.com
+squarespace.com
+weebly.com
+godaddy.com
+*.myshopify.com
+
+# Medical/Healthcare Portals (require login)
+patient-portal
+mychart
+patientgateway
+followmyhealth
+*.nextmd.com
+*.athenahealth.com
+*.eclinicalworks.com
+
+# Government Sites (often slow/protected)
+*.gov
+*.mil
+medicare.gov
+medicaid.gov
+
+# News/Media Sites (paywalls, anti-scraping)
+nytimes.com
+wsj.com
+bloomberg.com
+reuters.com
+
+# File Sharing/Cloud Storage
+dropbox.com
+box.com
+drive.google.com
+onedrive.live.com
+icloud.com
+
+# Payment Processors
+stripe.com
+square.com
+paypal.com
+venmo.com
+
+# Problematic Health Systems
+kp.org
+kaiserpermanente.org
+
+# ===================================================================
+# ADDED FROM SCRAPINGBEE LOG ANALYSIS - October 22, 2025
+# ===================================================================
+# 80 domains with repeated failures, 208 500-errors, 22 404-errors
+# Est. wasted time: 450 minutes | Est. wasted cost: 550 credits
+# ===================================================================
+
+# High-frequency failures (10+ errors)
+texasdls.com                    # 17 failures, avg 134s load time
+themedspawaco.com               # 12 failures, avg 140s load time
+cdmedicalaestheticswaco.com     # 12 failures, avg 140s load time  
+enigmamedispa.com               # 11 failures, avg 134s load time
+thealternativetouch.com         # 10 failures, avg 140s load time
+
+# Medium-frequency failures (5-9 errors)
+southabilenefm.com              # 6 failures, avg 36s load time
+lipogymonthlyspecials.com       # 6 failures, avg 39s load time
+cirilloinstitute.com            # 6 failures, avg 140s load time
+healthgrades.com                # 6 404 errors (directory site)
+drj.nextcare.com                # 5 404 errors (urgent care directory)
+shapetricities.com              # 5 failures, avg 41s load time
+treasurevalleyholisticcare.com  # 5 failures, avg 39s load time
+vitallmed.com                   # 5 failures
+instituteforfunctionalhealth.com # 5 failures, avg 140s load time
+
+# Repeated failures (2-4 errors)
+advancedneuropathycenter.com
+risemodernwellness.com
+alamoheightsderm.com
+graceandglowmd.com
+laserskinmedspa.com
+michelleesthetics.com
+vitaeaustin.com
+rejuvenations-lv.com
+afhchome.com
+amieksfamilypracticepllc.com
+tallowsol.com
+benbrookhealth.com
+findyourbeautiful.com
+iffhmedspa.com
+zibamedical.com
+elementmedicalspa.com
+wacobodysculpt.com
+boiseriverwellness.com
+cooperativewellness.net
+diamondwellnessclinic.com
+everpure.uspwin.com
+idmedspa.com
+springmistmedspa.com
+crderm.com
+summitmddermatology.com
+
+# Single failures but consistent issues
+inmyownskinmedspa.com
+desmadre.co
+madsenmedspa.com
+aura-ha.com
+healthfocusmed.com
+templenaturalhealth.com
+primavitamedicine.com
+burienwellness.com
+kasa.health
+prsurgeons.com
+skindeepnb.com
+rebekahsatyavati.com
+neurosportsperformance.com
+aestheticremediesmedspa.com
+drjenebyplasticsurgery.com
+medictechspa.com
+primemedaesthetics.com
+wcosmeticsurgery.com
+connollyskincare.com
+pennderm.com
+absolutelifewellnesscenter.com
+enrichwellnesscenter.com
+renewlasermed.com
+lasersmilecentertx.com
+gavaya.com
+therefinerytx.com
+truesoulmedspa.com
+
+# Canadian problem sites
+rashamedspa.ca
+treasureyouspa.ca
+nomorewrinkles.ca
+
+# 404 Not Found sites
+renewalmedispa.com
+abeautifulface.skincaretherapy.net
+hermedservices.com
+altitudeidaho.com
+glowlabmedspa.net
+usspanish.4life.com
+benevidawellness.com
+12onhillel.com
+midlandtxdermatology.com
+
+# Obvious non-medical sites
+hilton.com                      # Hotel chain, not medical
+
+# ===================================================================
+# END OF SCRAPINGBEE LOG ADDITIONS
+# ===================================================================
