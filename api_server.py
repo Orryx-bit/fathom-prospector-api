@@ -81,10 +81,10 @@ job_statuses_lock = threading.Lock()
 
 # Thread pool for running blocking operations
 # This prevents blocking the asyncio event loop
-executor = ThreadPoolExecutor(max_workers=10, thread_name_prefix="search_worker")
+executor = ThreadPoolExecutor(max_workers=30, thread_name_prefix="search_worker")
 
 # Semaphore to limit concurrent searches (prevent resource exhaustion)
-MAX_CONCURRENT_SEARCHES = 20
+MAX_CONCURRENT_SEARCHES = 40
 search_semaphore = asyncio.Semaphore(MAX_CONCURRENT_SEARCHES)
 
 # ============================================================================
