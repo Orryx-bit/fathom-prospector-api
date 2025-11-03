@@ -6,6 +6,7 @@ Production-Hardened Version 3.0
 """
 
 import argparse
+import asyncio
 import csv
 import json
 import logging
@@ -19,8 +20,10 @@ from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
 
+import aiohttp
 import pandas as pd
 import requests
+from aiohttp import ClientTimeout, TCPConnector
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
@@ -29,9 +32,7 @@ from ratelimit import limits, sleep_and_retry
 from blacklist_manager import get_blacklist_manager
 
 # Async HTTP for concurrent scraping
-import asyncio
-import aiohttp
-from aiohttp import ClientTimeout, TCPConnector
+
 
 # Load environment variables FIRST
 load_dotenv()
@@ -744,21 +745,24 @@ class FathomProspector:
                 'description': 'Leading medical spa offering laser hair removal, botox, fillers, and advanced skin treatments.',
                 'services': ['laser hair removal', 'botox', 'fillers', 'skin tightening'],
                 'social_links': ['Facebook', 'Instagram'],
-                'staff_count': 8
+                'staff_count': 8,
+                'text': 'Mock website text for Austin Aesthetic Center.'
             },
             'https://hillcountrymedspa.com': {
                 'title': 'Hill Country Med Spa - Body Contouring & Wellness',
                 'description': 'Full-service medical spa specializing in body contouring and wellness services.',
                 'services': ['body contouring', 'cellulite treatment', 'weight loss'],
                 'social_links': ['Instagram'],
-                'staff_count': 5
+                'staff_count': 5,
+                'text': 'Mock website text for Hill Country Med Spa.'
             },
             'https://lonestardermatology.com': {
                 'title': 'Lone Star Dermatology - Advanced Skin Care',
                 'description': 'Board-certified dermatologists providing medical and cosmetic dermatology services.',
                 'services': ['laser hair removal', 'skin tightening', 'botox'],
                 'social_links': ['Facebook', 'LinkedIn'],
-                'staff_count': 12
+                'staff_count': 12,
+                'text': 'Mock website text for Lone Star Dermatology.'
             }
         }
         
@@ -767,7 +771,8 @@ class FathomProspector:
             'description': 'Professional medical and aesthetic services',
             'services': ['botox', 'fillers'],
             'social_links': [],
-            'staff_count': 3
+            'staff_count': 3,
+            'text': 'Default mock website content.'
         })
     
     @sleep_and_retry
@@ -1067,7 +1072,8 @@ class FathomProspector:
                 'contact_names': [],
                 'additional_phones': [],
                 'contact_form_url': '',
-                'team_members': []
+                'team_members': [],
+                'text': 'Not Available - No Website'
             }
         
         if not self.check_robots_txt(url):
@@ -1082,7 +1088,8 @@ class FathomProspector:
                 'contact_names': [],
                 'additional_phones': [],
                 'contact_form_url': '',
-                'team_members': []
+                'team_members': [],
+                'text': 'Not Available - Restricted'
             }
             
         try:
@@ -1103,7 +1110,8 @@ class FathomProspector:
                 'contact_names': [],
                 'additional_phones': [],
                 'contact_form_url': '',
-                'team_members': []
+                'team_members': [],
+                'text': ''
             }
             
             # Get page title
@@ -1125,6 +1133,7 @@ class FathomProspector:
             
             # Extract services mentioned
             text_content = soup.get_text().lower()
+            data['text'] = text_content
             service_keywords = [
                 'laser hair removal', 'botox', 'fillers', 'coolsculpting',
                 'body contouring', 'skin tightening', 'photorejuvenation',
@@ -1212,7 +1221,8 @@ class FathomProspector:
                 'contact_names': [],
                 'additional_phones': [],
                 'contact_form_url': '',
-                'team_members': []
+                'team_members': [],
+                'text': 'Not Available - Timeout'
             }
         except Exception as e:
             logger.error(f"Error scraping website {url}: {str(e)}")
@@ -1226,7 +1236,8 @@ class FathomProspector:
                 'contact_names': [],
                 'additional_phones': [],
                 'contact_form_url': '',
-                'team_members': []
+                'team_members': [],
+                'text': 'Not Available - Error'
             }
     
     def is_js_heavy_site(self, url: str) -> bool:
@@ -1407,6 +1418,20 @@ class FathomProspector:
         services = ' '.join(practice_data.get('services', [])).lower()
         all_text = f"{name} {desc} {services}"
 
+        
+        # Priority order (most specific first)
+        if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
+            return 'dermatology'
+        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
+            return 'plastic_surgery'
+        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
+            return 'obgyn'
+        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
+            return 'medspa'
+        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
+            return 'familypractice'
+        else:
+            return 'general'
     def detect_specialty_ai(self, practice_data: Dict) -> str:
         """
         AI-powered specialty detection using Abacus RouteLLM
@@ -1763,21 +1788,6 @@ OUTPUT: A short, engaging DM ready to send.
             logger.error(f"Creative AI outreach generation failed: {str(e)}, using template-based fallback")
             return self.generate_outreach_template_based(practice_data, specialty, pain_analysis)
 
-        
-        # Priority order (most specific first)
-        if any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin doctor']):
-            return 'dermatology'
-        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
-            return 'plastic_surgery'
-        elif any(kw in all_text for kw in ['obgyn', 'ob/gyn', 'ob-gyn', 'gynecologist', 'women\'s health', 'womens health']):
-            return 'obgyn'
-        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa']):
-            return 'medspa'
-        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'family physician', 'primary care', 'general practice', 'functional medicine', 'integrative medicine']):
-            return 'familypractice'
-        else:
-            return 'general'
-    
     def analyze_pain_points_rule_based(self, practice_data: Dict, specialty: str) -> Dict:
         """
         Rule-based pain point analysis (replaces AI version)
@@ -2122,7 +2132,8 @@ Venus Sales Team"""
                 'title': 'Not Available - No Website',
                 'description': 'Not Available - No Website',
                 'services': [], 'social_links': [], 'staff_count': 0, 'emails': [],
-                'contact_names': [], 'additional_phones': [], 'contact_form_url': '', 'team_members': []
+                'contact_names': [], 'additional_phones': [], 'contact_form_url': '', 'team_members': [],
+                'website_text': 'Not Available - No Website'
             }
         
         if not self.check_robots_txt(base_url):
@@ -2147,6 +2158,7 @@ Venus Sales Team"""
             all_additional_phones = set()
             all_team_members = set()
             all_staff_counts = []
+            all_text_content = []
             
             homepage_result = results[0] if results else {} # Homepage is always first
             title = homepage_result.get('title', 'Not Available')
@@ -2164,6 +2176,7 @@ Venus Sales Team"""
                 all_additional_phones.update(page_data.get('additional_phones', []))
                 all_team_members.update(page_data.get('team_members', []))
                 all_staff_counts.append(page_data.get('staff_count', 0))
+                all_text_content.append(page_data.get('text', ''))
 
             # Aggregate staff count (use the max found)
             staff_count = max(all_staff_counts) if all_staff_counts else 0
@@ -2180,7 +2193,8 @@ Venus Sales Team"""
                 'contact_names': list(all_contact_names)[:5], # Limit contacts
                 'additional_phones': list(all_additional_phones)[:3],
                 'contact_form_url': contact_form_url,
-                'team_members': list(all_team_members)[:10]
+                'team_members': list(all_team_members)[:10],
+                'website_text': " ".join(all_text_content)
             }
             
         except Exception as e:
@@ -2192,22 +2206,223 @@ Venus Sales Team"""
     # --- END OF SURGICAL FIX ---
     # --------------------------------------------------------------------------
     
-    def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str]:
+    def _analyze_services_ai(self, website_text: str, specialty: str) -> Dict[str, str]:
         """
-        Calculate AI-powered scoring with specialty-specific weights
+        NEW (V4.0): AI-powered "engine" for scoring.
+        Analyzes website text to classify the prospect's opportunity type.
+        """
+        if not self.ai_enabled or not self.openai_client:
+            raise Exception("AI is not enabled.")
         
-        CORRECTED LOGIC FOR VENUS DEVICE SALES:
-        - SOLO/SMALL practices score HIGHER (single decision maker)
-        - NO hospital affiliation scores HIGHER (purchasing freedom)
-        - OFFICE-BASED scores HIGHER (no permission needed)
-        - PRIVATE ownership scores HIGHER (financial autonomy)
+        if not website_text:
+            logger.debug("No website text to analyze, skipping AI analysis.")
+            return {"classification": "Low Priority"}
+        
+        # Truncate text to avoid excessive token usage
+        max_text_len = 15000  # Approx 4k tokens
+        if len(website_text) > max_text_len:
+            logger.debug(f"Truncating website text from {len(website_text)} to {max_text_len} chars for AI analysis")
+            website_text = website_text[:max_text_len]
+
+        system_message = (
+            "You are an expert medical device sales analyst. Your job is to read a practice's "
+            "website text and classify its market opportunity based on its service menu. "
+            "You must return only a single, valid JSON object with your analysis."
+        )
+        
+        prompt = f"""
+Analyze the medical practice data below.
+
+**Detected Specialty:** `{specialty}`
+**Website Text:** ```{website_text}```
+
+---
+
+First, using the **Detected Specialty**, determine which prospect bucket to use:
+
+* **If Specialty is `familypractice`, `obgyn`, or `general`:** Use "Bucket 1: Crossover Market" logic.
+* **If Specialty is `medspa`, `plastic_surgery`, or `dermatology`:** Use "Bucket 2: Aesthetic Core Market" logic.
+
+---
+
+### **Bucket 1: Crossover Market Logic**
+
+Look for these Green Flags and Red Flags.
+
+* **Green Flags:** `botox`, `fillers`, `hydrafacial`, `weight loss`, `weight management`, `glp-1's`, `semaglutide`, `HRT`, `Biot-e`, `Ideal protein`, or any general mention of "aesthetic services".
+* **Red Flags:** `urgent care`, `pediatrics`, "corporate multi-location", or a large, existing menu of aesthetic *devices* (like CoolSculpting, Emsculpt, lasers).
+
+**Analysis for Bucket 1:**
+* If you find **Green Flags** and **No Red Flags**, classify as **"High-Potential Crossover"**.
+* If you find **Red Flags**, classify as **"Low Priority"**.
+* If you find no flags, classify as **"Low Priority"**.
+
+---
+
+### **Bucket 2: Aesthetic Core Market Logic**
+
+Look for the business's age (e.g., "since 1999", "20 years") and its device menu. Classify it into ONE of these types.
+
+* **Type 1: "New & Growing" (Green Flag):**
+    * **Profile:** Has **No Devices** (only injectables/facials) AND **no signs of being old**.
+    * **Conclusion:** This is a prime target for a first multi-platform device.
+
+* **Type 2: "Face, No Body" (Green Flag):**
+    * **Profile:** Has *face/skin* devices (IPL, Photofacial, Skin Resurfacing) but is **missing a body contouring solution**.
+    * **Conclusion:** This is a "gap selling" opportunity for a body device.
+
+* **Type 3: "Body, No Face" (Green Flag):**
+    * **Profile:** Has *body* devices (CoolSculpting, Emsculpt) but is **missing a face/skin platform** (IPL, Skin Resurfacing).
+    * **Conclusion:** This is a "gap selling" opportunity for a face/skin platform.
+
+* **Type 4: "The Laggard" (Red Flag):**
+    * **Profile:** Has **No Devices** (only injectables/facials) BUT the website shows they have been **open for many years**.
+    * **Conclusion:** This is a "Laggard" who is resistant to new technology.
+
+* **Type 5: "The Fully Saturated" (Red Flag):**
+    * **Profile:** Has a full menu of *new, modern, competing devices* for **both** face AND body.
+    * **Conclusion:** There is no gap to sell into.
+
+---
+
+### **REQUIRED JSON OUTPUT FORMAT**
+
+Based on your analysis, return a single JSON object in this *exact* format:
+
+```json
+{{
+  "classification": "..."
+}}
+```
+
+(Possible values for "classification": "High-Potential Crossover", "New & Growing", "Face, No Body", "Body, No Face", "The Laggard", "The Fully Saturated", or "Low Priority")
+"""
+        
+        response_text = self.call_ai(prompt, system_message, max_tokens=150, temperature=0.1)
+        
+        if not response_text:
+            raise Exception("AI returned an empty response.")
+        
+        # Extract JSON from the response
+        try:
+            # Find the JSON block
+            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+            if not json_match:
+                raise Exception(f"No JSON object found in AI response: {response_text}")
+            
+            json_str = json_match.group(0)
+            json_data = json.loads(json_str)
+            
+            if 'classification' not in json_data:
+                raise Exception(f"JSON response missing 'classification' key: {json_str}")
+                
+            return json_data
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to decode AI JSON response: {e}")
+            logger.error(f"Raw AI response: {response_text}")
+            raise Exception(f"AI returned malformed JSON: {response_text}")
+        except Exception as e:
+            logger.error(f"Error parsing AI response: {e}")
+            raise
+
+    def _calculate_medium_smart_score(self, scores: Dict, practice_data: Dict, specialty: str, all_text: str) -> Dict:
+        """
+        NEW (V4.0): "Medium-Smart" rule-based fallback logic.
+        This runs if the AI analysis fails. It's much smarter than the original
+        V3 logic and uses our tiered, specialty-aware rules.
+        """
+        logger.info(f"Running 'Medium-Smart' fallback scoring for {practice_data.get('name')}")
+        
+        services = practice_data.get('services', [])
+        services_text = ' '.join(services).lower()
+        full_text = f"{all_text} {services_text}".lower()
+        
+        # ---
+        # 1. DEFINE KEYWORD TIERS
+        # ---
+        
+        # Crossover Green Flags
+        crossover_flags = ['botox', 'fillers', 'hydrafacial', 'weight loss', 'glp-1', 'semaglutide', 'hrt', 'bio-t', 'ideal protein']
+        
+        # Core Market Red Flags
+        red_flag_devices = ['coolsculpting elite', 'emsculpt neo', 'sciton mjoule', 'lumenis m22', 'inmode optimas']
+        red_flag_practice = ['urgent care', 'pediatrics']
+        
+        # Core Market Tiers
+        tier_1_devices = ['coolsculpting', 'emsculpt', 'morpheus8', 'sciton', 'lumenis', 'ultherapy', 'fraxel']
+        tier_2_face = ['ipl', 'photofacial', 'skin resurfacing', 'laser hair removal']
+        tier_3_body = ['body contouring', 'cellulite reduction', 'body sculpting']
+        tier_4_injectables = ['botox', 'juvederm', 'restylane', 'fillers']
+        
+        # ---
+        # 2. APPLY BUCKET LOGIC
+        # ---
+        
+        if specialty in ['familypractice', 'obgyn', 'general']:
+            # --- BUCKET 1: Crossover Market Fallback ---
+            
+            if any(kw in full_text for kw in red_flag_practice):
+                scores['specialty_match'] = 2  # Disqualify
+                scores['aesthetic_services'] = 0
+            elif any(kw in full_text for kw in crossover_flags):
+                scores['specialty_match'] = 18 # Great match!
+                scores['aesthetic_services'] = 10 # Has basics
+                scores['competing_devices'] = 0  # Opportunity
+            else:
+                scores['specialty_match'] = 5  # Low priority
+                scores['aesthetic_services'] = 0
+        
+        else:
+            # --- BUCKET 2: Aesthetic Core Market Fallback ---
+            has_tier_1 = any(kw in full_text for kw in tier_1_devices)
+            has_tier_2_face = any(kw in full_text for kw in tier_2_face)
+            has_tier_3_body = any(kw in full_text for kw in tier_3_body)
+            has_tier_4_injectables = any(kw in full_text for kw in tier_4_injectables)
+            
+            is_laggard = any(kw in full_text for kw in ['since 199', '20 years']) and not (has_tier_1 or has_tier_2_face or has_tier_3_body)
+            is_saturated = any(kw in full_text for kw in red_flag_devices) or (has_tier_1 and has_tier_2_face and has_tier_3_body)
+
+            if is_saturated:
+                scores['specialty_match'] = 2
+                scores['aesthetic_services'] = 15
+                scores['competing_devices'] = 10 # Saturated
+            elif is_laggard:
+                scores['specialty_match'] = 2
+                scores['aesthetic_services'] = 2
+                scores['competing_devices'] = 0
+            elif has_tier_2_face and not has_tier_3_body and not has_tier_1:
+                # "Face, No Body"
+                scores['specialty_match'] = 20
+                scores['aesthetic_services'] = 15 # Has face
+                scores['competing_devices'] = 8  # Proven buyer
+            elif (has_tier_3_body or has_tier_1) and not has_tier_2_face:
+                # "Body, No Face"
+                scores['specialty_match'] = 20
+                scores['aesthetic_services'] = 15 # Has body
+                scores['competing_devices'] = 8  # Proven buyer
+            elif has_tier_4_injectables and not (has_tier_1 or has_tier_2_face or has_tier_3_body):
+                # "New & Growing"
+                scores['specialty_match'] = 20
+                scores['aesthetic_services'] = 5 # Basics only
+                scores['competing_devices'] = 0  # Opportunity
+            else:
+                # Default for Core
+                scores['specialty_match'] = 10
+                scores['aesthetic_services'] = 5
+                scores['competing_devices'] = 2
+                
+        return scores
+
+    def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str, str]:
+        """
+        Calculate AI-powered scoring with specialty-specific weights (V4.0 LOGIC)
         
         Returns:
-            (total_score, score_breakdown, detected_specialty)
+            (total_score, score_breakdown, detected_specialty, ai_classification)
         """
         
         # STEP 1: Detect specialty
-        # Use AI-enhanced detection (falls back to rule-based automatically)
         specialty = self.detect_specialty_ai(practice_data)
         
         # STEP 2: Get specialty-specific config (or use default)
@@ -2215,11 +2430,9 @@ Venus Sales Team"""
             config = self.specialty_scoring[specialty]
             logger.info(f"🎯 Using {specialty.upper()} scoring profile")
         else:
-            # Default to dermatology weights for general practices
             config = self.specialty_scoring['dermatology']
             logger.info(f"Using DEFAULT scoring profile for {specialty}")
         
-        weights = config['weights']
         high_value_keywords = config['high_value_keywords']
         
         scores = {
@@ -2237,98 +2450,96 @@ Venus Sales Team"""
         practice_name = practice_data.get('name', '').lower()
         practice_desc = practice_data.get('description', '').lower()
         address = practice_data.get('formatted_address', '').lower()
+        website_text = practice_data.get('website_text', '')
         all_text = f"{practice_name} {practice_desc} {address}"
         
         # ═══════════════════════════════════════════════════════════
-        # 1. Specialty Match (20 points)
+        # 1. V4.0 Service & Opportunity Scoring (AI or Medium-Smart Fallback)
+        # This replaces specialty_match, aesthetic_services, and competing_devices
         # ═══════════════════════════════════════════════════════════
-        specialty_keywords = [
-            'dermatology', 'dermatologist', 'plastic surgery', 'plastic surgeon',
-            'cosmetic', 'aesthetic', 'med spa', 'medical spa', 'medspa',
-            'skin care', 'skincare', 'beauty', 'obgyn', 'ob/gyn', 'gynecologist',
-            'women\'s health', 'family practice', 'family medicine'
-        ]
-        
-        specialty_matches = sum(1 for keyword in specialty_keywords if keyword in all_text)
-        scores['specialty_match'] = min(specialty_matches * 4, 20)
-        
+        ai_classification = "Fallback"
+        try:
+            if self.ai_enabled:
+                analysis = self._analyze_services_ai(website_text, specialty)
+                ai_classification = analysis.get("classification", "Fallback")
+                logger.info(f"🤖 AI Service Analysis Classification: {ai_classification}")
+
+                # Translate classification into scores
+                if ai_classification == "High-Potential Crossover":
+                    scores['specialty_match'] = 20
+                    scores['aesthetic_services'] = 12
+                    scores['competing_devices'] = 0
+                elif ai_classification == "New & Growing":
+                    scores['specialty_match'] = 20
+                    scores['aesthetic_services'] = 5
+                    scores['competing_devices'] = 0
+                elif ai_classification == "Face, No Body":
+                    scores['specialty_match'] = 20
+                    scores['aesthetic_services'] = 15
+                    scores['competing_devices'] = 8
+                elif ai_classification == "Body, No Face":
+                    scores['specialty_match'] = 20
+                    scores['aesthetic_services'] = 15
+                    scores['competing_devices'] = 8
+                elif ai_classification in ["The Laggard", "The Fully Saturated", "Low Priority"]:
+                    scores['specialty_match'] = 2
+                    scores['aesthetic_services'] = 2
+                    scores['competing_devices'] = 10 if ai_classification == "The Fully Saturated" else 0
+                else:
+                    raise Exception(f"AI returned unknown classification: {ai_classification}")
+            else:
+                raise Exception("AI not enabled, using fallback.")
+                
+        except Exception as e:
+            logger.warning(f"AI service analysis failed ({e}), using 'Medium-Smart' fallback scoring.")
+            scores = self._calculate_medium_smart_score(scores, practice_data, specialty, all_text)
+
         # ═══════════════════════════════════════════════════════════
         # 2. Decision-Making Autonomy (20 points) 🔥 CRITICAL
-        # CORRECTED: Solo/small = HIGH score (single decision maker)
         # ═══════════════════════════════════════════════════════════
         staff_count = practice_data.get('staff_count', 0)
         
-        # Check for hospital affiliation indicators
         hospital_indicators = [
             'hospital', 'medical center', 'health system', 'healthcare system',
             'affiliated', 'network', 'regional medical', 'university medical'
         ]
         has_hospital_affiliation = any(indicator in all_text for indicator in hospital_indicators)
         
-        # Check for corporate/chain indicators
         corporate_indicators = [
             'corporate', 'chain', 'franchise', 'national', 'locations',
             'branches', 'group practice', 'associates'
         ]
         is_corporate = any(indicator in all_text for indicator in corporate_indicators)
         
-        # Base score by staff size (REVERSED - smaller is better)
         if staff_count == 0 or staff_count == 1:
-            autonomy_score = 20  # ✅ Solo practice - PERFECT
+            autonomy_score = 20
         elif staff_count == 2:
-            autonomy_score = 18  # ✅ Very small - EXCELLENT
+            autonomy_score = 18
         elif staff_count <= 4:
-            autonomy_score = 15  # ✅ Small - VERY GOOD
+            autonomy_score = 15
         elif staff_count <= 6:
-            autonomy_score = 10  # 🟡 Medium - OK
+            autonomy_score = 10
         elif staff_count <= 10:
-            autonomy_score = 5   # 🟠 Large - Harder
+            autonomy_score = 5
         else:
-            autonomy_score = 2   # ❌ Very large - Avoid
+            autonomy_score = 2
         
-        # Penalize hospital affiliation (no purchasing freedom)
         if has_hospital_affiliation:
             autonomy_score = max(0, autonomy_score - 10)
         
-        # Penalize corporate/chain (centralized purchasing)
         if is_corporate:
             autonomy_score = max(0, autonomy_score - 8)
         
         scores['decision_autonomy'] = autonomy_score
         
         # ═══════════════════════════════════════════════════════════
-        # 3. Aesthetic Services (15 points)
-        # ═══════════════════════════════════════════════════════════
-        services = practice_data.get('services', [])
-        aesthetic_services = [
-            'botox', 'fillers', 'laser', 'coolsculpting', 'body contouring',
-            'skin tightening', 'hair removal', 'ipl', 'radiofrequency',
-            'body sculpting', 'cellulite', 'fat reduction'
-        ]
-        
-        service_matches = sum(1 for service in aesthetic_services 
-                            if any(service in s.lower() for s in services))
-        scores['aesthetic_services'] = min(service_matches * 3, 15)
-        
-        # ═══════════════════════════════════════════════════════════
-        # 4. Competing Devices (10 points)
-        # ═══════════════════════════════════════════════════════════
-        competing_devices = [
-            'coolsculpting', 'thermage', 'ultherapy', 'sculptra', 
-            'emsculpt', 'vanquish', 'exilis'
-        ]
-        
-        device_count = sum(1 for device in competing_devices if device in practice_desc)
-        scores['competing_devices'] = min(device_count * 5, 10)
-        
-        # ═══════════════════════════════════════════════════════════
-        # 5. Social Media Activity (10 points)
+        # 3. Social Media Activity (10 points)
         # ═══════════════════════════════════════════════════════════
         social_links = practice_data.get('social_links', [])
         scores['social_activity'] = min(len(social_links) * 3, 10)
         
         # ═══════════════════════════════════════════════════════════
-        # 6. Reviews & Rating (10 points)
+        # 4. Reviews & Rating (10 points)
         # ═══════════════════════════════════════════════════════════
         rating = practice_data.get('rating', 0)
         review_count = practice_data.get('user_ratings_total', 0)
@@ -2343,7 +2554,7 @@ Venus Sales Team"""
             scores['reviews_rating'] = 1
         
         # ═══════════════════════════════════════════════════════════
-        # 7. Search Visibility (10 points)
+        # 5. Search Visibility (10 points)
         # ═══════════════════════════════════════════════════════════
         website = practice_data.get('website', '')
         if website and 'http' in website:
@@ -2356,18 +2567,14 @@ Venus Sales Team"""
             scores['search_visibility'] = 1
         
         # ═══════════════════════════════════════════════════════════
-        # 8. Financial Indicators (10 points)
-        # Affluent area + cash-pay readiness
+        # 6. Financial Indicators (10 points)
         # ═══════════════════════════════════════════════════════════
-        
-        # Check for affluent area indicators
         affluent_indicators = [
             'hills', 'park', 'lake', 'estates', 'plaza', 'center',
             'avenue', 'boulevard', 'suite'
         ]
         is_affluent_area = any(indicator in address for indicator in affluent_indicators)
         
-        # Check for cash-pay service keywords
         cashpay_keywords = [
             'aesthetic', 'cosmetic', 'elective', 'spa', 'beauty',
             'anti-aging', 'wellness', 'rejuvenation'
@@ -2383,7 +2590,7 @@ Venus Sales Team"""
         scores['financial_indicators'] = financial_score
         
         # ═══════════════════════════════════════════════════════════
-        # 9. Weight Loss Services (5 points)
+        # 7. Weight Loss Services (5 points)
         # ═══════════════════════════════════════════════════════════
         weight_keywords = [
             'weight loss', 'medical weight', 'hormone therapy', 'iv therapy',
@@ -2394,7 +2601,7 @@ Venus Sales Team"""
         scores['weight_loss_services'] = min(weight_matches * 2, 5)
         
         # ═══════════════════════════════════════════════════════════
-        # 10. Specialty-Specific Keyword Bonus (up to +10 points)
+        # 8. Specialty-Specific Keyword Bonus (up to +10 points)
         # ═══════════════════════════════════════════════════════════
         services = practice_data.get('services', [])
         services_text = ' '.join(services).lower()
@@ -2412,7 +2619,7 @@ Venus Sales Team"""
         base_score = sum(scores.values())
         total_score = min(base_score + keyword_bonus, 100)
         
-        return total_score, scores, specialty
+        return total_score, scores, specialty, ai_classification
     
     def recommend_device(self, practice_data: Dict, ai_scores: Dict) -> Dict:
         """Recommend top device based on practice profile"""
@@ -2498,7 +2705,8 @@ Venus Sales Team"""
             'social_links': [],
             'staff_count': 0,
             'description': 'Not Available',
-            'title': 'Not Available'
+            'title': 'Not Available',
+            'website_text': ''
         }
         
         # Scrape website if available (using deep multi-page scraping)
@@ -2533,7 +2741,7 @@ Venus Sales Team"""
                 practice_record.update(website_data)
         
         # Calculate AI score with specialty detection
-        ai_score, score_breakdown, specialty = self.calculate_ai_score(practice_record)
+        ai_score, score_breakdown, specialty, ai_prospect_class = self.calculate_ai_score(practice_record)
         
         # ON-DEMAND OUTREACH: AI outreach generation moved to separate API call
         # This makes search faster and more reliable
@@ -2564,6 +2772,7 @@ Venus Sales Team"""
             **practice_record,
             'specialty': specialty,
             'ai_score': ai_score,
+            'ai_prospect_class': ai_prospect_class,
             'score_breakdown': score_breakdown,
             'primary_device_rec': device_recommendations.get('primary_recommendation', {}).get('device', ''),
             'device_rationale': device_recommendations.get('primary_recommendation', {}).get('rationale', ''),
@@ -2643,7 +2852,7 @@ Venus Sales Team"""
         csv_columns = [
             'name', 'specialty', 'address', 'phone', 'website', 'rating', 'review_count',
             'emails', 'contact_names',  # Contact Intelligence fields
-            'ai_score', 'confidence_level', 'primary_device_rec', 'device_rationale',
+            'ai_score', 'ai_prospect_class', 'confidence_level', 'primary_device_rec', 'device_rationale',
             'outreach_opener', 'services', 'social_links', 'staff_count',
             'specialty_match_score', 'decision_autonomy_score', 'aesthetic_services_score', 
             'competing_devices_score', 'social_activity_score', 'reviews_rating_score',
@@ -2693,7 +2902,8 @@ Venus Sales Team"""
             return self.get_mock_website_data(url) if self.demo_mode else {
                 'title': 'Not Available - No Website', 'description': 'Not Available - No Website',
                 'services': [], 'social_links': [], 'staff_count': 0, 'emails': [],
-                'contact_names': [], 'additional_phones': [], 'contact_form_url': '', 'team_members': []
+                'contact_names': [], 'additional_phones': [], 'contact_form_url': '', 'team_members': [],
+                'text': 'Not Available - No Website'
             }
         
         if not self.check_robots_txt(url):
@@ -2708,7 +2918,8 @@ Venus Sales Team"""
                 'contact_names': [],
                 'additional_phones': [],
                 'contact_form_url': '',
-                'team_members': []
+                'team_members': [],
+                'text': 'Not Available - Restricted'
             }
         
         try:
@@ -2730,7 +2941,8 @@ Venus Sales Team"""
                     'contact_names': [],
                     'additional_phones': [],
                     'contact_form_url': '',
-                    'team_members': []
+                    'team_members': [],
+                    'text': ''
                 }
                 
                 # Extract title
@@ -2749,6 +2961,8 @@ Venus Sales Team"""
                         data['description'] = og_desc.get('content', '').strip()
                     else:
                         data['description'] = 'Not Available'
+                
+                data['text'] = soup.get_text()
                 
                 # Extract services
                 data['services'] = self._extract_services_from_soup(soup)
