@@ -69,7 +69,7 @@ except ImportError:
     logger.warning("⚠️  ScrapingBee not available - JavaScript rendering disabled")
 
 # Domain whitelist for known JavaScript-heavy website builders
-# These sites will automatically use Playwright for better scraping
+# These sites will automatically use ScrapingBee for better scraping
 JS_HEAVY_DOMAINS = [
     'squarespace.com',
     'wix.com',
@@ -591,7 +591,7 @@ class FathomProspector:
             return self.get_mock_data(query, location)
         
         try:
-            logger.info(f"Searching Google Places: {query} near {location}")
+            logger.info(f"Searching Google Places for '{query}' near '{location}'")
             
             geocode_result = self.gmaps_api.geocode(location)
             if not geocode_result:
@@ -1297,7 +1297,7 @@ class FathomProspector:
     
     def scrape_with_scrapingbee_wrapper(self, url: str) -> Dict[str, any]:
         """
-        Scrape website using ScrapingBee for JavaScript-rendered content
+        Scrape website using ScrapingBee for JavaScript-rendered content, with exponential backoff.
         
         Args:
             url: Website URL to scrape
@@ -1327,29 +1327,50 @@ class FathomProspector:
                 'team_members': []
             }
         
-        try:
-            # Call ScrapingBee with extraction functions
-            result = scrape_with_scrapingbee(
-                url,
-                self.extract_emails,
-                self.extract_contact_names,
-                self.extract_additional_phones,
-                self.extract_contact_form_url,
-                self.extract_team_members
-            )
-            
-            if result:
-                return result
-            else:
-                # ScrapingBee failed, fallback
-                logger.warning(f"ScrapingBee failed for {url}, falling back to BeautifulSoup")
-                return self.scrape_website(url)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                result = scrape_with_scrapingbee(
+                    url,
+                    self.extract_emails,
+                    self.extract_contact_names,
+                    self.extract_additional_phones,
+                    self.extract_contact_form_url,
+                    self.extract_team_members
+                )
                 
-        except Exception as e:
-            logger.error(f"Error in ScrapingBee scraping {url}: {str(e)}")
-            # Fallback to BeautifulSoup
-            logger.info(f"Falling back to BeautifulSoup for {url}")
-            return self.scrape_website(url)
+                if result:
+                    return result
+                else:
+                    # ScrapingBee failed, fallback
+                    logger.warning(f"ScrapingBee returned no data for {url} on attempt {attempt + 1}, will fallback if all retries fail.")
+                    if attempt == max_retries - 1:
+                        break  # exit loop to fallback
+                    time.sleep(1)  # wait before retrying on empty result
+                    
+            except Exception as e:
+                # Check for 429 error
+                if '429' in str(e):
+                    if attempt < max_retries - 1:
+                        backoff_time = (2 ** attempt) + random.uniform(0.5, 1.0)
+                        logger.warning(f"ScrapingBee rate limit hit (429) for {url}. Retrying in {backoff_time:.2f}s... (Attempt {attempt+1}/{max_retries})")
+                        time.sleep(backoff_time)
+                        continue  # continue to next attempt
+                    else:
+                        logger.error(f"ScrapingBee rate limit hit on final attempt for {url}. Falling back.")
+                        break  # exit loop to fallback
+                else:
+                    logger.error(f"Error in ScrapingBee scraping {url} on attempt {attempt+1}: {str(e)}")
+                    if attempt < max_retries - 1:
+                        time.sleep(1)  # brief pause for other errors
+                        continue
+                    else:
+                        logger.error(f"ScrapingBee failed on final attempt for {url}. Falling back.")
+                        break  # exit loop to fallback
+        
+        # Fallback to BeautifulSoup if all retries fail
+        logger.warning(f"ScrapingBee failed for {url} after {max_retries} attempts, falling back to BeautifulSoup.")
+        return self.scrape_website(url)
 
     
     def scrape_website_smart(self, url: str) -> Dict[str, any]:
@@ -1357,9 +1378,9 @@ class FathomProspector:
         Smart scraping with automatic method selection
         
         Strategy:
-        1. Check if URL is from JS-heavy platform (whitelist) → use Playwright
+        1. Check if URL is from JS-heavy platform (whitelist) → use ScrapingBee
         2. Try BeautifulSoup first (fast)
-        3. If BeautifulSoup gets poor data → retry with Playwright
+        3. If BeautifulSoup gets poor data → retry with ScrapingBee
         
         Args:
             url: Website URL to scrape
@@ -1387,7 +1408,7 @@ class FathomProspector:
         
         # Check 1: Is this a known JS-heavy platform?
         if SCRAPINGBEE_AVAILABLE and self.is_js_heavy_site(url):
-            logger.info(f"JS-heavy platform detected, using Playwright immediately for {url}")
+            logger.info(f"JS-heavy platform detected, using ScrapingBee immediately for {url}")
             return self.scrape_with_scrapingbee_wrapper(url)
         
         # Check 2: Try BeautifulSoup first (fast path)
@@ -1399,12 +1420,12 @@ class FathomProspector:
             logger.info(f"✅ BeautifulSoup successful for {url}")
             return bs_result
         
-        # Check 4: BeautifulSoup failed, try Playwright if available
+        # Check 4: BeautifulSoup failed, try ScrapingBee if available
         if SCRAPINGBEE_AVAILABLE:
-            logger.info(f"BeautifulSoup data incomplete for {url}, retrying with Playwright...")
+            logger.info(f"BeautifulSoup data incomplete for {url}, retrying with ScrapingBee...")
             return self.scrape_with_scrapingbee_wrapper(url)
         else:
-            logger.warning(f"BeautifulSoup data incomplete but Playwright not available for {url}")
+            logger.warning(f"BeautifulSoup data incomplete but ScrapingBee not available for {url}")
             return bs_result
     
     def detect_specialty(self, practice_data: Dict) -> str:
@@ -2032,26 +2053,60 @@ Venus Sales Team"""
     
     def discover_site_pages(self, base_url: str) -> List[str]:
         """
-        Discover high-value pages on a practice website
-        Returns list of URLs to scrape
+        Intelligently discover high-value pages by scraping the homepage for navigation links.
+        Returns a prioritized list of URLs to scrape, reducing 404 errors.
         """
-        common_paths = [
-            '',  # Homepage
-            '/about', '/about-us', '/our-practice', '/who-we-are',
-            '/services', '/treatments', '/procedures', '/what-we-offer',
-            '/team', '/our-team', '/providers', '/doctors', '/staff', '/meet-the-team',
-            '/contact', '/locations', '/visit-us'
-        ]
+        if not base_url:
+            return []
+
+        logger.info(f"Intelligently discovering site pages from homepage: {base_url}")
+        # Use a set to handle duplicates automatically; homepage is always included
+        urls_to_scrape = {base_url}
+
+        try:
+            response = self.session.get(base_url, timeout=10)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
+
+            # Keywords to identify important pages
+            page_keywords = [
+                'about', 'team', 'staff', 'doctor', 'provider', 'physician',
+                'service', 'treatment', 'procedure',
+                'contact', 'location', 'visit', 'book', 'appointment'
+            ]
+
+            for link in soup.find_all('a', href=True):
+                href = link.get('href')
+                link_text = link.get_text().strip().lower()
+
+                # Filter out irrelevant links
+                if not href or href.startswith(('#', 'mailto:', 'tel:', 'javascript:')):
+                    continue
+
+                # Check if link text or URL path seems relevant
+                href_path = urlparse(href).path.lower()
+                if any(keyword in link_text or keyword in href_path for keyword in page_keywords):
+                    full_url = urljoin(base_url, href)
+                    
+                    # Basic validation: ensure it's from the same domain and not a file download
+                    parsed_url = urlparse(full_url)
+                    if parsed_url.netloc == urlparse(base_url).netloc and not any(full_url.endswith(ext) for ext in ['.pdf', '.jpg', '.png', '.zip', '.docx']):
+                        urls_to_scrape.add(full_url)
+
+        except requests.RequestException as e:
+            logger.warning(f"Could not scrape homepage {base_url} to discover pages: {e}. Falling back to guessing common paths.")
+            # Fallback to a smaller, safer list of common paths
+            common_paths = ['', '/about', '/services', '/team', '/contact']
+            return [urljoin(base_url, path) for path in common_paths]
+
+        # Convert set to list and ensure homepage is first
+        final_urls = list(urls_to_scrape)
+        if base_url in final_urls:
+            final_urls.remove(base_url)
+            final_urls.insert(0, base_url)
         
-        urls_to_scrape = []
-        
-        for path in common_paths:
-            url = urljoin(base_url, path)
-            # Add to list (we'll check if it exists when we try to scrape it)
-            if url not in urls_to_scrape:
-                urls_to_scrape.append(url)
-        
-        return urls_to_scrape[:7]  # Limit to 7 URLs max
+        logger.info(f"Discovered {len(final_urls)} relevant pages to check for {base_url}.")
+        return final_urls[:7]  # Limit to 7 URLs max
     
     def scrape_single_page(self, url: str) -> Dict:
         """
@@ -3176,7 +3231,7 @@ TOP 10 HIGH-PRIORITY PROSPECTS
         all_results = []
         
         for keyword in keywords:
-            logger.info(f"Searching for: {keyword}")
+            logger.info(f"Searching for: '{keyword}'")
             
             places = self.google_places_search(keyword, location, radius * 1000)
             
