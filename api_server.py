@@ -35,8 +35,44 @@ from slowapi.errors import RateLimitExceeded
 # Load environment variables from .env file
 load_dotenv()
 
-# Setup logging FIRST (before any imports that might need it)
-logging.basicConfig(level=logging.INFO)
+# --- ADD THIS CLASS ---
+class InfoWarningFilter(logging.Filter):
+    """
+    A custom filter to allow log records with a level
+    BELOW ERROR (i.e., INFO and WARNING).
+    """
+    def filter(self, record):
+        return record.levelno < logging.ERROR
+# --- END ADD ---
+
+# Setup logging FIRST
+# This custom config separates INFO/WARNING (stdout) from ERROR (stderr)
+# to prevent log aggregators from flagging INFO logs as errors.
+
+# 1. Create a base formatter
+log_formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
+# 2. Create handler for INFO/WARNING logs (goes to STDOUT)
+stdout_handler = logging.StreamHandler(sys.stdout)
+stdout_handler.setLevel(logging.INFO)
+stdout_handler.addFilter(InfoWarningFilter())  # Apply the filter
+stdout_handler.setFormatter(log_formatter)
+
+# 3. Create handler for ERROR logs (goes to STDERR)
+stderr_handler = logging.StreamHandler(sys.stderr)
+stderr_handler.setLevel(logging.ERROR)
+stderr_handler.setFormatter(log_formatter)
+
+# 4. Get the root logger and add both handlers
+root_logger = logging.getLogger()
+root_logger.setLevel(logging.INFO)  # Set the logger's base level
+root_logger.handlers.clear()  # Clear any default handlers
+root_logger.addHandler(stdout_handler)
+root_logger.addHandler(stderr_handler)
+
+# 5. Get the logger for this specific app
 logger = logging.getLogger(__name__)
 
 # Import deep dive module for on-demand intelligence gathering
