@@ -2076,7 +2076,7 @@ Venus Sales Team"""
             ]
 
             for link in soup.find_all('a', href=True):
-                href = link.get('href')
+                href = link.get('href', '').strip()
                 link_text = link.get_text().strip().lower()
 
                 # Filter out irrelevant links
