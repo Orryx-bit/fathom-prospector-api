@@ -10,6 +10,7 @@ import re
 from typing import Dict, List, Optional
 from bs4 import BeautifulSoup
 from scrapingbee import ScrapingBeeClient
+from urllib.parse import quote_plus # <-- FIX 1: Added for URL encoding
 
 logger = logging.getLogger(__name__)
 
@@ -27,35 +28,50 @@ else:
 
 def scrape_with_scrapingbee_advanced(url: str, wait_time: int = 3000) -> Optional[BeautifulSoup]:
     """
-    Advanced ScrapingBee scraping with premium features
+    Advanced ScrapingBee scraping with premium features and retry logic
     """
     if not SCRAPINGBEE_AVAILABLE:
         return None
-    
-    try:
-        logger.info(f"🐝 Deep Dive scraping: {url}")
-        time.sleep(random.uniform(0.5, 1.0))
-        
-        response = scrapingbee_client.get(
-            url,
-            params={
-                'render_js': True,
-                'premium_proxy': True,
-                'country_code': 'us',
-                'wait': wait_time,
-                'block_resources': False,
-            }
-        )
-        
-        if response.status_code == 200:
-            return BeautifulSoup(response.content, 'html.parser')
-        else:
-            logger.error(f"ScrapingBee error: Status {response.status_code}")
-            return None
+
+    # --- FIX 2: Added retry logic for 5xx errors and network exceptions ---
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"🐝 Deep Dive scraping: {url} (Attempt {attempt + 1}/{max_retries})")
+            time.sleep(random.uniform(0.5, 1.0))
             
-    except Exception as e:
-        logger.error(f"Error scraping {url}: {e}")
-        return None
+            response = scrapingbee_client.get(
+                url,
+                params={
+                    'render_js': True,
+                    'premium_proxy': True,
+                    'country_code': 'us',
+                    'wait': wait_time,
+                    'block_resources': False,
+                },
+                timeout=30 # Add a timeout
+            )
+            
+            if response.status_code == 200:
+                return BeautifulSoup(response.content, 'html.parser')
+            elif response.status_code >= 500:
+                # Server error, worth retrying
+                logger.warning(f"ScrapingBee returned status {response.status_code}. Retrying...")
+                time.sleep(2 ** attempt) # Exponential backoff
+                continue # Go to next attempt
+            else:
+                # 4xx errors (like 404, 403, 400) are not retried
+                logger.error(f"ScrapingBee error: Status {response.status_code}. Not retrying.")
+                return None
+                
+        except Exception as e:
+            # Network errors, timeouts, etc. are worth retrying
+            logger.error(f"Error scraping {url}: {e}. Retrying...")
+            time.sleep(2 ** attempt) # Exponential backoff
+    
+    logger.error(f"Failed to scrape {url} after {max_retries} attempts.")
+    return None
+    # --- END FIX 2 ---
 
 
 def scrape_google_reviews(business_name: str, location: str) -> Dict:
@@ -63,7 +79,8 @@ def scrape_google_reviews(business_name: str, location: str) -> Dict:
     try:
         # Build Google search URL for reviews
         search_query = f"{business_name} {location} reviews"
-        google_url = f"https://www.google.com/search?q={search_query.replace(' ', '+')}"
+        # --- FIX 3: Use quote_plus for proper URL encoding ---
+        google_url = f"https://www.google.com/search?q={quote_plus(search_query)}"
         
         soup = scrape_with_scrapingbee_advanced(google_url)
         if not soup:
@@ -88,7 +105,8 @@ def scrape_yelp_reviews(business_name: str, location: str) -> Dict:
     """Scrape Yelp reviews"""
     try:
         search_query = f"{business_name} {location}"
-        yelp_url = f"https://www.yelp.com/search?find_desc={search_query.replace(' ', '+')}"
+        # --- FIX 3: Use quote_plus for proper URL encoding ---
+        yelp_url = f"https://www.yelp.com/search?find_desc={quote_plus(search_query)}"
         
         soup = scrape_with_scrapingbee_advanced(yelp_url)
         if not soup:
@@ -112,8 +130,9 @@ def scrape_yelp_reviews(business_name: str, location: str) -> Dict:
 def scrape_healthgrades(business_name: str) -> Dict:
     """Scrape Healthgrades reviews"""
     try:
-        search_query = business_name.replace(' ', '+')
-        url = f"https://www.healthgrades.com/search?what={search_query}&where="
+        search_query = business_name
+        # --- FIX 3: Use quote_plus for proper URL encoding ---
+        url = f"https://www.healthgrades.com/search?what={quote_plus(search_query)}&where="
         
         soup = scrape_with_scrapingbee_advanced(url)
         if not soup:
@@ -211,7 +230,8 @@ def scrape_media_coverage(business_name: str, location: str) -> List[Dict]:
     """Scrape media mentions and press coverage"""
     try:
         search_query = f'"{business_name}" {location} news OR press OR award'
-        google_news_url = f"https://www.google.com/search?q={search_query.replace(' ', '+')}&tbm=nws"
+        # --- FIX 3: Use quote_plus for proper URL encoding ---
+        google_news_url = f"https://www.google.com/search?q={quote_plus(search_query)}&tbm=nws"
         
         soup = scrape_with_scrapingbee_advanced(google_news_url)
         if not soup:
@@ -286,7 +306,8 @@ def scrape_competitors(business_name: str, location: str, services: List[str]) -
         service_query = ' '.join(services[:3]) if services else 'medical spa'
         search_query = f"{service_query} near {location} -\"{business_name}\""
         
-        google_url = f"https://www.google.com/search?q={search_query.replace(' ', '+')}"
+        # --- FIX 3: Use quote_plus for proper URL encoding ---
+        google_url = f"https://www.google.com/search?q={quote_plus(search_query)}"
         
         soup = scrape_with_scrapingbee_advanced(google_url)
         if not soup:
