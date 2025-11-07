@@ -267,10 +267,21 @@ class GooglePlacesAPI:
 
 
 class FathomProspector:
-    """Main prospecting system for medical devices"""
+    """
+    Main prospecting system for medical devices.
+
+    This system supports dynamic scoring logic for different manufacturers.
+    The `manufacturer` parameter determines which device catalog and scoring rules to apply,
+    ensuring that each manufacturer's logic is completely isolated. Reps will only
+    see results and scores relevant to their specific device portfolio.
+
+    Supported manufacturers: "Venus Concepts", "Cutera".
+    Default: "Venus Concepts".
+    """
     
-    def __init__(self, demo_mode=False, existing_customers_csv=None, progress_callback=None):
+    def __init__(self, manufacturer="Venus Concepts", demo_mode=False, existing_customers_csv=None, progress_callback=None):
         self.gmaps_api = None  # Initialize early to prevent AttributeError
+        self.manufacturer = manufacturer
         
         self.gmaps_key = os.getenv('GOOGLE_PLACES_API_KEY')
         if not self.gmaps_key:
@@ -345,25 +356,23 @@ class FathomProspector:
             r'\bhealthcare system\b', r'\bregional medical\b', r'\buniversity medical\b'
         ]
         
-        # Device catalog - Venus product line
-        self.device_catalog = {
-            'Venus Versa': {
-                'specialties': ['hair removal', 'photorejuvenation', 'skin resurfacing', 'acne treatment', 'vascular lesions'],
-                'keywords': ['laser hair removal', 'ipl', 'photo facial', 'photofacial', 'skin rejuvenation', 'pigmentation']
+        # Device catalogs for multiple manufacturers
+        self.device_catalogs = {
+            "Venus Concepts": {
+                "Venus Bliss Max": {"services": ["fat destruction", "skin tightening", "muscle toning"]},
+                "Venus Viva": {"services": ["resurfacing", "skin tightening"]},
+                "Venus Versa": {"services": ["IPL", "multi-platform", "laser hair removal"]},
             },
-            'Venus Legacy': {
-                'specialties': ['body contouring', 'cellulite reduction', 'skin tightening', 'wrinkle reduction'],
-                'keywords': ['body sculpting', 'cellulite', 'radiofrequency', 'rf', 'skin tightening', 'body shaping']
-            },
-            'Venus Bliss MAX': {
-                'specialties': ['weight loss', 'muscle stimulation', 'body contouring', 'fat reduction'],
-                'keywords': ['weight loss', 'ems', 'muscle building', 'fat reduction', 'body sculpting', 'lipolysis']
-            },
-            'Venus Viva': {
-                'specialties': ['skin resurfacing', 'scar treatment', 'texture improvement', 'wrinkle reduction'],
-                'keywords': ['skin resurfacing', 'nano fractional', 'scar reduction', 'texture', 'fine lines']
+            "Cutera": {
+                "TruSculpt ID": {"services": ["fat destruction", "skin tightening"]},
+                "TruSculpt Flex": {"services": ["muscle toning"]},
+                "Enlighten": {"services": ["tattoo removal", "pigment correction"]},
+                "Xeo": {"services": ["laser hair removal", "IPL", "multi-platform"]},
             }
         }
+        
+        # Set the active device catalog based on the manufacturer
+        self.device_catalog = self.device_catalogs.get(self.manufacturer, self.device_catalogs["Venus Concepts"])
         
         # Specialty-specific scoring configurations
         self.specialty_scoring = {
@@ -1529,7 +1538,7 @@ Website Content: {website_text}
 
 Generate:
 1. 3-4 specific pain points this practice likely faces
-2. A readiness score (0-100) for adopting Venus aesthetic technology
+2. A readiness score (0-100) for adopting {self.manufacturer} aesthetic technology
 
 Format your response as:
 PAIN_POINTS:
@@ -1645,7 +1654,7 @@ Consider factors like competition, market position, current services, and growth
             # CREATIVE EMAIL PROMPT 
             # ========================================
             email_prompt = f"""
-You are "Alex Rivera," a top-performing medical device consultant known for:
+You are "Alex Rivera," a top-performing medical device consultant for {self.manufacturer} known for:
 - Creating irresistible curiosity gaps
 - Using unexpected analogies that make doctors stop and think  
 - Building immediate rapport through personalized insights
@@ -1694,7 +1703,7 @@ Remember: Sound like a helpful colleague, not a salesperson.
             # CREATIVE COLD CALL PROMPT
             # ========================================
             cold_call_prompt = f"""
-You are "Alex Rivera," a top-performing medical device consultant making a cold call to {practice_name}.
+You are "Alex Rivera," a top-performing medical device consultant for {self.manufacturer} making a cold call to {practice_name}.
 
 CREATIVE MISSION: Create a 30-second opening that makes the gatekeeper WANT to connect you.
 
@@ -1729,7 +1738,7 @@ OUTPUT: A natural, conversational script ready to use.
             # CREATIVE INSTAGRAM DM PROMPT
             # ========================================
             instagram_dm_prompt = f"""
-You are "Alex Rivera," sending an Instagram DM to {practice_name}.
+You are "Alex Rivera," sending an Instagram DM to {practice_name} on behalf of {self.manufacturer}.
 
 CREATIVE MISSION: Craft a DM that doesn't get ignored or blocked.
 
@@ -1765,7 +1774,7 @@ OUTPUT: A short, engaging DM ready to send.
             # ========================================
             # Generate all three outreach types with creative approach
             # ========================================
-            system_msg = "You are a creative medical device consultant who specializes in crafting outreach that actually gets responses. You avoid corporate jargon and focus on creating genuine curiosity and value."
+            system_msg = f"You are a creative medical device consultant for {self.manufacturer} who specializes in crafting outreach that actually gets responses. You avoid corporate jargon and focus on creating genuine curiosity and value."
             
             # Generate creative email
             email_response = self.call_ai(email_prompt, system_msg, max_tokens=400, temperature=0.8)
@@ -1893,6 +1902,17 @@ OUTPUT: A short, engaging DM ready to send.
         if len(services) > 5:
             readiness_score += 5
         
+        # Manufacturer-specific readiness adjustments based on their catalog
+        # This ensures the readiness score reflects the opportunity for the *specific* manufacturer
+        if self.manufacturer == "Cutera":
+            # High signal for tattoo removal (Enlighten) or advanced body contouring (TruSculpt)
+            if any(kw in website_text for kw in ['tattoo', 'pigment', 'trusculpt']):
+                readiness_score += 15
+        elif self.manufacturer == "Venus Concepts":
+            # High signal for practices mentioning RF or all-in-one platforms
+            if any(kw in website_text for kw in ['radiofrequency', 'rf', 'multi-platform']):
+                readiness_score += 10
+        
         # Cap score at 100
         readiness_score = min(100, readiness_score)
         
@@ -1901,7 +1921,7 @@ OUTPUT: A short, engaging DM ready to send.
             'revenue_opportunity': f'High-value aesthetic services for {specialty} practices',
             'readiness_score': readiness_score,
             'competing_services': [s for s in services if any(kw in s.lower() for kw in ['botox', 'laser', 'filler', 'aesthetic', 'cosmetic'])],
-            'gap_analysis': 'Venus devices can complement existing services or create new revenue stream',
+            'gap_analysis': f'{self.manufacturer} devices can complement existing services or create new revenue stream',
             'decision_maker_profile': 'Practice owner, medical director, or office manager',
             'best_approach': 'Focus on ROI, patient satisfaction, and competitive differentiation'
         }
@@ -1922,16 +1942,16 @@ OUTPUT: A short, engaging DM ready to send.
                 'subject': f'Expand Your Aesthetic Services - {name}',
                 'body': f"""Dear {contact},
 
-I hope this message finds you well. I am reaching out because {name} is exactly the type of leading dermatology practice that benefits most from Venus technologies.
+I hope this message finds you well. I am reaching out because {name} is exactly the type of leading dermatology practice that benefits most from {self.manufacturer} technologies.
 
 Many dermatologists we work with face similar challenges: med spas encroaching on aesthetic services, patients requesting non-invasive body contouring, and the need to stay competitive while maintaining medical excellence.
 
-Our Venus systems complement your existing practice by adding high-demand services like body contouring, cellulite reduction, and skin tightening—all with clinically proven, FDA-cleared technology.
+Our {self.manufacturer} systems complement your existing practice by adding high-demand services like body contouring, cellulite reduction, and skin tightening—all with clinically proven, FDA-cleared technology.
 
 Would you be open to a brief conversation about how we have helped practices like yours increase aesthetic revenue by 30-40 percent?
 
 Best regards,
-Venus Sales Team"""
+{self.manufacturer} Sales Team"""
             },
             'plastic_surgery': {
                 'subject': f'Enhance Pre/Post-Surgical Care Revenue - {name}',
@@ -1939,16 +1959,16 @@ Venus Sales Team"""
 
 I specialize in working with plastic surgery practices like {name} that want to maximize patient value and retention.
 
-Venus technologies are perfect for pre and post-surgical care, non-invasive alternatives for patients not ready for surgery, and maintenance between procedures.
+{self.manufacturer} technologies are perfect for pre and post-surgical care, non-invasive alternatives for patients not ready for surgery, and maintenance between procedures.
 
 Our devices complement your surgical practice by capturing patients throughout their aesthetic journey, not just during surgical windows.
 
-I would love to show you how practices similar to yours have increased annual revenue by over $200K with Venus systems.
+I would love to show you how practices similar to yours have increased annual revenue by over $200K with {self.manufacturer} systems.
 
 Can we schedule 15 minutes to discuss?
 
 Best regards,
-Venus Sales Team"""
+{self.manufacturer} Sales Team"""
             },
             'obgyn': {
                 'subject': f'Womens Wellness + Aesthetics - {name}',
@@ -1956,31 +1976,31 @@ Venus Sales Team"""
 
 I am reaching out to OB/GYN practices like {name} that are expanding into womens wellness and aesthetics.
 
-Postpartum body contouring is one of the fastest-growing service requests in womens health, and Venus technologies allow you to serve this need without invasive procedures.
+Postpartum body contouring is one of the fastest-growing service requests in womens health, and {self.manufacturer} technologies allow you to serve this need without invasive procedures.
 
-Many of our OB/GYN partners have successfully integrated Venus treatments for body contouring, skin tightening, and cellulite reduction—perfect for your patient demographic.
+Many of our OB/GYN partners have successfully integrated {self.manufacturer} treatments for body contouring, skin tightening, and cellulite reduction—perfect for your patient demographic.
 
 Would you be interested in learning how we have helped practices like yours add $100-150K in annual aesthetic revenue?
 
 Best regards,
-Venus Sales Team"""
+{self.manufacturer} Sales Team"""
             },
             'medspa': {
                 'subject': f'Upgrade Your Technology - {name}',
                 'body': f"""Dear {contact},
 
-{name} caught my attention as a forward-thinking med spa, and I wanted to reach out about Venus technologies.
+{name} caught my attention as a forward-thinking med spa, and I wanted to reach out about {self.manufacturer} technologies.
 
 The med spa market is competitive, and having state-of-the-art equipment is critical for attracting and retaining high-value clients.
 
-Venus systems deliver clinical results your clients will love: body contouring, cellulite reduction, skin tightening, and wrinkle reduction—all FDA-cleared and backed by extensive clinical studies.
+{self.manufacturer} systems deliver clinical results your clients will love: body contouring, cellulite reduction, skin tightening, and wrinkle reduction—all FDA-cleared and backed by extensive clinical studies.
 
-Many med spas we work with see 30-50 percent increase in treatment bookings after adding Venus technologies.
+Many med spas we work with see 30-50 percent increase in treatment bookings after adding {self.manufacturer} technologies.
 
 Can we schedule a brief demo or discussion?
 
 Best regards,
-Venus Sales Team"""
+{self.manufacturer} Sales Team"""
             },
             'familypractice': {
                 'subject': f'Differentiate Your Practice - {name}',
@@ -1990,12 +2010,12 @@ I work with forward-thinking family practices like {name} that want to different
 
 Adding aesthetic services like body contouring and skin tightening creates a powerful practice differentiator while generating cash-pay revenue streams beyond insurance reimbursements.
 
-Venus technologies are perfect for family practices because they are easy to integrate, require minimal training, and patients love the results.
+{self.manufacturer} technologies are perfect for family practices because they are easy to integrate, require minimal training, and patients love the results.
 
 Would you be open to a conversation about how we have helped practices like yours add $75-100K in annual aesthetic revenue?
 
 Best regards,
-Venus Sales Team"""
+{self.manufacturer} Sales Team"""
             }
         }
         
@@ -2004,16 +2024,16 @@ Venus Sales Team"""
             'subject': f'Aesthetic Technology for {name}',
             'body': f"""Dear {contact},
 
-I am reaching out because {name} could benefit from Venus aesthetic technologies.
+I am reaching out because {name} could benefit from {self.manufacturer} aesthetic technologies.
 
 Our FDA-cleared systems offer body contouring, skin tightening, cellulite reduction, and wrinkle reduction—high-demand services that generate excellent revenue.
 
-Many practices similar to yours have successfully integrated Venus technologies to enhance patient satisfaction and increase revenue.
+Many practices similar to yours have successfully integrated {self.manufacturer} technologies to enhance patient satisfaction and increase revenue.
 
 Would you be interested in a brief conversation?
 
 Best regards,
-Venus Sales Team"""
+{self.manufacturer} Sales Team"""
         })
         
         # Generate talking points based on pain points and specialty
@@ -2037,9 +2057,9 @@ Venus Sales Team"""
             call_to_action = 'Send additional information and case studies'
         
         # Generate simple cold call and Instagram versions from email
-        cold_call = f"Hi, this is [Your Name] from Venus Medical. I'm reaching out because {name} would be a great fit for our aesthetic technologies. {pain_points[0] if pain_points else 'Many practices like yours'} - and Venus addresses this with proven body contouring and skin tightening solutions. Could we schedule a brief 15-minute call to discuss?"
+        cold_call = f"Hi, this is [Your Name] from {self.manufacturer}. I'm reaching out because {name} would be a great fit for our aesthetic technologies. {pain_points[0] if pain_points else 'Many practices like yours'} - and {self.manufacturer} addresses this with proven body contouring and skin tightening solutions. Could we schedule a brief 15-minute call to discuss?"
         
-        instagram = f"Hi! Noticed {name}'s excellent reputation. Many practices like yours are seeing great results with Venus aesthetic technologies. Would you be open to learning more?"
+        instagram = f"Hi! Noticed {name}'s excellent reputation. Many practices like yours are seeing great results with {self.manufacturer} aesthetic technologies. Would you be open to learning more?"
         
         return {
             'outreachColdCall': cold_call,
@@ -2669,53 +2689,76 @@ Based on your analysis, return a single JSON object in this *exact* format:
         keyword_bonus = min(keyword_bonus, 10)
         
         # ═══════════════════════════════════════════════════════════
+        # 9. Manufacturer-Specific Scoring Bonus
+        # This section applies scoring logic isolated to the selected manufacturer.
+        # ═══════════════════════════════════════════════════════════
+        manufacturer_bonus = 0
+        
+        # --- Venus Concepts Logic ---
+        if self.manufacturer == "Venus Concepts":
+            # The existing scoring model is already well-tuned for Venus Concepts'
+            # broad market (e.g., medspas, OBGYNs), so no specific bonus is added here.
+            # The logic is preserved as-is per requirements.
+            pass
+
+        # --- Cutera Logic ---
+        elif self.manufacturer == "Cutera":
+            # Add bonuses for services that are strong fits for Cutera's device catalog.
+            if "body contouring" in services_text or "fat destruction" in services_text:
+                manufacturer_bonus += 10  # Strong signal for TruSculpt line
+            if "tattoo removal" in services_text:
+                manufacturer_bonus += 10  # Very strong signal for Enlighten
+            if "laser hair removal" in services_text or "ipl" in services_text:
+                manufacturer_bonus += 5   # Good signal for Xeo
+        
+        # ═══════════════════════════════════════════════════════════
         # TOTAL SCORE (out of 110, normalized to 100)
         # ═══════════════════════════════════════════════════════════
         base_score = sum(scores.values())
-        total_score = min(base_score + keyword_bonus, 100)
+        total_score = min(base_score + keyword_bonus + manufacturer_bonus, 100)
         
         return total_score, scores, specialty, ai_classification
     
     def recommend_device(self, practice_data: Dict, ai_scores: Dict) -> Dict:
-        """Recommend top device based on practice profile"""
+        """Recommend top device based on practice profile using manufacturer-specific catalog."""
         
         services = practice_data.get('services', [])
         description = practice_data.get('description', '').lower()
+        website_text = practice_data.get('website_text', '').lower()
+        
+        # Combine all text sources for a comprehensive search
+        all_prospect_text = ' '.join(services) + ' ' + description + ' ' + website_text
         
         device_scores = {}
         
+        # self.device_catalog is already filtered for the active manufacturer in __init__
         for device_name, device_info in self.device_catalog.items():
             score = 0
             reasons = []
             
-            # Base scoring for specialty alignment
-            for specialty in device_info['specialties']:
-                if any(specialty.lower() in service.lower() for service in services):
+            # Check for service alignment based on the manufacturer's device capabilities
+            for service_keyword in device_info.get('services', []):
+                if service_keyword.lower() in all_prospect_text:
                     score += 20
-                    reasons.append(f"Offers {specialty}")
-            
-            # Keyword matches
-            for keyword in device_info['keywords']:
-                if keyword.lower() in description:
-                    score += 10
-                    reasons.append(f"Keyword: {keyword}")
+                    reasons.append(f"Offers services related to '{service_keyword}'")
             
             device_scores[device_name] = {
                 'score': score,
-                'reasons': reasons
+                'reasons': list(set(reasons)) # Remove duplicate reasons
             }
         
         sorted_devices = sorted(device_scores.items(), 
-                              key=lambda x: x[1]['score'], reverse=True)
+                                key=lambda x: x[1]['score'], reverse=True)
         
         recommendations = []
         for i, (device_name, data) in enumerate(sorted_devices[:3]):
-            recommendations.append({
-                'device': device_name,
-                'fit_score': data['score'],
-                'rationale': '; '.join(data['reasons']) if data['reasons'] else 'General practice fit',
-                'rank': i + 1
-            })
+            if data['score'] > 0: # Only recommend if there's a match
+                recommendations.append({
+                    'device': device_name,
+                    'fit_score': data['score'],
+                    'rationale': '; '.join(data['reasons']) if data['reasons'] else 'General practice fit',
+                    'rank': i + 1
+                })
         
         return {
             'primary_recommendation': recommendations[0] if recommendations else None,
@@ -2825,6 +2868,7 @@ Based on your analysis, return a single JSON object in this *exact* format:
         # Compile final record (without AI outreach - generated on-demand)
         final_record = {
             **practice_record,
+            'manufacturer': self.manufacturer,
             'specialty': specialty,
             'ai_score': ai_score,
             'ai_prospect_class': ai_prospect_class,
@@ -2906,7 +2950,7 @@ Based on your analysis, return a single JSON object in this *exact* format:
         
         csv_columns = [
             'name', 'specialty', 'address', 'phone', 'website', 'rating', 'review_count',
-            'emails', 'contact_names',  # Contact Intelligence fields
+            'manufacturer', 'emails', 'contact_names',  # Contact Intelligence fields
             'ai_score', 'ai_prospect_class', 'confidence_level', 'primary_device_rec', 'device_rationale',
             'outreach_opener', 'services', 'social_links', 'staff_count',
             'specialty_match_score', 'decision_autonomy_score', 'aesthetic_services_score', 
@@ -3226,7 +3270,7 @@ TOP 10 HIGH-PRIORITY PROSPECTS
                        radius: int, max_results: int):
         """Main prospecting workflow"""
         
-        logger.info(f"Starting prospecting for {keywords} near {location}")
+        logger.info(f"Starting prospecting for {keywords} near {location} using {self.manufacturer} logic")
         
         all_results = []
         
@@ -3292,6 +3336,7 @@ def main():
     parser.add_argument('--city', help='City or location to search')
     parser.add_argument('--radius', type=int, default=25, help='Search radius in km')
     parser.add_argument('--max-results', type=int, default=150, help='Max results per keyword')
+    parser.add_argument('--manufacturer', default='Venus Concepts', help='Specify the manufacturer for scoring logic (e.g., Venus Concepts, Cutera)')
     parser.add_argument('--interactive', action='store_true', help='Run in interactive mode')
     parser.add_argument('--demo', action='store_true', help='Run in demo mode')
     parser.add_argument('--exclude-csv', help='CSV file with existing customers')
@@ -3301,6 +3346,7 @@ def main():
     os.makedirs('logs', exist_ok=True)
     
     prospector = FathomProspector(
+        manufacturer=args.manufacturer,
         demo_mode=args.demo, 
         existing_customers_csv=args.exclude_csv
     )
@@ -3341,6 +3387,7 @@ def main():
     print(f"Location: {city}")
     print(f"Radius: {radius} km")
     print(f"Max results per keyword: {max_results}")
+    print(f"Manufacturer Logic: {prospector.manufacturer}")
     print(f"Google Places API: {'✓ Configured' if prospector.gmaps_key else '✗ Missing'}")
     sys.stdout.flush()
     
