@@ -1,3 +1,4 @@
+```python
 """
 Fathom Prospector - Python API Server (Phase 2: Production Hardened)
 Wraps prospect.py in a FastAPI server for remote calls from Next.js app
@@ -392,6 +393,8 @@ async def start_search(
     # Get user ID from request
     user_id = get_user_id_from_header(request)
     
+    manufacturer = request.query_params.get("manufacturer", "Venus Concepts")
+    
     # Check user quota
     quota_info = check_user_quota(user_id)
     
@@ -431,7 +434,7 @@ async def start_search(
     }
     
     # Start search in background
-    background_tasks.add_task(run_prospect_search, job_id, search_request)
+    background_tasks.add_task(run_prospect_search, job_id, search_request, manufacturer)
     
     # Log with quota warning if approaching limit
     quota_msg = f"(Quota: {quota_info['used']}/{quota_info['limit']})"
@@ -445,7 +448,7 @@ async def start_search(
         message=f"Search started successfully. Remaining quota: {quota_info['remaining']} searches today."
     )
 
-def _run_prospect_search_sync(job_id: str, request: SearchRequest):
+def _run_prospect_search_sync(job_id: str, request: SearchRequest, manufacturer: str):
     """
     Synchronous version of prospect search to run in thread pool
     This prevents blocking the asyncio event loop
@@ -474,9 +477,11 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
             "--keywords", *request.keywords,
             "--city", request.location,
             "--radius", str(request.radius),
-            "--max-results", str(request.maxResults)
+            "--max-results", str(request.maxResults),
+            "--manufacturer", manufacturer
         ]
         
+        logger.info(f"Job {job_id}: Manufacturer received: {manufacturer}")
         logger.info(f"Job {job_id}: Running command: {' '.join(cmd)}")
         
         # --- FIX for ModuleNotFoundError ---
@@ -634,7 +639,7 @@ def _run_prospect_search_sync(job_id: str, request: SearchRequest):
                 process.wait()
             logger.info(f"Job {job_id}: Process terminated in finally block")
 
-async def run_prospect_search(job_id: str, request: SearchRequest):
+async def run_prospect_search(job_id: str, request: SearchRequest, manufacturer: str):
     """
     Async wrapper for prospect search
     Uses semaphore to limit concurrent searches and thread pool to prevent blocking
@@ -649,7 +654,7 @@ async def run_prospect_search(job_id: str, request: SearchRequest):
             # Run synchronous search in thread pool with timeout (90 minutes for large searches)
             loop = asyncio.get_event_loop()
             await asyncio.wait_for(
-                loop.run_in_executor(executor, _run_prospect_search_sync, job_id, request),
+                loop.run_in_executor(executor, _run_prospect_search_sync, job_id, request, manufacturer),
                 timeout=5400  # 90 minute max per search (increased from 5 min)
             )
         except asyncio.TimeoutError:
@@ -1033,3 +1038,4 @@ if __name__ == "__main__":
         limit_concurrency=100,
         limit_max_requests=1000  # Restart worker after N requests to prevent memory leaks
     )
+```
