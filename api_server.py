@@ -1037,4 +1037,3 @@ if __name__ == "__main__":
         limit_concurrency=100,
         limit_max_requests=1000  # Restart worker after N requests to prevent memory leaks
     )
-```
