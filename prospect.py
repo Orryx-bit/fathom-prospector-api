@@ -360,6 +360,7 @@ class FathomProspector:
         self.device_catalogs = {
             "Venus Concepts": {
                 "Venus Bliss Max": {"services": ["fat destruction", "skin tightening", "muscle toning"]},
+                "Venus Nova": {"services": ["body contouring", "skin tightening", "muscle toning", "EMS", "RF treatment", "post-weight loss", "fat reduction", "weight management", "glp-1"]},
                 "Venus Viva": {"services": ["resurfacing", "skin tightening"]},
                 "Venus Versa": {"services": ["IPL", "multi-platform", "laser hair removal"]},
             },
