@@ -1,0 +1,206 @@
+
+# Venus Concepts Manufacturer-Specific Scoring Rubric (0-100 points)
+# Evaluates fit for Venus device portfolio
+
+manufacturer: "Venus Concepts"
+
+device_portfolio:
+  venus_viva:
+    services:
+      - "Skin resurfacing"
+      - "Wrinkle reduction"
+      - "Acne scars"
+      - "Texture improvement"
+      - "Nanofractional RF"
+    opportunity_signals:
+      - "Fractional laser interest"
+      - "Skin texture treatments"
+      - "Acne scar treatments"
+      - "Anti-aging focus"
+  
+  venus_versa:
+    services:
+      - "IPL photorejuvenation"
+      - "Hair removal"
+      - "Vascular lesions"
+      - "Pigmentation"
+      - "Multi-application platform"
+    opportunity_signals:
+      - "IPL services"
+      - "Hair removal business"
+      - "Multi-modality interest"
+      - "Platform consolidation opportunity"
+  
+  venus_bliss:
+    services:
+      - "Fat reduction (EFX)"
+      - "Muscle toning (DiamondPolar)"
+      - "Body contouring"
+      - "Cellulite reduction"
+    opportunity_signals:
+      - "Body contouring interest"
+      - "Weight loss programs"
+      - "Post-bariatric patients"
+      - "Muscle toning interest"
+  
+  venus_legacy:
+    services:
+      - "Skin tightening"
+      - "Cellulite reduction"
+      - "Circumferential reduction"
+      - "MP2 technology"
+    opportunity_signals:
+      - "Body contouring"
+      - "Skin laxity treatments"
+      - "Non-invasive body treatments"
+  
+  venus_diamondpolar:
+    services:
+      - "Muscle building"
+      - "Body sculpting"
+      - "EMS treatments"
+    opportunity_signals:
+      - "Fitness/wellness focus"
+      - "Muscle toning interest"
+      - "Athletic clientele"
+
+scoring_factors:
+  portfolio_alignment:
+    max_points: 25
+    description: "How well practice services align with Venus portfolio"
+    evaluation:
+      - "Count matching service categories"
+      - "Weight by revenue potential"
+      - "Bonus for multi-device opportunity"
+  
+  body_focus:
+    max_points: 20
+    description: "Body contouring/toning emphasis (Venus strength)"
+    keywords:
+      - "body contouring"
+      - "fat reduction"
+      - "cellulite"
+      - "muscle toning"
+      - "skin tightening"
+      - "body sculpting"
+  
+  face_rf_opportunity:
+    max_points: 15
+    description: "RF skin resurfacing gap or interest"
+    signals:
+      - "Offers other facial treatments but not RF"
+      - "Mentions 'texture' or 'acne scars'"
+      - "Has fractional laser interest"
+  
+  multi_modality_appeal:
+    max_points: 15
+    description: "Interest in platform consolidation"
+    indicators:
+      - "Multiple standalone devices"
+      - "Mentions 'platform' or 'versatile'"
+      - "Limited space (favor multi-app platforms)"
+  
+  hair_removal_gap:
+    max_points: 10
+    description: "Hair removal opportunity (Versa/IPL)"
+    evaluation:
+      - "No existing hair removal service"
+      - "Aging/outdated hair removal tech"
+      - "High demand area for hair removal"
+  
+  weight_loss_integration:
+    max_points: 10
+    description: "GLP-1/medical weight loss program synergy"
+    signals:
+      - "Weight loss program"
+      - "GLP-1 services"
+      - "Bariatric/post-weight loss focus"
+      - "Wellness programs"
+  
+  venus_competitor_gap:
+    max_points: 5
+    description: "Gap analysis - lacks Venus-comparable tech"
+    assessment:
+      - "No RF devices"
+      - "No body contouring devices"
+      - "Outdated technology"
+
+opportunity_profiles:
+  full_suite_opportunity:
+    score_range: "85-100"
+    description: "Can benefit from multiple Venus devices"
+    characteristics:
+      - "Large aesthetic practice"
+      - "Body + face services"
+      - "Multiple treatment rooms"
+      - "High patient volume"
+    recommended_approach: "Multi-device package with financing"
+  
+  body_specialist:
+    score_range: "70-84"
+    description: "Strong fit for body devices (Bliss, Legacy, DiamondPolar)"
+    characteristics:
+      - "Body contouring focus"
+      - "Weight loss programs"
+      - "Spa/wellness environment"
+    recommended_approach: "Lead with Bliss or Legacy"
+  
+  platform_consolidation:
+    score_range: "60-79"
+    description: "Good fit for Versa multi-application platform"
+    characteristics:
+      - "Multiple aging devices"
+      - "Limited space"
+      - "Seeking efficiency"
+    recommended_approach: "Versa as all-in-one solution"
+  
+  emerging_opportunity:
+    score_range: "40-59"
+    description: "Early-stage aesthetic interest"
+    characteristics:
+      - "Limited current aesthetic services"
+      - "Growth trajectory"
+      - "Investment appetite"
+    recommended_approach: "Entry-level device (Versa or Viva)"
+
+talking_points:
+  body_contouring:
+    - "Venus Bliss combines fat reduction AND muscle toning in one treatment"
+    - "Clinically proven 24-27% fat reduction"
+    - "Patients love the dual benefit approach"
+  
+  skin_resurfacing:
+    - "Venus Viva's NanoFractional RF is safer than traditional lasers"
+    - "Treats ALL skin types safely"
+    - "Minimal downtime compared to ablative lasers"
+  
+  platform_value:
+    - "Venus Versa: 7+ applications on one platform"
+    - "Maximize ROI per square foot"
+    - "Simplify training and inventory"
+  
+  clinical_credibility:
+    - "FDA-cleared and Health Canada approved"
+    - "150+ published clinical studies"
+    - "Used in 60+ countries worldwide"
+
+competitive_positioning:
+  vs_coolsculpt:
+    - "More comfortable treatment (no freezing)"
+    - "Treats multiple areas simultaneously"
+    - "Includes skin tightening benefit"
+  
+  vs_emsculpt:
+    - "More affordable per treatment"
+    - "Larger treatment area coverage"
+    - "Can combine with fat reduction"
+  
+  vs_thermage:
+    - "Less painful treatment experience"
+    - "More predictable outcomes"
+    - "Lower price point"
+
+notes:
+  - "Venus strength: Non-invasive body contouring + multi-app platforms"
+  - "Key differentiator: Combination treatments (fat + muscle)"
+  - "Target practices: Med spas, weight loss clinics, OB/GYN, dermatology"
