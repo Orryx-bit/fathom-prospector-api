@@ -15,7 +15,9 @@ import random
 import re
 import sys
 import time
+import yaml
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from urllib.parse import urljoin, urlparse
 from urllib.robotparser import RobotFileParser
@@ -29,7 +31,10 @@ from dotenv import load_dotenv
 from ratelimit import limits, sleep_and_retry
 
 # Import blacklist manager for filtering problematic sites
-from blacklist_manager import get_blacklist_manager
+try:
+    from blacklist_manager import get_blacklist_manager
+except ImportError:
+    get_blacklist_manager = None
 
 # Async HTTP for concurrent scraping
 
@@ -465,6 +470,47 @@ class FathomProspector:
                 ]
             }
         }
+        
+        # ============================================================
+        # THREE-LAYER SCORING ARCHITECTURE - Load YAML Configurations
+        # ============================================================
+        self._load_scoring_configs()
+    
+    def _load_scoring_configs(self):
+        """Load YAML scoring configuration files for three-layer architecture"""
+        try:
+            # Get the directory where this script is located
+            script_dir = Path(__file__).parent
+            config_dir = script_dir  # Configs expected in same directory
+            
+            # Load universal aesthetic scoring rubric
+            universal_config_path = config_dir / 'universal_aesthetic_scoring.yaml'
+            if universal_config_path.exists():
+                with open(universal_config_path, 'r') as f:
+                    self.universal_scoring_config = yaml.safe_load(f)
+                logger.info("✓ Loaded universal aesthetic scoring config")
+            else:
+                logger.warning(f"Universal scoring config not found at {universal_config_path}")
+                self.universal_scoring_config = {}
+            
+            # Load manufacturer-specific scoring rubric
+            manufacturer_slug = self.manufacturer.lower().replace(' ', '_').replace('concepts', '').strip('_')
+            if manufacturer_slug not in ['venus', 'sciton', 'cutera']:
+                manufacturer_slug = 'venus'  # default fallback
+            
+            mfr_config_path = config_dir / f'{manufacturer_slug}_scoring.yaml'
+            if mfr_config_path.exists():
+                with open(mfr_config_path, 'r') as f:
+                    self.manufacturer_scoring_config = yaml.safe_load(f)
+                logger.info(f"✓ Loaded {manufacturer_slug} manufacturer scoring config")
+            else:
+                logger.warning(f"Manufacturer scoring config not found at {mfr_config_path}")
+                self.manufacturer_scoring_config = {}
+                
+        except Exception as e:
+            logger.warning(f"Failed to load YAML scoring configs: {e} - using fallback logic")
+            self.universal_scoring_config = {}
+            self.manufacturer_scoring_config = {}
     
     
     def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
@@ -2490,12 +2536,586 @@ Based on your analysis, return a single JSON object in this *exact* format:
                 
         return scores
 
+    # ============================================================
+    # THREE-LAYER SCORING ARCHITECTURE METHODS
+    # ============================================================
+    
+    def classify_practice_type_universal(self, practice_data: Dict) -> str:
+        """
+        LAYER 1: Universal Practice-Type Classification (9 types)
+        
+        Returns one of: medspa, plastic_surgery, dermatology, wellness, 
+                       integrative_medicine, weight_loss, family_practice, 
+                       urgent_care, general
+        """
+        if not self.ai_enabled:
+            return self._classify_practice_type_rule_based(practice_data)
+        
+        try:
+            # Extract comprehensive practice context
+            name = practice_data.get('name', '')
+            description = practice_data.get('description', '')
+            services = ', '.join(practice_data.get('services', []))
+            website_text = practice_data.get('website_text', '')[:2000]  # More context
+            
+            prompt = f"""Classify this medical practice into ONE category:
+
+Practice Name: {name}
+Description: {description}
+Services: {services}
+Website Content: {website_text}
+
+Categories (return ONLY ONE):
+1. medspa - Medical spas, aesthetic clinics, beauty clinics (non-physician primary ownership)
+2. plastic_surgery - Plastic surgeons, cosmetic surgeons, reconstructive surgery practices
+3. dermatology - Dermatologists, skin clinics, medical/cosmetic dermatology
+4. wellness - Wellness centers, longevity clinics, anti-aging centers, preventative medicine
+5. integrative_medicine - Functional medicine, holistic health, integrative practitioners
+6. weight_loss - Medical weight loss, bariatric, GLP-1 clinics, weight management
+7. family_practice - Family medicine, primary care, internal medicine, general practitioners
+8. urgent_care - Urgent care centers, walk-in clinics, immediate care
+9. general - Other healthcare services not fitting above categories
+
+CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
+
+            system_msg = "You are a medical practice classification expert. Analyze practice data and return the single most accurate category."
+            
+            result = self.call_ai(prompt, system_msg, max_tokens=20, temperature=0.2).lower().strip()
+            
+            valid_types = ['medspa', 'plastic_surgery', 'dermatology', 'wellness', 
+                          'integrative_medicine', 'weight_loss', 'family_practice', 
+                          'urgent_care', 'general']
+            
+            if result in valid_types:
+                logger.info(f"🎯 Practice type classified: {result}")
+                return result
+            else:
+                logger.warning(f"AI returned invalid type '{result}', using rule-based fallback")
+                return self._classify_practice_type_rule_based(practice_data)
+                
+        except Exception as e:
+            logger.error(f"Practice classification failed: {e}, using rule-based fallback")
+            return self._classify_practice_type_rule_based(practice_data)
+    
+    def _classify_practice_type_rule_based(self, practice_data: Dict) -> str:
+        """Rule-based fallback for practice type classification"""
+        name = practice_data.get('name', '').lower()
+        desc = practice_data.get('description', '').lower()
+        services = ' '.join(practice_data.get('services', [])).lower()
+        all_text = f"{name} {desc} {services}"
+        
+        # Priority-ordered classification
+        if any(kw in all_text for kw in ['urgent care', 'walk-in', 'immediate care', 'emergency']):
+            return 'urgent_care'
+        elif any(kw in all_text for kw in ['weight loss', 'bariatric', 'glp-1', 'semaglutide', 'medical weight']):
+            return 'weight_loss'
+        elif any(kw in all_text for kw in ['plastic surgery', 'plastic surgeon', 'cosmetic surgeon']):
+            return 'plastic_surgery'
+        elif any(kw in all_text for kw in ['dermatology', 'dermatologist', 'skin clinic', 'skin doctor']):
+            return 'dermatology'
+        elif any(kw in all_text for kw in ['functional medicine', 'integrative medicine', 'holistic']):
+            return 'integrative_medicine'
+        elif any(kw in all_text for kw in ['wellness center', 'longevity', 'anti-aging center', 'preventative']):
+            return 'wellness'
+        elif any(kw in all_text for kw in ['med spa', 'medspa', 'medical spa', 'aesthetic clinic']):
+            return 'medspa'
+        elif any(kw in all_text for kw in ['family medicine', 'family practice', 'primary care', 'internal medicine']):
+            return 'family_practice'
+        else:
+            return 'general'
+    
+    def calculate_universal_aesthetic_score(self, practice_data: Dict) -> Tuple[int, Dict]:
+        """
+        LAYER 2: Universal Aesthetic Scoring (0-100, brand-neutral)
+        
+        Scores aesthetic sophistication based on 14 factors:
+        - aesthetic_sophistication (12 pts)
+        - cash_pay_indicators (10 pts)
+        - treatment_depth (10 pts)
+        - provider_credentials (8 pts)
+        - before_after_photos (8 pts)
+        - online_booking (7 pts)
+        - marketing_sophistication (8 pts)
+        - review_quality (8 pts)
+        - website_quality (8 pts)
+        - seo_visibility (6 pts)
+        - service_diversity (6 pts)
+        - injectable_program (6 pts)
+        - laser_program (6 pts)
+        - device_maturity (3 pts)
+        """
+        
+        score_breakdown = {}
+        
+        # Extract practice data safely (fixing unsafe .get().get() chains)
+        name = practice_data.get('name', '').lower()
+        description = practice_data.get('description', '')
+        if description is None:
+            description = ''
+        description = description.lower()
+        
+        website_text = practice_data.get('website_text', '')
+        if website_text is None:
+            website_text = ''
+        website_text = website_text.lower()
+        
+        services = practice_data.get('services', [])
+        if services is None:
+            services = []
+        services_text = ' '.join(services).lower()
+        
+        rating = practice_data.get('rating', 0)
+        if rating is None:
+            rating = 0
+            
+        review_count = practice_data.get('user_ratings_total', 0)
+        if review_count is None:
+            review_count = 0
+            
+        website = practice_data.get('website', '')
+        if website is None:
+            website = ''
+            
+        social_links = practice_data.get('social_links', [])
+        if social_links is None:
+            social_links = []
+        
+        all_text = f"{name} {description} {services_text} {website_text}"
+        
+        # 1. Aesthetic Sophistication (12 pts)
+        aesthetic_keywords = ['aesthetic', 'cosmetic', 'beauty', 'rejuvenation', 'anti-aging']
+        gallery_keywords = ['before and after', 'gallery', 'results', 'transformations']
+        
+        if any(kw in all_text for kw in gallery_keywords) and len(services) >= 5:
+            score_breakdown['aesthetic_sophistication'] = 12
+        elif any(kw in all_text for kw in aesthetic_keywords) and len(services) >= 3:
+            score_breakdown['aesthetic_sophistication'] = 8
+        elif any(kw in all_text for kw in aesthetic_keywords):
+            score_breakdown['aesthetic_sophistication'] = 4
+        else:
+            score_breakdown['aesthetic_sophistication'] = 0
+        
+        # 2. Cash-Pay Indicators (10 pts)
+        cash_keywords = ['cash pay', 'membership', 'package', 'elective', 'spa', 'aesthetic']
+        score_breakdown['cash_pay_indicators'] = min(sum(3 for kw in cash_keywords if kw in all_text), 10)
+        
+        # 3. Treatment Depth (10 pts)
+        face_treatments = ['botox', 'filler', 'chemical peel', 'microneedling', 'facial']
+        body_treatments = ['body contouring', 'fat reduction', 'cellulite', 'skin tightening']
+        laser_treatments = ['laser hair removal', 'laser resurfacing', 'ipl', 'photorejuvenation']
+        
+        categories = 0
+        if any(t in all_text for t in face_treatments):
+            categories += 1
+        if any(t in all_text for t in body_treatments):
+            categories += 1
+        if any(t in all_text for t in laser_treatments):
+            categories += 1
+        
+        score_breakdown['treatment_depth'] = min(categories * 3, 10)
+        
+        # 4. Provider Credentials (8 pts)
+        high_cred = ['board certified', 'md', ' do', 'fellowship']
+        medium_cred = ['np', 'pa', 'rn', 'esthetician']
+        
+        if any(kw in all_text for kw in high_cred):
+            score_breakdown['provider_credentials'] = 8
+        elif any(kw in all_text for kw in medium_cred):
+            score_breakdown['provider_credentials'] = 4
+        else:
+            score_breakdown['provider_credentials'] = 0
+        
+        # 5. Before/After Photos (8 pts)
+        if any(kw in all_text for kw in ['before and after', 'before/after', 'gallery', 'results']):
+            score_breakdown['before_after_photos'] = 8
+        elif 'photo' in all_text:
+            score_breakdown['before_after_photos'] = 2
+        else:
+            score_breakdown['before_after_photos'] = 0
+        
+        # 6. Online Booking (7 pts)
+        booking_keywords = ['online booking', 'book online', 'schedule online', 'online appointment', 'book now']
+        score_breakdown['online_booking'] = 7 if any(kw in all_text for kw in booking_keywords) else 0
+        
+        # 7. Marketing Sophistication (8 pts)
+        marketing_points = 0
+        if len(website_text) > 500:  # Professional website
+            marketing_points += 3
+        if len(social_links) >= 2:  # Active social media
+            marketing_points += 3
+        if 'blog' in all_text or 'article' in all_text:
+            marketing_points += 2
+        score_breakdown['marketing_sophistication'] = min(marketing_points, 8)
+        
+        # 8. Review Quality (8 pts)
+        if rating >= 4.5 and review_count >= 100:
+            score_breakdown['review_quality'] = 8
+        elif rating >= 4.0 and review_count >= 50:
+            score_breakdown['review_quality'] = 6
+        elif rating >= 3.5 and review_count >= 25:
+            score_breakdown['review_quality'] = 3
+        else:
+            score_breakdown['review_quality'] = 1
+        
+        # 9. Website Quality (8 pts)
+        if website and len(website_text) > 1000:
+            score_breakdown['website_quality'] = 8
+        elif website and len(website_text) > 500:
+            score_breakdown['website_quality'] = 5
+        elif website:
+            score_breakdown['website_quality'] = 2
+        else:
+            score_breakdown['website_quality'] = 0
+        
+        # 10. SEO Visibility (6 pts)
+        seo_points = 0
+        if website:
+            seo_points += 3
+        if rating > 0:  # Has Google reviews
+            seo_points += 3
+        score_breakdown['seo_visibility'] = seo_points
+        
+        # 11. Service Diversity (6 pts)
+        service_count = len(services)
+        if service_count >= 5:
+            score_breakdown['service_diversity'] = 6
+        elif service_count >= 3:
+            score_breakdown['service_diversity'] = 4
+        elif service_count >= 1:
+            score_breakdown['service_diversity'] = 2
+        else:
+            score_breakdown['service_diversity'] = 0
+        
+        # 12. Injectable Program (6 pts)
+        injectable_keywords = ['botox', 'filler', 'dysport', 'xeomin', 'juvederm', 'restylane']
+        injectable_count = sum(1 for kw in injectable_keywords if kw in all_text)
+        score_breakdown['injectable_program'] = min(injectable_count * 2, 6)
+        
+        # 13. Laser Program (6 pts)
+        laser_keywords = ['laser hair removal', 'ipl', 'laser resurfacing', 'laser treatment']
+        laser_count = sum(1 for kw in laser_keywords if kw in all_text)
+        score_breakdown['laser_program'] = min(laser_count * 2, 6)
+        
+        # 14. Device Maturity (3 pts)
+        device_keywords = ['coolsculpt', 'emsculpt', 'thermage', 'ultherapy', 'fraxel', 'laser', 'rf']
+        device_count = sum(1 for kw in device_keywords if kw in all_text)
+        if device_count >= 3:
+            score_breakdown['device_maturity'] = 3
+        elif device_count >= 1:
+            score_breakdown['device_maturity'] = 2
+        else:
+            score_breakdown['device_maturity'] = 0
+        
+        total_score = sum(score_breakdown.values())
+        
+        logger.info(f"📊 Universal aesthetic score: {total_score}/100")
+        return total_score, score_breakdown
+    
+    def calculate_manufacturer_opportunity_score(self, practice_data: Dict, 
+                                                  practice_type: str, 
+                                                  universal_score: int) -> Tuple[int, Dict]:
+        """
+        LAYER 3: Manufacturer-Specific Opportunity Scoring (0-100)
+        
+        Routes based on self.manufacturer and calculates fit for specific device portfolio
+        """
+        
+        manufacturer_lower = self.manufacturer.lower()
+        
+        if 'venus' in manufacturer_lower:
+            return self._score_venus_opportunity(practice_data, practice_type, universal_score)
+        elif 'sciton' in manufacturer_lower:
+            return self._score_sciton_opportunity(practice_data, practice_type, universal_score)
+        elif 'cutera' in manufacturer_lower:
+            return self._score_cutera_opportunity(practice_data, practice_type, universal_score)
+        else:
+            # Default fallback
+            logger.warning(f"Unknown manufacturer '{self.manufacturer}', using default scoring")
+            return self._score_venus_opportunity(practice_data, practice_type, universal_score)
+    
+    def _score_venus_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
+        """Venus Concepts opportunity scoring"""
+        scores = {}
+        
+        # Extract text safely
+        all_text = self._extract_safe_text(practice_data)
+        
+        # Portfolio Alignment (25 pts)
+        venus_services = ['body contouring', 'fat reduction', 'skin tightening', 'cellulite', 
+                         'muscle toning', 'ipl', 'hair removal', 'resurfacing']
+        matches = sum(1 for svc in venus_services if svc in all_text)
+        scores['portfolio_alignment'] = min(matches * 3, 25)
+        
+        # Body Focus (20 pts)
+        body_keywords = ['body contouring', 'fat reduction', 'cellulite', 'muscle toning', 'body sculpting']
+        body_mentions = sum(1 for kw in body_keywords if kw in all_text)
+        scores['body_focus'] = min(body_mentions * 5, 20)
+        
+        # Face RF Opportunity (15 pts)
+        has_facial_services = any(kw in all_text for kw in ['facial', 'skin rejuvenation', 'acne scar'])
+        has_rf = 'radiofrequency' in all_text or 'rf' in all_text
+        if has_facial_services and not has_rf:
+            scores['face_rf_opportunity'] = 15
+        elif has_facial_services:
+            scores['face_rf_opportunity'] = 7
+        else:
+            scores['face_rf_opportunity'] = 0
+        
+        # Multi-Modality Appeal (15 pts)
+        if 'platform' in all_text or 'multi' in all_text:
+            scores['multi_modality_appeal'] = 15
+        elif practice_data.get('services') and len(practice_data.get('services', [])) >= 5:
+            scores['multi_modality_appeal'] = 10
+        else:
+            scores['multi_modality_appeal'] = 0
+        
+        # Hair Removal Gap (10 pts)
+        if 'hair removal' not in all_text:
+            scores['hair_removal_gap'] = 10
+        elif 'laser hair removal' in all_text:
+            scores['hair_removal_gap'] = 5  # Upgrade opportunity
+        else:
+            scores['hair_removal_gap'] = 0
+        
+        # Weight Loss Integration (10 pts)
+        weight_loss_keywords = ['weight loss', 'glp-1', 'bariatric', 'medical weight']
+        if any(kw in all_text for kw in weight_loss_keywords):
+            scores['weight_loss_integration'] = 10
+        else:
+            scores['weight_loss_integration'] = 0
+        
+        # Venus Competitor Gap (5 pts)
+        competitors = ['coolsculpt', 'emsculpt', 'thermage']
+        if not any(comp in all_text for comp in competitors):
+            scores['venus_competitor_gap'] = 5
+        else:
+            scores['venus_competitor_gap'] = 0
+        
+        total = sum(scores.values())
+        logger.info(f"🔵 Venus opportunity score: {total}/100")
+        return total, scores
+    
+    def _score_sciton_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
+        """Sciton opportunity scoring"""
+        scores = {}
+        
+        all_text = self._extract_safe_text(practice_data)
+        
+        # Laser Sophistication (25 pts)
+        laser_keywords = ['laser', 'ipl', 'photorejuvenation', 'fractional', 'resurfacing']
+        laser_count = sum(1 for kw in laser_keywords if kw in all_text)
+        if laser_count >= 3:
+            scores['laser_sophistication'] = 25
+        elif laser_count >= 1:
+            scores['laser_sophistication'] = 15
+        else:
+            scores['laser_sophistication'] = 0
+        
+        # Premium Positioning (20 pts)
+        premium_indicators = ['luxury', 'premium', 'boutique', 'exclusive', 'vip', 'concierge']
+        if any(ind in all_text for ind in premium_indicators):
+            scores['premium_positioning'] = 20
+        elif universal_score >= 70:  # Infer from sophistication
+            scores['premium_positioning'] = 10
+        else:
+            scores['premium_positioning'] = 0
+        
+        # Science-Based Marketing (15 pts)
+        science_keywords = ['clinical', 'proven', 'research', 'study', 'evidence']
+        if any(kw in all_text for kw in science_keywords):
+            scores['science_based_marketing'] = 15
+        else:
+            scores['science_based_marketing'] = 0
+        
+        # Skin Rejuvenation Focus (15 pts)
+        rejuv_keywords = ['skin rejuvenation', 'photorejuvenation', 'anti-aging', 'laser resurfacing']
+        rejuv_count = sum(1 for kw in rejuv_keywords if kw in all_text)
+        scores['skin_rejuvenation_focus'] = min(rejuv_count * 5, 15)
+        
+        # Physician-Led (10 pts)
+        if practice_type in ['dermatology', 'plastic_surgery']:
+            scores['physician_led'] = 10
+        elif 'md' in all_text or 'doctor' in all_text:
+            scores['physician_led'] = 7
+        else:
+            scores['physician_led'] = 0
+        
+        # Women's Health Opportunity (8 pts)
+        if practice_type == 'obgyn' or 'women' in all_text:
+            scores['womens_health_opportunity'] = 8
+        else:
+            scores['womens_health_opportunity'] = 0
+        
+        # Technology Upgrade Cycle (7 pts)
+        upgrade_keywords = ['upgrade', 'replace', 'outdated', 'old equipment']
+        if any(kw in all_text for kw in upgrade_keywords):
+            scores['technology_upgrade_cycle'] = 7
+        else:
+            scores['technology_upgrade_cycle'] = 0
+        
+        total = sum(scores.values())
+        logger.info(f"🟢 Sciton opportunity score: {total}/100")
+        return total, scores
+    
+    def _score_cutera_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
+        """Cutera opportunity scoring"""
+        scores = {}
+        
+        all_text = self._extract_safe_text(practice_data)
+        
+        # Portfolio Breadth (20 pts)
+        cutera_services = ['body contouring', 'tattoo removal', 'vascular', 'pigment', 
+                          'microneedling', 'laser hair removal']
+        matches = sum(1 for svc in cutera_services if svc in all_text)
+        scores['portfolio_breadth'] = min(matches * 4, 20)
+        
+        # Tattoo Removal Opportunity (20 pts) - HIGH VALUE
+        if 'tattoo removal' in all_text:
+            scores['tattoo_removal_opportunity'] = 20
+        elif practice_type == 'dermatology':
+            scores['tattoo_removal_opportunity'] = 10  # Strong opportunity
+        else:
+            scores['tattoo_removal_opportunity'] = 0
+        
+        # Body Contouring Focus (15 pts)
+        body_keywords = ['body contouring', 'fat reduction', 'muscle toning', 'body sculpting']
+        body_count = sum(1 for kw in body_keywords if kw in all_text)
+        scores['body_contouring_focus'] = min(body_count * 5, 15)
+        
+        # Vascular/Pigment Need (15 pts)
+        vascular_keywords = ['rosacea', 'vascular', 'spider vein', 'pigmentation']
+        if any(kw in all_text for kw in vascular_keywords):
+            scores['vascular_pigment_need'] = 15
+        else:
+            scores['vascular_pigment_need'] = 0
+        
+        # Microneedling Upgrade (12 pts)
+        if 'microneedling' in all_text:
+            if 'rf' not in all_text:
+                scores['microneedling_upgrade'] = 12  # Upgrade opportunity
+            else:
+                scores['microneedling_upgrade'] = 5   # Already has RF
+        else:
+            scores['microneedling_upgrade'] = 0
+        
+        # Platform Efficiency Need (10 pts)
+        if len(practice_data.get('services', [])) >= 5:
+            scores['platform_efficiency_need'] = 10
+        else:
+            scores['platform_efficiency_need'] = 0
+        
+        # Dermatology Alignment (8 pts)
+        if practice_type == 'dermatology':
+            scores['dermatology_alignment'] = 8
+        else:
+            scores['dermatology_alignment'] = 0
+        
+        total = sum(scores.values())
+        logger.info(f"🟠 Cutera opportunity score: {total}/100")
+        return total, scores
+    
+    def _extract_safe_text(self, practice_data: Dict) -> str:
+        """Safely extract and combine all text data from practice"""
+        name = practice_data.get('name', '')
+        if name is None:
+            name = ''
+        
+        description = practice_data.get('description', '')
+        if description is None:
+            description = ''
+        
+        website_text = practice_data.get('website_text', '')
+        if website_text is None:
+            website_text = ''
+        
+        services = practice_data.get('services', [])
+        if services is None:
+            services = []
+        services_text = ' '.join(services)
+        
+        return f"{name} {description} {services_text} {website_text}".lower()
+
     def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str, str]:
         """
-        Calculate AI-powered scoring with specialty-specific weights (V4.0 LOGIC)
+        Calculate AI-powered scoring with THREE-LAYER ARCHITECTURE (V5.0 UPGRADE)
+        
+        NEW ARCHITECTURE:
+        Layer 1: Universal Practice-Type Classification (9 types)
+        Layer 2: Universal Aesthetic Score (0-100, brand-neutral)
+        Layer 3: Manufacturer-Specific Opportunity Score (0-100)
+        
+        BACKWARD COMPATIBILITY:
+        - Preserves ai_score (0-100)
+        - Preserves ai_prospect_class
+        - Preserves score_breakdown
+        - Adds new fields: universal_aesthetic_score, manufacturer_opportunity_score
         
         Returns:
             (total_score, score_breakdown, detected_specialty, ai_classification)
+        """
+        
+        # LAYER 1: Universal Practice-Type Classification
+        practice_type = self.classify_practice_type_universal(practice_data)
+        logger.info(f"🎯 Layer 1 - Practice Type: {practice_type}")
+        
+        # LAYER 2: Universal Aesthetic Scoring (brand-neutral)
+        universal_aesthetic_score, universal_breakdown = self.calculate_universal_aesthetic_score(practice_data)
+        logger.info(f"📊 Layer 2 - Universal Aesthetic Score: {universal_aesthetic_score}/100")
+        
+        # LAYER 3: Manufacturer-Specific Opportunity Scoring
+        manufacturer_opportunity_score, manufacturer_breakdown = self.calculate_manufacturer_opportunity_score(
+            practice_data, practice_type, universal_aesthetic_score)
+        logger.info(f"🎯 Layer 3 - Manufacturer Opportunity Score: {manufacturer_opportunity_score}/100")
+        
+        # BACKWARD COMPATIBILITY: Maintain original scoring structure
+        # Calculate combined ai_score (weighted average of layers 2 and 3)
+        ai_score = int((universal_aesthetic_score * 0.4) + (manufacturer_opportunity_score * 0.6))
+        
+        # Generate ai_prospect_class based on combined score
+        if ai_score >= 80:
+            ai_prospect_class = "High-Potential Target"
+        elif ai_score >= 65:
+            ai_prospect_class = "Strong Opportunity"
+        elif ai_score >= 50:
+            ai_prospect_class = "Moderate Fit"
+        elif ai_score >= 35:
+            ai_prospect_class = "Low Priority"
+        else:
+            ai_prospect_class = "Not Recommended"
+        
+        # Combine score breakdowns for backward compatibility
+        score_breakdown = {
+            # Original fields (legacy compatibility)
+            'specialty_match': min(int(universal_aesthetic_score * 0.2), 20),
+            'decision_autonomy': min(int(manufacturer_opportunity_score * 0.2), 20),
+            'aesthetic_services': min(int(universal_aesthetic_score * 0.15), 15),
+            'competing_devices': 0,  # Deprecated but kept for compatibility
+            'social_activity': min(len(practice_data.get('social_links', [])) * 3, 10),
+            'reviews_rating': universal_breakdown.get('review_quality', 0),
+            'search_visibility': universal_breakdown.get('seo_visibility', 0),
+            'financial_indicators': min(int(universal_aesthetic_score * 0.1), 10),
+            'weight_loss_services': 5 if 'weight_loss' in practice_type else 0,
+            
+            # NEW FIELDS: Three-layer architecture
+            'universal_aesthetic_score': universal_aesthetic_score,
+            'manufacturer_opportunity_score': manufacturer_opportunity_score,
+        }
+        
+        # Store detailed breakdowns in practice_data for export
+        practice_data['universal_aesthetic_breakdown'] = universal_breakdown
+        practice_data['manufacturer_opportunity_breakdown'] = manufacturer_breakdown
+        
+        logger.info(f"✅ THREE-LAYER SCORING COMPLETE - Final AI Score: {ai_score}/100 ({ai_prospect_class})")
+        
+        return ai_score, score_breakdown, practice_type, ai_prospect_class
+    
+    # END THREE-LAYER SCORING ARCHITECTURE
+    # ============================================================
+
+    def calculate_ai_score_legacy(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str, str]:
+        """
+        LEGACY METHOD: Original V4.0 scoring logic (preserved for reference)
+        NOT USED - replaced by three-layer architecture above
         """
         
         # STEP 1: Detect specialty
