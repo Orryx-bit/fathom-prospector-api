@@ -2774,7 +2774,9 @@ Based on your analysis, return a single JSON object in this *exact* format:
             return ""
         
         practice_name = practice_data.get('name', 'Your Practice')
-        primary_device = device_rec.get('primary_recommendation', {}).get('device', 'our devices')
+        primary = device_rec.get("primary_recommendation") or {} 
+        primary_device = primary.get("device", "our devices")
+
         
         opener = f"Hi! I noticed {practice_name}'s excellent reputation. Many practices like yours are seeing significant results with {primary_device}. Would you be interested in a brief conversation?"
         
@@ -2866,26 +2868,32 @@ Based on your analysis, return a single JSON object in this *exact* format:
         else:
             confidence = "Low"
         
-        # Compile final record (without AI outreach - generated on-demand)
-        final_record = {
-            **practice_record,
-            'manufacturer': self.manufacturer,
-            'specialty': specialty,
-            'ai_score': ai_score,
-            'ai_prospect_class': ai_prospect_class,
-            'score_breakdown': score_breakdown,
-            'primary_device_rec': device_recommendations.get('primary_recommendation', {}).get('device', ''),
-            'device_rationale': device_recommendations.get('primary_recommendation', {}).get('rationale', ''),
-            'all_device_recs': device_recommendations.get('all_recommendations', []),
-            'outreach_opener': outreach_opener,
-            'confidence_level': confidence,
-            'data_completeness': completeness,
-            # AI outreach fields set to None - will be populated on-demand via API
-            'outreachColdCall': None,
-            'outreachInstagram': None,
-            'outreachEmail': None,
-            'outreachEmailSubject': None
-        }
+    # SAFE handling of primary device recommendation
+primary_rec = (device_recommendations or {}).get("primary_recommendation") or {}
+
+final_record = {
+    **practice_record,
+    'manufacturer': self.manufacturer,
+    'specialty': specialty,
+    'ai_score': ai_score,
+    'ai_prospect_class': ai_prospect_class,
+    'score_breakdown': score_breakdown,
+
+    'primary_device_rec': primary_rec.get("device", ""),
+    'device_rationale': primary_rec.get("rationale", ""),
+
+    'all_device_recs': (device_recommendations or {}).get('all_recommendations', []),
+    'outreach_opener': outreach_opener,
+    'confidence_level': confidence,
+    'data_completeness': completeness,
+
+    'outreachColdCall': None,
+    'outreachInstagram': None,
+    'outreachDM': None,
+    'outreachEmail': None,
+    'outreachEmailSubject': None
+}
+
         
         return final_record
     
