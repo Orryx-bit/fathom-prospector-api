@@ -2868,7 +2868,7 @@ Based on your analysis, return a single JSON object in this *exact* format:
         else:
             confidence = "Low"
         
-    # SAFE handling of primary device recommendation
+# SAFE handling of primary device recommendation
 primary_rec = (device_recommendations or {}).get("primary_recommendation") or {}
 
 final_record = {
@@ -2894,8 +2894,8 @@ final_record = {
     'outreachEmailSubject': None
 }
 
-        
-        return final_record
+return final_record
+
     
     def generate_outreach_for_prospect_standalone(self, prospect_data: Dict) -> Dict:
         """
