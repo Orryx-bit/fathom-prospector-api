@@ -608,7 +608,7 @@ class FathomProspector:
                 logger.error(f"Could not geocode location: {location}")
                 return []
             
-            lat_lng = geocode_result[0]['geometry']['location']
+            lat_lng = ((geocode_result[0] or {}).get('geometry') or {}).get('location', {})
             
             places_result = self.gmaps_api.places_nearby(
                 location=lat_lng,
@@ -2868,33 +2868,31 @@ Based on your analysis, return a single JSON object in this *exact* format:
         else:
             confidence = "Low"
         
-# SAFE handling of primary device recommendation
-primary_rec = (device_recommendations or {}).get("primary_recommendation") or {}
+        
+        # SAFE handling of primary device recommendation
+        primary_rec = (device_recommendations or {}).get("primary_recommendation") or {}
 
-final_record = {
-    **practice_record,
-    'manufacturer': self.manufacturer,
-    'specialty': specialty,
-    'ai_score': ai_score,
-    'ai_prospect_class': ai_prospect_class,
-    'score_breakdown': score_breakdown,
+        final_record = {
+            **practice_record,
+            'manufacturer': self.manufacturer,
+            'specialty': specialty,
+            'ai_score': ai_score,
+            'ai_prospect_class': ai_prospect_class,
+            'score_breakdown': score_breakdown,
+            'primary_device_rec': primary_rec.get("device", ""),
+            'device_rationale': primary_rec.get("rationale", ""),
+            'all_device_recs': (device_recommendations or {}).get('all_recommendations', []),
+            'outreach_opener': outreach_opener,
+            'confidence_level': confidence,
+            'data_completeness': completeness,
+            'outreachColdCall': None,
+            'outreachInstagram': None,
+            'outreachDM': None,
+            'outreachEmail': None,
+            'outreachEmailSubject': None
+        }
 
-    'primary_device_rec': primary_rec.get("device", ""),
-    'device_rationale': primary_rec.get("rationale", ""),
-
-    'all_device_recs': (device_recommendations or {}).get('all_recommendations', []),
-    'outreach_opener': outreach_opener,
-    'confidence_level': confidence,
-    'data_completeness': completeness,
-
-    'outreachColdCall': None,
-    'outreachInstagram': None,
-    'outreachDM': None,
-    'outreachEmail': None,
-    'outreachEmailSubject': None
-}
-
-return final_record
+        return final_record
 
     
     def generate_outreach_for_prospect_standalone(self, prospect_data: Dict) -> Dict:
