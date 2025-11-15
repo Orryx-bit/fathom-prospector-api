@@ -2833,66 +2833,89 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
             logger.warning(f"Unknown manufacturer '{self.manufacturer}', using default scoring")
             return self._score_venus_opportunity(practice_data, practice_type, universal_score)
     
+    def _get_scoring_weight(self, factor_name: str, default: int = 0) -> int:
+        """
+        Get scoring weight from YAML config with fallback to default.
+        Surgical helper for YAML-driven scoring.
+        """
+        try:
+            if self.manufacturer_scoring_config and 'scoring_factors' in self.manufacturer_scoring_config:
+                factor = self.manufacturer_scoring_config['scoring_factors'].get(factor_name, {})
+                return factor.get('max_points', default)
+            return default
+        except Exception as e:
+            logger.warning(f"Failed to get scoring weight for {factor_name}: {e}")
+            return default
+
     def _score_venus_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
-        """Venus Concepts opportunity scoring"""
+        """Venus Concepts opportunity scoring - YAML-driven"""
         scores = {}
         
         # Extract text safely
         all_text = self._extract_safe_text(practice_data)
         
-        # Portfolio Alignment (25 pts)
+        # Get max points from YAML config (with fallback to original hardcoded values)
+        max_portfolio = self._get_scoring_weight('portfolio_alignment', 25)
+        max_body = self._get_scoring_weight('body_focus', 20)
+        max_face_rf = self._get_scoring_weight('face_rf_opportunity', 15)
+        max_multi = self._get_scoring_weight('multi_modality_appeal', 15)
+        max_hair = self._get_scoring_weight('hair_removal_gap', 10)
+        max_weight = self._get_scoring_weight('weight_loss_integration', 10)
+        max_competitor = self._get_scoring_weight('venus_competitor_gap', 5)
+        
+        # Portfolio Alignment
         venus_services = ['body contouring', 'fat reduction', 'skin tightening', 'cellulite', 
                          'muscle toning', 'ipl', 'hair removal', 'resurfacing']
         matches = sum(1 for svc in venus_services if svc in all_text)
-        scores['portfolio_alignment'] = min(matches * 3, 25)
+        scores['portfolio_alignment'] = min(matches * 3, max_portfolio)
         
-        # Body Focus (20 pts)
+        # Body Focus
         body_keywords = ['body contouring', 'fat reduction', 'cellulite', 'muscle toning', 'body sculpting']
         body_mentions = sum(1 for kw in body_keywords if kw in all_text)
-        scores['body_focus'] = min(body_mentions * 5, 20)
+        scores['body_focus'] = min(body_mentions * 5, max_body)
         
-        # Face RF Opportunity (15 pts)
+        # Face RF Opportunity
         has_facial_services = any(kw in all_text for kw in ['facial', 'skin rejuvenation', 'acne scar'])
         has_rf = 'radiofrequency' in all_text or 'rf' in all_text
         if has_facial_services and not has_rf:
-            scores['face_rf_opportunity'] = 15
+            scores['face_rf_opportunity'] = max_face_rf
         elif has_facial_services:
-            scores['face_rf_opportunity'] = 7
+            scores['face_rf_opportunity'] = int(max_face_rf * 0.47)  # ~7 pts for 15
         else:
             scores['face_rf_opportunity'] = 0
         
-        # Multi-Modality Appeal (15 pts)
+        # Multi-Modality Appeal
         if 'platform' in all_text or 'multi' in all_text:
-            scores['multi_modality_appeal'] = 15
+            scores['multi_modality_appeal'] = max_multi
         elif practice_data.get('services') and len(practice_data.get('services', [])) >= 5:
-            scores['multi_modality_appeal'] = 10
+            scores['multi_modality_appeal'] = int(max_multi * 0.67)  # ~10 pts for 15
         else:
             scores['multi_modality_appeal'] = 0
         
-        # Hair Removal Gap (10 pts)
+        # Hair Removal Gap
         if 'hair removal' not in all_text:
-            scores['hair_removal_gap'] = 10
+            scores['hair_removal_gap'] = max_hair
         elif 'laser hair removal' in all_text:
-            scores['hair_removal_gap'] = 5  # Upgrade opportunity
+            scores['hair_removal_gap'] = int(max_hair * 0.5)  # Upgrade opportunity
         else:
             scores['hair_removal_gap'] = 0
         
-        # Weight Loss Integration (10 pts)
+        # Weight Loss Integration
         weight_loss_keywords = ['weight loss', 'glp-1', 'bariatric', 'medical weight']
         if any(kw in all_text for kw in weight_loss_keywords):
-            scores['weight_loss_integration'] = 10
+            scores['weight_loss_integration'] = max_weight
         else:
             scores['weight_loss_integration'] = 0
         
-        # Venus Competitor Gap (5 pts)
+        # Venus Competitor Gap
         competitors = ['coolsculpt', 'emsculpt', 'thermage']
         if not any(comp in all_text for comp in competitors):
-            scores['venus_competitor_gap'] = 5
+            scores['venus_competitor_gap'] = max_competitor
         else:
             scores['venus_competitor_gap'] = 0
         
         total = sum(scores.values())
-        logger.info(f"🔵 Venus opportunity score: {total}/100")
+        logger.info(f"🔵 Venus opportunity score: {total}/100 (YAML-driven)")
         return total, scores
     
     def _score_sciton_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
@@ -2958,60 +2981,69 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
         return total, scores
     
     def _score_cutera_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
-        """Cutera opportunity scoring"""
+        """Cutera opportunity scoring - YAML-driven"""
         scores = {}
         
         all_text = self._extract_safe_text(practice_data)
         
-        # Portfolio Breadth (20 pts)
+        # Get max points from YAML config (with fallback to original hardcoded values)
+        max_portfolio = self._get_scoring_weight('portfolio_breadth', 20)
+        max_tattoo = self._get_scoring_weight('tattoo_removal_opportunity', 20)
+        max_body = self._get_scoring_weight('body_contouring_focus', 15)
+        max_vascular = self._get_scoring_weight('vascular_pigment_need', 15)
+        max_microneedling = self._get_scoring_weight('microneedling_upgrade', 12)
+        max_platform = self._get_scoring_weight('platform_efficiency_need', 10)
+        max_derm = self._get_scoring_weight('dermatology_alignment', 8)
+        
+        # Portfolio Breadth
         cutera_services = ['body contouring', 'tattoo removal', 'vascular', 'pigment', 
                           'microneedling', 'laser hair removal']
         matches = sum(1 for svc in cutera_services if svc in all_text)
-        scores['portfolio_breadth'] = min(matches * 4, 20)
+        scores['portfolio_breadth'] = min(matches * 4, max_portfolio)
         
-        # Tattoo Removal Opportunity (20 pts) - HIGH VALUE
+        # Tattoo Removal Opportunity - HIGH VALUE
         if 'tattoo removal' in all_text:
-            scores['tattoo_removal_opportunity'] = 20
+            scores['tattoo_removal_opportunity'] = max_tattoo
         elif practice_type == 'dermatology':
-            scores['tattoo_removal_opportunity'] = 10  # Strong opportunity
+            scores['tattoo_removal_opportunity'] = int(max_tattoo * 0.5)  # Strong opportunity
         else:
             scores['tattoo_removal_opportunity'] = 0
         
-        # Body Contouring Focus (15 pts)
+        # Body Contouring Focus
         body_keywords = ['body contouring', 'fat reduction', 'muscle toning', 'body sculpting']
         body_count = sum(1 for kw in body_keywords if kw in all_text)
-        scores['body_contouring_focus'] = min(body_count * 5, 15)
+        scores['body_contouring_focus'] = min(body_count * 5, max_body)
         
-        # Vascular/Pigment Need (15 pts)
+        # Vascular/Pigment Need
         vascular_keywords = ['rosacea', 'vascular', 'spider vein', 'pigmentation']
         if any(kw in all_text for kw in vascular_keywords):
-            scores['vascular_pigment_need'] = 15
+            scores['vascular_pigment_need'] = max_vascular
         else:
             scores['vascular_pigment_need'] = 0
         
-        # Microneedling Upgrade (12 pts)
+        # Microneedling Upgrade
         if 'microneedling' in all_text:
             if 'rf' not in all_text:
-                scores['microneedling_upgrade'] = 12  # Upgrade opportunity
+                scores['microneedling_upgrade'] = max_microneedling  # Upgrade opportunity
             else:
-                scores['microneedling_upgrade'] = 5   # Already has RF
+                scores['microneedling_upgrade'] = int(max_microneedling * 0.42)  # Already has RF (~5 pts for 12)
         else:
             scores['microneedling_upgrade'] = 0
         
-        # Platform Efficiency Need (10 pts)
+        # Platform Efficiency Need
         if len(practice_data.get('services', [])) >= 5:
-            scores['platform_efficiency_need'] = 10
+            scores['platform_efficiency_need'] = max_platform
         else:
             scores['platform_efficiency_need'] = 0
         
-        # Dermatology Alignment (8 pts)
+        # Dermatology Alignment
         if practice_type == 'dermatology':
-            scores['dermatology_alignment'] = 8
+            scores['dermatology_alignment'] = max_derm
         else:
             scores['dermatology_alignment'] = 0
         
         total = sum(scores.values())
-        logger.info(f"🟠 Cutera opportunity score: {total}/100")
+        logger.info(f"🟠 Cutera opportunity score: {total}/100 (YAML-driven)")
         return total, scores
     
     def _extract_safe_text(self, practice_data: Dict) -> str:
