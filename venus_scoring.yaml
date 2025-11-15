@@ -1,377 +1,510 @@
-# Venus Concepts Manufacturer-Specific Scoring Rubric (0-100 points)
-# Updated: 2025-11-15 - "Best Device Match" Scoring System
-# Philosophy: Score by fit to ANY Venus device, not one specific device
+# ============================================================================
+# VENUS CONCEPTS - MANUFACTURER SCORING SYSTEM v3.0
+# ============================================================================
+# Philosophy: "Best Device Match" Scoring
+# - Each device scores independently (0-100 points)
+# - Highest-scoring device = Manufacturer Opportunity Score
+# - NO body vs. face bias
+# - Show only WINNING device breakdown for actionable intelligence
+# ============================================================================
 
 manufacturer: "Venus Concepts"
+version: "3.0"
+last_updated: "2025-11-15"
+system_type: "per_device_custom_scoring"
 
-device_portfolio:
+# ============================================================================
+# SCORING METHODOLOGY
+# ============================================================================
+
+scoring_approach:
+  method: "Device-Specific Custom Scoring"
+  max_points_per_device: 100
+  manufacturer_score_calculation: "MAX(all device scores)"
+  breakdown_display: "winning_device_only"
+  fairness_principle: "All devices equal max points - no category bias"
+  
+implementation_notes:
+  - "Backend scores each device independently"
+  - "Viva (facial) can score 100, Bliss MAX (body) can score 100"
+  - "Nova gets GLP-1 bonus, Viva gets dermatology bonus, etc."
+  - "Only show winning device's specific breakdown to rep"
+  - "Prevents body-device bias in scoring"
+
+# ============================================================================
+# DEVICE PORTFOLIO - Production-Ready Intelligence
+# ============================================================================
+
+devices:
+  
   venus_viva:
-    services:
-    - "Skin resurfacing"
-    - "Wrinkle reduction"
-    - "Acne scars"
-    - "Texture improvement"
-    - "Nanofractional RF"
+    name: "Venus Viva"
+    category: "Facial RF Resurfacing"
+    price: "$50K-$75K"
+    ideal_customers:
+      - "Cosmetic dermatology"
+      - "Plastic surgery (facial)"
+      - "High-end med spas"
+    
+    service_keywords_weighted:
+      - {term: "skin resurfacing", points: 10}
+      - {term: "acne scar", points: 8}
+      - {term: "texture improvement", points: 7}
+      - {term: "fractional laser", points: 6}
+      - {term: "wrinkle reduction", points: 5}
+    
     opportunity_signals:
-    - "Fractional laser interest"
-    - "Skin texture treatments"
-    - "Acne scar treatments"
-    - "Anti-aging focus"
+      - "no RF resurfacing device"
+      - "mentions Morpheus8 or Fraxel"
+      - "diverse skin types (Fitzpatrick III-VI)"
+    
+    competitive_edges:
+      - "Safer than CO2 for all skin types"
+      - "Less invasive than Morpheus8"
+      - "2-3 day downtime vs. 7-10"
+    
+    roi: "$800-$1,500/treatment, $80K-$120K annual"
+    
+    disqualifiers:
+      - {condition: "recently_purchased_morpheus8", penalty: -50}
+      - {condition: "basic_facials_only", penalty: -30}
   
   venus_versa:
-    services:
-    - "IPL photorejuvenation"
-    - "Hair removal"
-    - "Vascular lesions"
-    - "Pigmentation"
-    - "Multi-application platform"
+    name: "Venus Versa"
+    category: "Multi-Application Platform"
+    price: "$75K-$120K"
+    ideal_customers:
+      - "Med spas (all sizes)"
+      - "Dermatology"
+      - "Family practice adding aesthetics"
+    
+    service_keywords_weighted:
+      - {term: "hair removal", points: 10}
+      - {term: "photorejuvenation", points: 8}
+      - {term: "vascular lesions", points: 7}
+      - {term: "pigmentation", points: 6}
+    
     opportunity_signals:
-    - "IPL services"
-    - "Hair removal business"
-    - "Multi-modality interest"
-    - "Platform consolidation opportunity"
+      - "multiple_standalone_devices"
+      - "limited_space"
+      - "aging_equipment (5+ years)"
+    
+    competitive_edges:
+      - "7+ applications on ONE platform"
+      - "Better pricing than Lumenis M22"
+      - "Simpler than Cutera Xeo"
+    
+    roi: "$150K-$250K annual with multi-modality"
+    
+    disqualifiers:
+      - {condition: "recently_bought_ipl_platform", penalty: -50}
+      - {condition: "single_modality_focus", penalty: -25}
   
   venus_bliss_max:
-    services:
-    - "Fat reduction (EFX)"
-    - "Muscle toning (DiamondPolar)"
-    - "Body contouring"
-    - "Cellulite reduction"
-    opportunity_signals:
-    - "Body contouring interest"
-    - "Weight loss programs"
-    - "Post-bariatric patients"
-    - "Muscle toning interest"
+    name: "Venus Bliss MAX"
+    category: "Premium Body Contouring"
+    price: "$120K-$180K"
+    ideal_customers:
+      - "Med spas (body-focused)"
+      - "Weight loss clinics"
+      - "Plastic surgery"
+    
+    service_keywords_weighted:
+      - {term: "body contouring", points: 12}
+      - {term: "fat reduction", points: 10}
+      - {term: "cellulite reduction", points: 8}
+      - {term: "muscle toning", points: 6}
+    
+    glp1_bonus:
+      enabled: true
+      max_points: 25
+      keywords:
+        - {term: "glp-1", points: 15}
+        - {term: "ozempic", points: 15}
+        - {term: "wegovy", points: 15}
+        - {term: "medical weight loss", points: 12}
+        - {term: "post-bariatric", points: 10}
+    
+    competitive_edges:
+      - "3-in-1: fat + skin + muscle"
+      - "24-27% fat reduction (clinical)"
+      - "More comfortable than CoolSculpt"
+      - "8 applicators = high throughput"
+    
+    roi: "$200K-$400K annual with GLP-1 program"
+    
+    disqualifiers:
+      - {condition: "face_only_practice", penalty: -50}
+      - {condition: "budget_under_100k", penalty: -30}
   
   venus_nova:
-    services:
-    - "Body contouring (affordable)"
-    - "Skin tightening"
-    - "EMS treatments"
-    - "Post-weight loss"
-    opportunity_signals:
-    - "GLP-1 providers"
-    - "Weight management programs"
-    - "Budget-conscious practices"
-    - "Entry-level body contouring"
+    name: "Venus Nova"
+    category: "GLP-1 Body Solution"
+    price: "$80K-$110K"
+    ideal_customers:
+      - "Weight loss clinics (PRIMARY)"
+      - "Wellness centers"
+      - "Small med spas with GLP-1"
+    
+    service_keywords_weighted:
+      - {term: "glp-1", points: 20}
+      - {term: "ozempic", points: 18}
+      - {term: "wegovy", points: 18}
+      - {term: "medical weight loss", points: 15}
+      - {term: "loose skin", points: 8}
+    
+    glp1_bonus:
+      enabled: true
+      max_points: 35
+      positioning: "PRIMARY GLP-1 device"
+    
+    competitive_edges:
+      - "Perfect Phase 2 for GLP-1 patients"
+      - "Lower price than Bliss MAX"
+      - "Built-in GLP-1 patient pipeline"
+    
+    roi: "$80K-$150K annual (20+ GLP-1 pts/month)"
+    
+    disqualifiers:
+      - {condition: "already_has_bliss_max", penalty: -50}
+      - {condition: "no_weight_loss_services", penalty: -40}
+      - {condition: "high_budget (upsell to Bliss)", penalty: -30}
   
   venus_legacy:
-    services:
-    - "Skin tightening"
-    - "Cellulite reduction"
-    - "Circumferential reduction"
-    - "MP2 technology"
+    name: "Venus Legacy"
+    category: "Entry-Level Body Tightening"
+    price: "$60K-$90K"
+    ideal_customers:
+      - "Small-mid med spas"
+      - "Budget-conscious clinics"
+      - "Dermatology adding body"
+    
+    service_keywords_weighted:
+      - {term: "skin tightening", points: 12}
+      - {term: "cellulite reduction", points: 10}
+      - {term: "body contouring", points: 8}
+    
     opportunity_signals:
-    - "Body contouring"
-    - "Skin laxity treatments"
-    - "Non-invasive body treatments"
-  
-  venus_diamondpolar:
-    services:
-    - "Muscle building"
-    - "Body sculpting"
-    - "EMS treatments"
-    opportunity_signals:
-    - "Fitness/wellness focus"
-    - "Muscle toning interest"
-    - "Athletic clientele"
+      - "no_body_device"
+      - "budget_conscious"
+      - "testing_body_market"
+    
+    competitive_edges:
+      - "More comfortable than Thermage"
+      - "No consumables"
+      - "Under $90K entry"
+    
+    roi: "$60K-$100K annual, no consumables"
+    
+    disqualifiers:
+      - {condition: "high_budget (upsell to Bliss)", penalty: -30}
 
-scoring_factors:
-  device_opportunity_score:
-    max_points: 25
-    description: "Best fit to ANY Venus device (no penalty for specialization)"
-    logic: "Calculate body_fit and facial_fit separately, take MAX of both"
-    
-    body_devices_track:
-      target_devices: ["Bliss Max", "Nova", "Legacy", "DiamondPolar"]
-      max_points: 25
-      signals:
-        body_contouring_services:
-          points: 15
-          keywords:
-          - "body contouring"
-          - "fat reduction"
-          - "cellulite"
-          - "muscle toning"
-          - "skin tightening"
-          - "body sculpting"
-        
-        weight_loss_synergy:
-          points: 10
-          keywords:
-          - "weight loss"
-          - "GLP-1"
-          - "semaglutide"
-          - "ozempic"
-          - "wegovy"
-          - "bariatric"
-        
-        existing_body_devices:
-          points: 5
-          description: "Has competing body devices (replacement opportunity)"
-    
-    facial_devices_track:
-      target_devices: ["Viva", "Versa"]
-      max_points: 25
-      signals:
-        rf_resurfacing_gap:
-          points: 15
-          keywords:
-          - "skin resurfacing"
-          - "acne scars"
-          - "texture"
-          - "wrinkles"
-          - "anti-aging"
-          - "fractional"
-        
-        ipl_hair_removal_gap:
-          points: 10
-          keywords:
-          - "hair removal"
-          - "IPL"
-          - "photorejuvenation"
-          - "pigmentation"
-          - "vascular lesions"
-        
-        multi_modality_interest:
-          points: 5
-          signals:
-          - "Multiple standalone devices"
-          - "Platform consolidation interest"
-          - "Limited space"
+# ============================================================================
+# UNIVERSAL SCORING FACTORS (All Devices)
+# ============================================================================
+
+universal_factors:
   
-  practice_quality_indicators:
+  practice_quality:
     max_points: 20
-    description: "Investment mindset and financial success signals"
-    factors:
-      website_quality:
-        points: 7
-        description: "Good website = investment in business"
-        evaluation:
-        - "Modern design (2+ years old)"
-        - "Service pages with detail"
-        - "Online booking capability"
-        - "Professional photography"
-      
-      social_media_presence:
-        points: 7
-        description: "Active social = financially successful practice"
-        signals:
-        - "Instagram/Facebook active"
-        - "Regular posting (1+ per week)"
+    rationale: "Good website/social = investment mindset"
+    
+    website_quality:
+      points: 7
+      positive:
+        - "Modern design (<3 years)"
+        - "Detailed service pages"
+        - "Online booking"
+        - "Professional photos"
+      tiers:
+        - {description: "Excellent modern site", points: 7}
+        - {description: "Good site", points: 5}
+        - {description: "Basic site", points: 3}
+        - {description: "Outdated/poor site", points: 1}
+    
+    social_media:
+      points: 7
+      positive:
+        - "Active (1+ post/week)"
         - "Before/after photos"
+        - "Video content"
         - "Patient engagement"
-      
-      online_reviews:
-        points: 6
-        evaluation:
-        - "100+ reviews: +6 points"
-        - "50-99 reviews: +4 points"
-        - "25-49 reviews: +2 points"
-        - "<25 reviews: +1 point"
+      tiers:
+        - {description: "Highly active (3+/week)", points: 7}
+        - {description: "Active (1-2/week)", points: 5}
+        - {description: "Occasional", points: 3}
+        - {description: "Inactive", points: 1}
+    
+    reviews:
+      points: 6
+      tiers:
+        - {threshold: "100+", points: 6}
+        - {threshold: "50-99", points: 4}
+        - {threshold: "25-49", points: 2}
+        - {threshold: "<25", points: 1}
   
-  practice_type_bonus:
+  practice_size:
     max_points: 15
-    description: "Highest close rate practice types"
-    scoring:
-      med_spa: 15
-      family_practice: 15
-      plastic_surgery: 12
-      dermatology: 12
-      obgyn: 10
-      wellness_clinic: 8
-      primary_care: 8
-      other: 5
+    
+    provider_count:
+      points: 8
+      tiers:
+        - {count: "3+", points: 8}
+        - {count: "2", points: 5}
+        - {count: "1", points: 2}
+    
+    facility:
+      points: 7
+      signals:
+        - {signal: "multiple_treatment_rooms", points: 3}
+        - {signal: "large_square_footage", points: 2}
+        - {signal: "multiple_locations", points: 2}
   
-  technology_gap_score:
+  technology_gap:
     max_points: 15
-    description: "Device acquisition opportunity assessment"
-    scenarios:
-      greenfield_opportunity:
-        points: 15
-        description: "No competing devices (pure opportunity)"
-        signals:
-        - "No RF devices"
-        - "No body contouring devices"
-        - "Limited aesthetic technology"
-      
-      replacement_opportunity:
-        points: 10
-        description: "Has competing devices (upgrade path)"
-        signals:
-        - "Aging competitor devices (5+ years)"
-        - "Competitors: CoolSculpt, Emsculpt, Thermage"
-      
-      saturated_red_flag:
-        points: -10
-        description: "4-5 machines, no gaps (low probability)"
-        signals:
-        - "Multiple body devices"
-        - "Multiple facial devices"
-        - "Recent purchases (within 1 year)"
-        - "No identified gaps"
+    
+    greenfield:
+      points: 15
+      description: "No competing devices"
+      rationale: "Clean slate, no switching cost"
+    
+    replacement:
+      points: 10
+      description: "Aging competitor devices"
+      signals:
+        - "Device 5+ years old"
+        - "Competitor brands present"
+    
+    saturated:
+      points: -15
+      description: "RED FLAG: Too much equipment"
+      signals:
+        - "4-5+ devices same category"
+        - "Recent purchase (<12 months)"
   
-  glp1_nova_opportunity:
+  competitive_presence:
     max_points: 10
-    description: "Venus Nova target profile (GLP-1 providers)"
-    signals:
-      weight_loss_program:
-        points: 10
-        keywords:
-        - "weight management"
-        - "medical weight loss"
-        - "weight loss clinic"
-      
-      glp1_services:
-        points: 10
-        keywords:
-        - "GLP-1"
-        - "semaglutide"
-        - "ozempic"
-        - "wegovy"
-        - "tirzepatide"
-        - "mounjaro"
-      
-      post_bariatric_focus:
-        points: 8
-        keywords:
-        - "bariatric"
-        - "post-weight loss"
-        - "body after weight loss"
-        - "skin tightening after weight loss"
+    
+    body_competitors:
+      points: 8
+      devices: ["CoolSculpt", "Emsculpt", "TruSculpt"]
+    
+    facial_competitors:
+      points: 8
+      devices: ["Morpheus8", "Fraxel", "Thermage"]
   
-  multi_device_upsell_potential:
+  budget_capacity:
     max_points: 10
-    description: "Capacity for multiple device purchase"
-    factors:
-      practice_size:
-        points: 5
-        evaluation:
-        - "3+ providers: +5 points"
-        - "2 providers: +3 points"
-        - "1 provider: +1 point"
-      
-      facility_capacity:
-        points: 5
-        signals:
-        - "Multiple treatment rooms"
-        - "Large square footage"
-        - "Multiple locations"
-        - "High patient volume indicators"
-  
-  competitive_landscape:
-    max_points: 5
-    description: "Competitor device analysis"
-    scenarios:
-      uses_venus_competitors:
-        points: 5
-        description: "Replacement opportunity"
-        competitors:
-        - "CoolSculpt"
-        - "Emsculpt"
-        - "Thermage"
-        - "Fraxel"
-        - "Clear + Brilliant"
-      
-      no_devices:
-        points: 3
-        description: "Greenfield opportunity"
+    
+    premium:
+      points: 10
+      signals: ["3+ providers", "high-end location", "premium pricing"]
+      recommend: "Bliss MAX, Versa"
+    
+    mid_range:
+      points: 6
+      signals: ["2 providers", "moderate pricing"]
+      recommend: "Nova, Viva, Legacy"
+    
+    budget:
+      points: 3
+      signals: ["1 provider", "value-focused"]
+      recommend: "Legacy, Nova"
 
-opportunity_profiles:
-  full_suite_opportunity:
-    score_range: "85-100"
+# ============================================================================
+# GLP-1 SYNERGY MULTIPLIER (Nova/Bliss MAX)
+# ============================================================================
+
+glp1_multiplier:
+  description: "GLP-1 providers = PRIME body device targets"
+  rationale: "Patients lose 30-100+ lbs → need body contouring"
+  max_bonus: 25  # Nova and Bliss MAX only
+  
+  signals:
+    glp1_prescription:
+      points: 15
+      terms: ["GLP-1", "semaglutide", "ozempic", "wegovy", "mounjaro"]
+    
+    weight_loss_program:
+      points: 12
+      terms: ["medical weight loss", "weight management"]
+    
+    post_bariatric:
+      points: 10
+      terms: ["post-bariatric", "loose skin", "after weight loss"]
+  
+  talking_points:
+    - "Perfect 'Phase 2' for GLP-1 patients"
+    - "You prescribe weight loss, we provide body sculpting"
+    - "Every GLP-1 patient = potential body contouring patient"
+    - "Addresses #1 complaint: loose skin"
+  
+  device_positioning:
+    nova: "PRIMARY for GLP-1 providers ($80K-$110K)"
+    bliss_max: "PREMIUM for established programs ($120K-$180K)"
+
+# ============================================================================
+# UNIVERSAL DISQUALIFIERS
+# ============================================================================
+
+disqualifiers:
+  
+  no_aesthetic_focus:
+    penalty: -50
+    signals: ["no aesthetic services", "internal medicine only"]
+  
+  recent_competitor_purchase:
+    penalty: -40
+    timeframe: "6-12 months"
+    examples: ["CoolSculpt", "Morpheus8", "Emsculpt"]
+  
+  saturated_equipment:
+    penalty: -30
+    signals: ["4-5+ devices", "no gaps identified"]
+  
+  wrong_specialty:
+    penalty: -25
+    examples: ["body practice → facial device", "face practice → body device"]
+
+# ============================================================================
+# OPPORTUNITY PROFILES (Score-Based Segmentation)
+# ============================================================================
+
+opportunity_tiers:
+  
+  tier_1_full_suite:
+    score: "85-100"
     description: "Can benefit from multiple Venus devices"
     characteristics:
-    - "Large aesthetic practice"
-    - "Body + face services"
-    - "Multiple treatment rooms"
-    - "High patient volume"
-    recommended_approach: "Multi-device package with financing"
+      - "Large aesthetic practice"
+      - "Body + face services"
+      - "Multiple treatment rooms"
+    approach: "Multi-device package with financing"
   
-  high_priority_specialist:
-    score_range: "70-84"
-    description: "Strong fit for specific device track (body OR face)"
+  tier_2_specialist:
+    score: "70-84"
+    description: "Strong fit for specific device (body OR face)"
     characteristics:
-    - "Specialized practice (body or facial focus)"
-    - "Clear technology gap"
-    - "Med spa or family practice"
-    recommended_approach: "Lead with best-fit device (Bliss, Viva, or Versa)"
+      - "Specialized practice"
+      - "Clear technology gap"
+      - "Med spa or family practice"
+    approach: "Lead with best-fit device"
   
-  solid_opportunity:
-    score_range: "60-79"
-    description: "Good fit for platform consolidation or entry device"
+  tier_3_solid:
+    score: "60-79"
+    description: "Platform consolidation or entry device"
     characteristics:
-    - "Multiple aging devices"
-    - "Limited space"
-    - "Seeking efficiency"
-    - "Investment-minded (good website/social)"
-    recommended_approach: "Versa as all-in-one solution or Viva as entry point"
+      - "Multiple aging devices"
+      - "Limited space"
+      - "Investment-minded"
+    approach: "Versa all-in-one or entry device"
   
-  emerging_opportunity:
-    score_range: "45-59"
-    description: "Early-stage aesthetic interest or growth trajectory"
+  tier_4_emerging:
+    score: "45-59"
+    description: "Early-stage aesthetic interest"
     characteristics:
-    - "Limited current aesthetic services"
-    - "Growth trajectory"
-    - "Investment appetite"
-    recommended_approach: "Entry-level device (Nova, Versa, or Viva)"
+      - "Limited current services"
+      - "Growth trajectory"
+    approach: "Entry-level (Nova, Versa, Viva)"
   
-  low_priority:
-    score_range: "0-44"
-    description: "Poor fit or saturated market"
+  tier_5_low_priority:
+    score: "0-44"
+    description: "Poor fit or saturated"
     characteristics:
-    - "No aesthetic focus"
-    - "4-5 machines, no gaps"
-    - "Recent competitor purchases"
-    recommended_approach: "Deprioritize - focus on higher-scoring prospects"
+      - "No aesthetic focus"
+      - "4-5+ machines, no gaps"
+      - "Recent competitor purchase"
+    approach: "Deprioritize"
+
+# ============================================================================
+# SALES INTELLIGENCE - Ready-to-Use Talking Points
+# ============================================================================
 
 talking_points:
+  
   body_contouring:
-    - "Venus Bliss Max combines fat reduction AND muscle toning in one treatment"
-    - "Clinically proven 24-27% fat reduction"
-    - "Patients love the dual benefit approach"
+    - "Bliss MAX: 3-in-1 fat reduction + skin tightening + muscle"
+    - "24-27% fat reduction (clinical data)"
+    - "More comfortable than CoolSculpt (no freezing)"
   
-  nova_positioning:
-    - "Venus Nova is perfect for GLP-1 providers adding body contouring"
-    - "More affordable entry point than Bliss Max"
-    - "Ideal for practices with post-weight loss patients"
+  glp1_positioning:
+    - "Nova perfect for GLP-1 providers"
+    - "Phase 2 after Ozempic/Wegovy weight loss"
+    - "$80K-$150K annual revenue add"
   
-  skin_resurfacing:
-    - "Venus Viva's NanoFractional RF is safer than traditional lasers"
-    - "Treats ALL skin types safely"
-    - "Minimal downtime compared to ablative lasers"
+  facial_resurfacing:
+    - "Viva NanoFractional RF safer than CO2 lasers"
+    - "ALL skin types (Fitzpatrick I-VI)"
+    - "2-3 day downtime vs. 7-10 for ablative"
   
   platform_value:
-    - "Venus Versa: 7+ applications on one platform"
+    - "Versa: 7+ applications on ONE device"
     - "Maximize ROI per square foot"
-    - "Simplify training and inventory"
+    - "Hair removal alone = 12-18 month ROI"
   
-  clinical_credibility:
+  clinical_proof:
     - "FDA-cleared and Health Canada approved"
     - "150+ published clinical studies"
-    - "Used in 60+ countries worldwide"
+    - "60+ countries worldwide"
 
-competitive_positioning:
-  vs_coolsculpt:
-    - "More comfortable treatment (no freezing)"
-    - "Treats multiple areas simultaneously"
-    - "Includes skin tightening benefit"
-  
-  vs_emsculpt:
-    - "More affordable per treatment"
-    - "Larger treatment area coverage"
-    - "Can combine with fat reduction"
-  
-  vs_thermage:
-    - "Less painful treatment experience"
-    - "More predictable outcomes"
-    - "Lower price point"
+# ============================================================================
+# COMPETITIVE POSITIONING
+# ============================================================================
 
-scoring_notes:
-  - "Philosophy: Score by fit to ANY device, not one specific device"
-  - "No penalty for specialization (body-only or face-only practices)"
-  - "Practice type matters: Med spas and family practices close fastest"
-  - "GLP-1 providers are prime Nova targets"
-  - "Good website/social = investment mindset (positive signal)"
-  - "Red flag: 4-5 machines with no identified gaps"
-  - "Real scores preferred over inflated numbers"
+vs_competitors:
+  
+  coolsculpt:
+    weakness: "Uncomfortable freezing, long treatment"
+    venus_advantage: "Bliss MAX: no freezing, faster, includes skin tightening"
+  
+  emsculpt:
+    weakness: "Higher cost, can't treat many areas"
+    venus_advantage: "Bliss MAX: better ROI, 8 applicators, includes fat reduction"
+  
+  morpheus8:
+    weakness: "Invasive needles, longer recovery"
+    venus_advantage: "Viva: less invasive, faster healing"
+  
+  fraxel:
+    weakness: "Hyperpigmentation risk on darker skin"
+    venus_advantage: "Viva: safe Fitzpatrick I-VI"
+  
+  thermage:
+    weakness: "Painful, expensive, consumables"
+    venus_advantage: "Legacy: comfortable, no consumables, under $90K"
+  
+  lumenis_m22:
+    weakness: "More expensive, complex interface"
+    venus_advantage: "Versa: better pricing, simpler training"
+
+# ============================================================================
+# IMPLEMENTATION NOTES
+# ============================================================================
+
+system_notes:
+  philosophy:
+    - "Score by fit to ANY device, not one specific device"
+    - "No penalty for specialization (body-only or face-only OK)"
+    - "Each device scores independently 0-100"
+    - "Highest score = Manufacturer Opportunity Score"
+  
+  fairness:
+    - "Viva (facial) can score 100"
+    - "Bliss MAX (body) can score 100"
+    - "No body vs. face bias"
+  
+  actionable_intelligence:
+    - "Show ONLY winning device breakdown"
+    - "Include specific talking points for that device"
+    - "Provide ROI data and competitive positioning"
+  
+  scalability:
+    - "Easy to add new devices (e.g., new Cutera devices)"
+    - "Each device self-contained scoring logic"
+    - "Manufacturer-level disqualifiers apply to all"
+  
+  accuracy:
+    - "Real scores preferred over inflated numbers"
+    - "GLP-1 providers get Nova/Bliss bonus"
+    - "Good website/social = investment signal"
+    - "4-5+ machines with no gaps = RED FLAG"
