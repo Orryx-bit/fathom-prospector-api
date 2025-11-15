@@ -987,6 +987,104 @@ async def start_deep_dive(
             "message": "Internal server error"
         }
 
+@app.get("/api/deep-dive/{session_id}")
+@limiter.limit("10/minute")  # Rate limit: 10 deep dive requests per minute
+async def get_deep_dive_for_session(
+    session_id: str,
+    request: Request,
+    api_key: str = Header(..., alias="X-API-Key")
+):
+    """
+    Retrieve deep dive intelligence data for a specific search session
+    
+    This endpoint provides enhanced sales intelligence gathered during the prospect search,
+    including device detection, competitive analysis, and opportunity signals.
+    
+    Returns the deep dive data structure with:
+    - Device intelligence (installed devices, technology gaps)
+    - GLP-1 opportunity signals
+    - Treatment stacking indicators
+    - Competitive positioning insights
+    """
+    verify_api_key(api_key)
+    
+    try:
+        # Look up the session in search_jobs
+        if session_id not in search_jobs:
+            raise HTTPException(status_code=404, detail=f"Session {session_id} not found")
+        
+        job = search_jobs[session_id]
+        
+        if job["status"] != "completed":
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Session not completed. Current status: {job['status']}"
+            )
+        
+        results = job.get("results", [])
+        
+        if not results:
+            return {
+                "status": "success",
+                "session_id": session_id,
+                "data": {
+                    "prospects_analyzed": 0,
+                    "device_intelligence": [],
+                    "opportunity_signals": [],
+                    "market_insights": {
+                        "total_practices": 0,
+                        "glp1_opportunities": 0,
+                        "treatment_stacking_potential": 0
+                    }
+                },
+                "message": "No prospects found in this session"
+            }
+        
+        # Import deep_dive module
+        try:
+            from deep_dive import analyze_session_intelligence
+            
+            logger.info(f"🔍 Analyzing deep dive intelligence for session: {session_id} ({len(results)} prospects)")
+            
+            # Analyze the session results for intelligence
+            intelligence_data = analyze_session_intelligence(results)
+            
+            logger.info(f"✅ Deep dive analysis complete for session {session_id}")
+            
+            return {
+                "status": "success",
+                "session_id": session_id,
+                "data": intelligence_data,
+                "message": f"Deep dive intelligence retrieved for {len(results)} prospects"
+            }
+            
+        except ImportError:
+            logger.warning("Deep dive module not available - returning basic analysis")
+            
+            # Fallback: Return basic prospect summary
+            return {
+                "status": "success",
+                "session_id": session_id,
+                "data": {
+                    "prospects_analyzed": len(results),
+                    "device_intelligence": [],
+                    "opportunity_signals": [],
+                    "market_insights": {
+                        "total_practices": len(results),
+                        "glp1_opportunities": 0,
+                        "treatment_stacking_potential": 0
+                    },
+                    "note": "Deep dive module not available - showing basic analysis"
+                },
+                "message": f"Basic analysis for {len(results)} prospects"
+            }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in deep dive session endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
 if __name__ == "__main__":
     import uvicorn
     
