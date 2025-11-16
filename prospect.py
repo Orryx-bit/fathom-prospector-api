@@ -493,7 +493,7 @@ class FathomProspector:
                 logger.warning(f"Universal scoring config not found at {universal_config_path}")
                 self.universal_scoring_config = {}
             
-            # Load manufacturer-specific scoring rubric
+            # Load manufacturer-specific scoring rubric (legacy - keeping for compatibility)
             manufacturer_slug = self.manufacturer.lower().replace(' ', '_').replace('concepts', '').strip('_')
             if manufacturer_slug not in ['venus', 'sciton', 'cutera']:
                 manufacturer_slug = 'venus'  # default fallback
@@ -506,11 +506,35 @@ class FathomProspector:
             else:
                 logger.warning(f"Manufacturer scoring config not found at {mfr_config_path}")
                 self.manufacturer_scoring_config = {}
+            
+            # Load device-specific scoring configs (NEW - Per-Device Scoring)
+            self.device_scoring_configs = {}
+            devices_dir = config_dir / 'devices'
+            if devices_dir.exists():
+                for device_yaml in devices_dir.glob('*.yaml'):
+                    try:
+                        with open(device_yaml, 'r') as f:
+                            device_config = yaml.safe_load(f)
+                            device_name = device_config.get('device_name', device_yaml.stem)
+                            device_manufacturer = device_config.get('manufacturer', '').lower()
+                            
+                            # Only load devices for current manufacturer
+                            if manufacturer_slug in device_manufacturer or self.manufacturer.lower() in device_manufacturer:
+                                self.device_scoring_configs[device_name] = device_config
+                                logger.info(f"✓ Loaded device scoring config: {device_name}")
+                    except Exception as e:
+                        logger.warning(f"Failed to load device config {device_yaml}: {e}")
+                
+                logger.info(f"✓ Loaded {len(self.device_scoring_configs)} device scoring configs for {self.manufacturer}")
+            else:
+                logger.warning(f"Devices directory not found at {devices_dir}")
+                self.device_scoring_configs = {}
                 
         except Exception as e:
             logger.warning(f"Failed to load YAML scoring configs: {e} - using fallback logic")
             self.universal_scoring_config = {}
             self.manufacturer_scoring_config = {}
+            self.device_scoring_configs = {}
     
     
     def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
@@ -703,7 +727,7 @@ class FathomProspector:
             details = self.gmaps_api.place_details(
                 place_id=place_id,
                 fields=['name', 'formatted_address', 'formatted_phone_number', 
-                       'website', 'rating', 'user_ratings_total', 'types']
+                       'website', 'rating', 'user_ratings_total', 'types', 'geometry']
             )
             
             # place_details() already returns the result dict, not the full response
@@ -2817,9 +2841,18 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
         """
         LAYER 3: Manufacturer-Specific Opportunity Scoring (0-100)
         
-        Routes based on self.manufacturer and calculates fit for specific device portfolio
+        NEW APPROACH (Option A): Per-Device Custom Scoring
+        - Scores each device individually using device-specific YAML
+        - Returns the HIGHEST scoring device's score as Manufacturer Opportunity Score
+        - No bias toward body vs. face devices - each device has custom factors
+        - Only the winning device's breakdown is returned for transparency
         """
         
+        # If device-specific configs are loaded, use per-device scoring (NEW)
+        if self.device_scoring_configs:
+            return self._score_best_device_match(practice_data, practice_type, universal_score)
+        
+        # Fallback to legacy manufacturer-level scoring
         manufacturer_lower = self.manufacturer.lower()
         
         if 'venus' in manufacturer_lower:
@@ -2832,6 +2865,226 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
             # Default fallback
             logger.warning(f"Unknown manufacturer '{self.manufacturer}', using default scoring")
             return self._score_venus_opportunity(practice_data, practice_type, universal_score)
+    
+    def _score_best_device_match(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
+        """
+        NEW: Per-Device Custom Scoring (Option A)
+        
+        Scores each device individually and returns the HIGHEST scoring device.
+        This ensures fairness - no bias toward body vs. face devices.
+        """
+        all_text = self._extract_safe_text(practice_data)
+        best_device_name = None
+        best_device_score = 0
+        best_device_breakdown = {}
+        
+        logger.info(f"🎯 Scoring {len(self.device_scoring_configs)} devices for {self.manufacturer}")
+        
+        for device_name, device_config in self.device_scoring_configs.items():
+            try:
+                device_score, device_breakdown = self._score_single_device(
+                    device_config, 
+                    practice_data, 
+                    practice_type, 
+                    all_text
+                )
+                
+                logger.info(f"  📊 {device_name}: {device_score}/100")
+                
+                # Track the highest scoring device
+                if device_score > best_device_score:
+                    best_device_score = device_score
+                    best_device_name = device_name
+                    best_device_breakdown = device_breakdown
+                    
+            except Exception as e:
+                logger.error(f"Failed to score device {device_name}: {e}")
+                continue
+        
+        # Add best device metadata to breakdown
+        if best_device_name:
+            best_device_breakdown['best_device'] = best_device_name
+            logger.info(f"🏆 Best device match: {best_device_name} ({best_device_score}/100)")
+        else:
+            logger.warning(f"⚠️  No devices scored successfully for {self.manufacturer}")
+            best_device_breakdown = {'error': 'No devices scored'}
+        
+        return best_device_score, best_device_breakdown
+    
+    def _score_single_device(self, device_config: Dict, practice_data: Dict, 
+                            practice_type: str, all_text: str) -> Tuple[int, Dict]:
+        """
+        Score a single device using its custom YAML scoring factors.
+        
+        Returns: (total_score, breakdown_dict)
+        """
+        scores = {}
+        total_score = 0
+        
+        scoring_factors = device_config.get('scoring_factors', {})
+        disqualifiers = device_config.get('disqualifiers', [])
+        
+        # Process each scoring factor category
+        for factor_name, factor_config in scoring_factors.items():
+            max_points = factor_config.get('max_points', 0)
+            
+            if factor_name == 'ideal_customer_profile':
+                score = self._score_icp(factor_config, practice_type, all_text, max_points)
+            elif factor_name == 'service_alignment':
+                score = self._score_services(factor_config, all_text, max_points)
+            elif factor_name in ['glp1_weight_loss_synergy', 'glp1_weight_loss_focus']:
+                score = self._score_glp1(factor_config, all_text, max_points)
+            elif factor_name == 'technology_gap':
+                score = self._score_tech_gap(factor_config, all_text, max_points)
+            elif factor_name in ['platform_consolidation_need', 'entry_level_body_need', 
+                               'entry_level_opportunity', 'budget_price_fit']:
+                score = self._score_indicators(factor_config, practice_data, all_text, max_points)
+            elif factor_name in ['competitive_upgrade_opportunity', 'upgrade_opportunity', 
+                               'competitive_positioning', 'upgrade_path']:
+                score = self._score_competitive(factor_config, all_text, max_points)
+            elif factor_name in ['medical_dermatology_focus', 'tattoo_removal_demand', 
+                               'geographic_market_fit', 'body_device_gap', 
+                               'weight_loss_integration', 'efficiency_opportunity']:
+                score = self._score_indicators(factor_config, practice_data, all_text, max_points)
+            else:
+                # Generic indicator scoring for any other factors
+                score = self._score_indicators(factor_config, practice_data, all_text, max_points)
+            
+            scores[factor_name] = score
+            total_score += score
+        
+        # Apply disqualifiers
+        for disqualifier in disqualifiers:
+            condition = disqualifier.get('condition', '')
+            penalty = disqualifier.get('penalty', 0)
+            
+            if self._check_disqualifier(condition, practice_data, all_text):
+                total_score += penalty  # Penalties are negative
+                scores[f"disqualifier_{condition}"] = penalty
+                logger.info(f"  ⚠️  Disqualifier triggered: {condition} ({penalty} pts)")
+        
+        # Ensure score stays within 0-100
+        total_score = max(0, min(100, total_score))
+        
+        return total_score, scores
+    
+    def _score_icp(self, factor_config: Dict, practice_type: str, all_text: str, max_points: int) -> int:
+        """Score ideal customer profile (practice type alignment)"""
+        keywords = factor_config.get('keywords', {})
+        
+        # Check if practice type matches any keyword
+        practice_type_lower = practice_type.lower()
+        for keyword, points in keywords.items():
+            keyword_lower = keyword.lower().replace('_', ' ')
+            if keyword_lower in practice_type_lower or keyword_lower in all_text:
+                return min(points, max_points)
+        
+        return 0
+    
+    def _score_services(self, factor_config: Dict, all_text: str, max_points: int) -> int:
+        """Score service alignment (keyword matching)"""
+        services = factor_config.get('services', [])
+        total_score = 0
+        
+        for service_item in services:
+            keyword = service_item.get('keyword', '').lower()
+            points = service_item.get('points', 0)
+            
+            if keyword in all_text:
+                total_score += points
+        
+        return min(total_score, max_points)
+    
+    def _score_glp1(self, factor_config: Dict, all_text: str, max_points: int) -> int:
+        """Score GLP-1/weight loss synergy"""
+        services = factor_config.get('services', [])
+        total_score = 0
+        
+        for service_item in services:
+            keyword = service_item.get('keyword', '').lower()
+            points = service_item.get('points', 0)
+            
+            if keyword in all_text:
+                total_score += points
+        
+        return min(total_score, max_points)
+    
+    def _score_tech_gap(self, factor_config: Dict, all_text: str, max_points: int) -> int:
+        """Score technology gap indicators"""
+        indicators = factor_config.get('indicators', [])
+        total_score = 0
+        
+        for indicator in indicators:
+            signal = indicator.get('signal', '').lower()
+            points = indicator.get('points', 0)
+            
+            # Simple keyword matching for now (can be enhanced with logic)
+            if signal.replace('_', ' ') in all_text:
+                total_score += points
+        
+        return min(total_score, max_points)
+    
+    def _score_indicators(self, factor_config: Dict, practice_data: Dict, all_text: str, max_points: int) -> int:
+        """Score generic indicators"""
+        indicators = factor_config.get('indicators', [])
+        total_score = 0
+        
+        for indicator in indicators:
+            signal = indicator.get('signal', '').lower()
+            points = indicator.get('points', 0)
+            
+            # Check both text and practice data
+            if signal.replace('_', ' ') in all_text:
+                total_score += points
+            elif signal == 'small_practice' and len(practice_data.get('services', [])) < 5:
+                total_score += points
+        
+        return min(total_score, max_points)
+    
+    def _score_competitive(self, factor_config: Dict, all_text: str, max_points: int) -> int:
+        """Score competitive positioning/upgrade opportunities"""
+        indicators = factor_config.get('indicators', [])
+        vs_competitors = factor_config.get('vs_competitors', [])
+        
+        total_score = 0
+        
+        # Check indicators
+        for indicator in indicators:
+            signal = indicator.get('signal', '').lower()
+            points = indicator.get('points', 0)
+            
+            if signal.replace('_', ' ') in all_text:
+                total_score += points
+        
+        # Check vs_competitors (if present)
+        for competitor in vs_competitors:
+            device_name = competitor.get('device', '').lower()
+            points = competitor.get('points', 0)
+            
+            if device_name.replace(' ', '') in all_text.replace(' ', ''):
+                total_score += points
+        
+        return min(total_score, max_points)
+    
+    def _check_disqualifier(self, condition: str, practice_data: Dict, all_text: str) -> bool:
+        """Check if a disqualifier condition is met"""
+        condition_lower = condition.lower()
+        
+        # Common disqualifier patterns
+        if 'face_only' in condition_lower and 'body' not in all_text:
+            return True
+        if 'no_body' in condition_lower and 'body' not in all_text:
+            return True
+        if 'recently' in condition_lower and 'purchased' in condition_lower:
+            # Check for competitor mentions (simplified)
+            return False  # Would need date logic for real implementation
+        if 'no_aesthetic' in condition_lower and 'aesthetic' not in all_text:
+            return True
+        if 'budget' in condition_lower:
+            # Would need revenue data for real implementation
+            return False
+        
+        return False
     
     def _get_scoring_weight(self, factor_name: str, default: int = 0) -> int:
         """
@@ -3445,6 +3698,12 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
             logger.info(f"Skipping existing customer: {practice_name}")
             return None
         
+        # Extract latitude and longitude from geometry
+        geometry = place_data.get('geometry', {})
+        location = geometry.get('location', {})
+        latitude = location.get('lat')
+        longitude = location.get('lng')
+        
         # Initialize practice record
         practice_record = {
             'name': place_data.get('name', ''),
@@ -3454,6 +3713,8 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
             'rating': place_data.get('rating', 0),
             'review_count': place_data.get('user_ratings_total', 0),
             'types': place_data.get('types', []),
+            'latitude': latitude,
+            'longitude': longitude,
             'services': [],
             'social_links': [],
             'staff_count': 0,
