@@ -1,35 +1,45 @@
 # ============================================================================
-# VENUS CONCEPTS - MANUFACTURER SCORING SYSTEM v3.0
+# VENUS CONCEPTS - MANUFACTURER SCORING SYSTEM v4.1
 # ============================================================================
-# Philosophy: "Best Device Match" Scoring
+# Philosophy: "Best Device Match" + "Enhanced Business Type Intelligence"
 # - Each device scores independently (0-100 points)
 # - Highest-scoring device = Manufacturer Opportunity Score
-# - NO body vs. face bias
+# - Business type detection with cash-pay infrastructure prioritization
+# - ENHANCED PRAM Framework: Up to 60 points (was 40 in v4.0)
+# - Expanded GLP-1 detection and weight-loss keyword engine
+# - Financial readiness indicators and competitive gap analysis
 # - Show only WINNING device breakdown for actionable intelligence
 # ============================================================================
 
 manufacturer: "Venus Concepts"
-version: "3.0"
-last_updated: "2025-11-15"
-system_type: "per_device_custom_scoring"
+version: "4.1"
+last_updated: "2025-11-17"
+system_type: "per_device_custom_scoring_with_enhanced_business_intelligence"
 
 # ============================================================================
 # SCORING METHODOLOGY
 # ============================================================================
 
 scoring_approach:
-  method: "Device-Specific Custom Scoring"
+  method: "Device-Specific Custom Scoring + Enhanced Business Type Intelligence"
   max_points_per_device: 100
   manufacturer_score_calculation: "MAX(all device scores)"
   breakdown_display: "winning_device_only"
   fairness_principle: "All devices equal max points - no category bias"
+  business_type_priority: "Cash-pay infrastructure > patient volume"
+  pram_enhancement: "Increased from 40 to 60 max points for better scoring accuracy"
   
 implementation_notes:
   - "Backend scores each device independently"
   - "Viva (facial) can score 100, Bliss MAX (body) can score 100"
   - "Nova gets GLP-1 bonus, Viva gets dermatology bonus, etc."
+  - "Business type detection applies multipliers and boosts"
+  - "Wellness center (200 patients) > Traditional OB/GYN (1,000 patients)"
+  - "ENHANCED PRAM Framework quantifies cash-pay fluency (up to 60 points)"
+  - "Expanded GLP-1/weight-loss detection with 20+ new keywords"
+  - "Financial readiness indicators (pricing pages, financing logos, memberships)"
+  - "Competitive device saturation detection reduces scores for over-equipped practices"
   - "Only show winning device's specific breakdown to rep"
-  - "Prevents body-device bias in scoring"
 
 # ============================================================================
 # DEVICE PORTFOLIO - Production-Ready Intelligence
@@ -45,6 +55,7 @@ devices:
       - "Cosmetic dermatology"
       - "Plastic surgery (facial)"
       - "High-end med spas"
+      - "Aesthetic gynecology (vaginal + facial)"
     
     service_keywords_weighted:
       - {term: "skin resurfacing", points: 10}
@@ -52,16 +63,21 @@ devices:
       - {term: "texture improvement", points: 7}
       - {term: "fractional laser", points: 6}
       - {term: "wrinkle reduction", points: 5}
+      - {term: "vaginal rejuvenation", points: 8}
+      - {term: "intimate wellness", points: 7}
     
     opportunity_signals:
       - "no RF resurfacing device"
       - "mentions Morpheus8 or Fraxel"
       - "diverse skin types (Fitzpatrick III-VI)"
+      - "pelvic floor therapy"
+      - "sexual wellness services"
     
     competitive_edges:
       - "Safer than CO2 for all skin types"
       - "Less invasive than Morpheus8"
       - "2-3 day downtime vs. 7-10"
+      - "Dual use: facial + vaginal applications"
     
     roi: "$800-$1,500/treatment, $80K-$120K annual"
     
@@ -77,22 +93,27 @@ devices:
       - "Med spas (all sizes)"
       - "Dermatology"
       - "Family practice adding aesthetics"
+      - "Men's health clinics (hair removal focus)"
     
     service_keywords_weighted:
       - {term: "hair removal", points: 10}
       - {term: "photorejuvenation", points: 8}
       - {term: "vascular lesions", points: 7}
       - {term: "pigmentation", points: 6}
+      - {term: "men's grooming", points: 8}
+      - {term: "laser hair removal", points: 10}
     
     opportunity_signals:
       - "multiple_standalone_devices"
       - "limited_space"
       - "aging_equipment (5+ years)"
+      - "men's services"
     
     competitive_edges:
       - "7+ applications on ONE platform"
       - "Better pricing than Lumenis M22"
       - "Simpler than Cutera Xeo"
+      - "Strong hair removal for men's clinics"
     
     roi: "$150K-$250K annual with multi-modality"
     
@@ -108,12 +129,17 @@ devices:
       - "Med spas (body-focused)"
       - "Weight loss clinics"
       - "Plastic surgery"
+      - "Bariatric centers"
+      - "Postpartum recovery centers"
     
     service_keywords_weighted:
       - {term: "body contouring", points: 12}
       - {term: "fat reduction", points: 10}
       - {term: "cellulite reduction", points: 8}
       - {term: "muscle toning", points: 6}
+      - {term: "postpartum body", points: 10}
+      - {term: "mommy makeover", points: 9}
+      - {term: "post-bariatric", points: 12}
     
     glp1_bonus:
       enabled: true
@@ -122,7 +148,20 @@ devices:
         - {term: "glp-1", points: 15}
         - {term: "ozempic", points: 15}
         - {term: "wegovy", points: 15}
+        - {term: "mounjaro", points: 15}
+        - {term: "tirzepatide", points: 15}
+        - {term: "semaglutide", points: 15}
+        - {term: "compounded semaglutide", points: 15}
+        - {term: "compounded tirzepatide", points: 15}
         - {term: "medical weight loss", points: 12}
+        - {term: "medical weight loss program", points: 12}
+        - {term: "weight loss injections", points: 12}
+        - {term: "glp-1 program", points: 15}
+        - {term: "semaglutide clinic", points: 15}
+        - {term: "obesity medicine", points: 12}
+        - {term: "phentermine", points: 10}
+        - {term: "lipotropic injections", points: 8}
+        - {term: "b12 mic injections", points: 8}
         - {term: "post-bariatric", points: 10}
     
     competitive_edges:
@@ -130,6 +169,7 @@ devices:
       - "24-27% fat reduction (clinical)"
       - "More comfortable than CoolSculpt"
       - "8 applicators = high throughput"
+      - "Perfect for postpartum and post-bariatric patients"
     
     roi: "$200K-$400K annual with GLP-1 program"
     
@@ -145,13 +185,29 @@ devices:
       - "Weight loss clinics (PRIMARY)"
       - "Wellness centers"
       - "Small med spas with GLP-1"
+      - "Bariatric surgery centers"
+      - "Obesity medicine practices"
     
     service_keywords_weighted:
       - {term: "glp-1", points: 20}
       - {term: "ozempic", points: 18}
       - {term: "wegovy", points: 18}
+      - {term: "mounjaro", points: 18}
+      - {term: "tirzepatide", points: 18}
+      - {term: "semaglutide", points: 18}
+      - {term: "compounded semaglutide", points: 18}
+      - {term: "compounded tirzepatide", points: 18}
       - {term: "medical weight loss", points: 15}
+      - {term: "medical weight loss program", points: 15}
+      - {term: "weight loss injections", points: 15}
+      - {term: "glp-1 program", points: 20}
+      - {term: "semaglutide clinic", points: 20}
+      - {term: "obesity medicine", points: 15}
+      - {term: "phentermine", points: 12}
+      - {term: "lipotropic injections", points: 10}
+      - {term: "b12 mic injections", points: 10}
       - {term: "loose skin", points: 8}
+      - {term: "post-bariatric", points: 15}
     
     glp1_bonus:
       enabled: true
@@ -162,6 +218,7 @@ devices:
       - "Perfect Phase 2 for GLP-1 patients"
       - "Lower price than Bliss MAX"
       - "Built-in GLP-1 patient pipeline"
+      - "Ideal for bariatric and obesity medicine practices"
     
     roi: "$80K-$150K annual (20+ GLP-1 pts/month)"
     
@@ -178,21 +235,30 @@ devices:
       - "Small-mid med spas"
       - "Budget-conscious clinics"
       - "Dermatology adding body"
+      - "Postpartum recovery centers"
+      - "Bariatric surgery aftercare"
     
     service_keywords_weighted:
       - {term: "skin tightening", points: 12}
       - {term: "cellulite reduction", points: 10}
       - {term: "body contouring", points: 8}
+      - {term: "postpartum recovery", points: 12}
+      - {term: "post-pregnancy body", points: 12}
+      - {term: "diastasis recti", points: 10}
+      - {term: "post-bariatric skin", points: 12}
     
     opportunity_signals:
       - "no_body_device"
       - "budget_conscious"
       - "testing_body_market"
+      - "postpartum focus"
+      - "bariatric aftercare"
     
     competitive_edges:
       - "More comfortable than Thermage"
       - "No consumables"
       - "Under $90K entry"
+      - "Perfect gateway device for postpartum and bariatric markets"
     
     roi: "$60K-$100K annual, no consumables"
     
@@ -216,9 +282,11 @@ universal_factors:
         - "Detailed service pages"
         - "Online booking"
         - "Professional photos"
+        - "Before/after gallery"
+        - "Provider credentials clearly listed"
       tiers:
-        - {description: "Excellent modern site", points: 7}
-        - {description: "Good site", points: 5}
+        - {description: "Excellent modern site with booking + gallery", points: 7}
+        - {description: "Good site with some modern features", points: 5}
         - {description: "Basic site", points: 3}
         - {description: "Outdated/poor site", points: 1}
     
@@ -229,8 +297,10 @@ universal_factors:
         - "Before/after photos"
         - "Video content"
         - "Patient engagement"
+        - "Strong follower count"
+        - "Regular stories/reels"
       tiers:
-        - {description: "Highly active (3+/week)", points: 7}
+        - {description: "Highly active (3+/week) with engagement", points: 7}
         - {description: "Active (1-2/week)", points: 5}
         - {description: "Occasional", points: 3}
         - {description: "Inactive", points: 1}
@@ -312,36 +382,66 @@ universal_factors:
       recommend: "Legacy, Nova"
 
 # ============================================================================
-# GLP-1 SYNERGY MULTIPLIER (Nova/Bliss MAX)
+# ENHANCED GLP-1 SYNERGY MULTIPLIER (Nova/Bliss MAX)
 # ============================================================================
 
 glp1_multiplier:
-  description: "GLP-1 providers = PRIME body device targets"
+  description: "GLP-1 providers = PRIME body device targets (EXPANDED KEYWORDS)"
   rationale: "Patients lose 30-100+ lbs → need body contouring"
   max_bonus: 25  # Nova and Bliss MAX only
+  practice_multiplier: "1.30x-1.50x to PRAM and device-fit scores"
   
   signals:
     glp1_prescription:
       points: 15
-      terms: ["GLP-1", "semaglutide", "ozempic", "wegovy", "mounjaro"]
+      terms:
+        - "GLP-1"
+        - "semaglutide"
+        - "ozempic"
+        - "wegovy"
+        - "mounjaro"
+        - "tirzepatide"
+        - "compounded semaglutide"
+        - "compounded tirzepatide"
+        - "glp-1 program"
+        - "semaglutide clinic"
     
     weight_loss_program:
       points: 12
-      terms: ["medical weight loss", "weight management"]
+      terms:
+        - "medical weight loss"
+        - "weight management"
+        - "medical weight loss program"
+        - "weight loss injections"
+        - "obesity medicine"
     
     post_bariatric:
       points: 10
-      terms: ["post-bariatric", "loose skin", "after weight loss"]
+      terms:
+        - "post-bariatric"
+        - "loose skin"
+        - "after weight loss"
+        - "bariatric surgery"
+    
+    supplemental_weight_loss:
+      points: 8
+      terms:
+        - "phentermine"
+        - "lipotropic injections"
+        - "b12 mic injections"
+        - "vitamin injections for weight loss"
   
   talking_points:
     - "Perfect 'Phase 2' for GLP-1 patients"
     - "You prescribe weight loss, we provide body sculpting"
     - "Every GLP-1 patient = potential body contouring patient"
     - "Addresses #1 complaint: loose skin"
+    - "32M GLP-1 patients nationwide = massive opportunity"
   
   device_positioning:
     nova: "PRIMARY for GLP-1 providers ($80K-$110K)"
     bliss_max: "PREMIUM for established programs ($120K-$180K)"
+    legacy: "ENTRY for bariatric aftercare ($60K-$90K)"
 
 # ============================================================================
 # UNIVERSAL DISQUALIFIERS
@@ -431,6 +531,7 @@ talking_points:
     - "Nova perfect for GLP-1 providers"
     - "Phase 2 after Ozempic/Wegovy weight loss"
     - "$80K-$150K annual revenue add"
+    - "32M GLP-1 patients = massive opportunity"
   
   facial_resurfacing:
     - "Viva NanoFractional RF safer than CO2 lasers"
@@ -477,8 +578,1618 @@ vs_competitors:
     weakness: "More expensive, complex interface"
     venus_advantage: "Versa: better pricing, simpler training"
 
+
 # ============================================================================
-# IMPLEMENTATION NOTES
+# ENHANCED BUSINESS TYPE INTELLIGENCE - SECRET SAUCE v4.1
+# ============================================================================
+# Philosophy: "Cash-pay infrastructure > patient volume"
+# Based on: Venus Deep Research (PRAM Framework) + v4.1 Enhancements
+# Impact: Wellness center (200 patients) > Traditional OB/GYN (1,000 patients)
+
+business_type_intelligence:
+  enabled: true
+  version: "4.1"
+  philosophy: "Cash-pay fluency + financial readiness + demographic alignment"
+  implementation_note: "Apply business type detection BEFORE device scoring, then apply multipliers"
+  
+  # ==========================================================================
+  # TIER 1: PRIME BUYERS - Cash-Pay Native (Base Score Boost: +20-35)
+  # ==========================================================================
+  
+  wellness_center:
+    tier: "prime_buyer"
+    base_score_boost: 25
+    priority_level: 1
+    rationale: "Cash-pay native, aesthetic-forward, device-hungry, wellness + aesthetics convergence"
+    glp1_practice_multiplier: 1.40  # If GLP-1 keywords detected
+    
+    detection_keywords:
+      primary:
+        - "wellness center"
+        - "wellness clinic"
+        - "integrative wellness"
+        - "holistic wellness"
+      secondary:
+        - "functional medicine"
+        - "regenerative medicine"
+        - "holistic health"
+        - "integrative health"
+        - "preventive wellness"
+        - "longevity clinic"
+      services:
+        - "IV therapy"
+        - "hormone optimization"
+        - "peptide therapy"
+        - "NAD+ therapy"
+        - "vitamin IV"
+        - "wellness programs"
+        - "bio-hacking"
+        - "performance optimization"
+    
+    device_fit_matrix:
+      venus_nova:
+        score_multiplier: 1.40
+        rationale: "Perfect for body optimization + GLP-1 crossover in wellness"
+        ideal_if:
+          - "offers weight loss"
+          - "has GLP-1"
+          - "has hormone therapy"
+          - "body optimization focus"
+        talking_points:
+          - "Complements your wellness optimization services"
+          - "Non-invasive body sculpting aligns with holistic approach"
+          - "Perfect for patients seeking comprehensive wellness"
+      
+      venus_bliss_max:
+        score_multiplier: 1.35
+        rationale: "Premium wellness centers invest in flagship devices"
+        ideal_if:
+          - "3+ providers"
+          - "high-end location"
+          - "premium pricing"
+          - "full aesthetic suite"
+      
+      venus_legacy:
+        score_multiplier: 1.30
+        rationale: "Entry point for wellness centers testing aesthetics"
+        ideal_if:
+          - "1-2 providers"
+          - "new to body devices"
+          - "budget-conscious"
+    
+    cash_pay_signals:
+      - {signal: "pricing_on_website", points: 10}
+      - {signal: "membership_programs", points: 8}
+      - {signal: "package_deals", points: 6}
+      - {signal: "financing_mentioned", points: 5}
+      - {signal: "cash_pricing_explicit", points: 5}
+  
+  
+  hrt_hormone_clinic:
+    tier: "prime_buyer"
+    base_score_boost: 30
+    priority_level: 1
+    rationale: "GLP-1 synergy + cash-pay + aesthetic crossover = PERFECT FIT"
+    glp1_practice_multiplier: 1.50  # HIGHEST multiplier
+    
+    detection_keywords:
+      primary:
+        - "HRT"
+        - "hormone replacement"
+        - "hormone therapy"
+        - "TRT"
+        - "testosterone"
+        - "hormone clinic"
+        - "hormone optimization"
+      secondary:
+        - "bioidentical hormones"
+        - "BHRT"
+        - "pellet therapy"
+        - "testosterone replacement"
+        - "estrogen therapy"
+        - "menopause treatment"
+        - "andropause"
+      services:
+        - "weight loss"
+        - "GLP-1"
+        - "semaglutide"
+        - "tirzepatide"
+        - "compounded semaglutide"
+        - "peptides"
+        - "anti-aging"
+        - "age management"
+    
+    device_fit_matrix:
+      venus_nova:
+        score_multiplier: 1.50
+        rationale: "GLP-1 + hormone patients = built-in body contouring pipeline"
+        ideal_if:
+          - "offers GLP-1"
+          - "weight loss program"
+          - "anti-aging focus"
+        talking_points:
+          - "Your hormone + GLP-1 patients are PERFECT body contouring candidates"
+          - "Phase 2 after weight loss: address loose skin concern"
+          - "Average HRT clinic has 50-200 GLP-1 patients = $80K-$150K annual Nova revenue"
+      
+      venus_bliss_max:
+        score_multiplier: 1.45
+        rationale: "Established HRT clinics can afford premium devices"
+        ideal_if:
+          - "3+ providers"
+          - "large patient base"
+          - "premium services"
+    
+    glp1_synergy_bonus:
+      enabled: true
+      max_additional_points: 20
+      rationale: "HRT + GLP-1 = double aesthetic motivation"
+  
+  
+  concierge_medicine:
+    tier: "prime_buyer"
+    base_score_boost: 25
+    priority_level: 1
+    rationale: "High-net-worth patients, 100% cash-pay model, affluent demographics"
+    demographic_multiplier: 1.35  # Affluent clientele
+    
+    detection_keywords:
+      primary:
+        - "concierge medicine"
+        - "concierge practice"
+        - "concierge physician"
+        - "membership-based practice"
+        - "direct primary care"
+        - "DPC"
+      secondary:
+        - "executive health"
+        - "VIP medicine"
+        - "boutique practice"
+        - "private practice"
+        - "retainer-based"
+        - "membership medicine"
+        - "luxury healthcare"
+    
+    device_fit_matrix:
+      venus_versa:
+        score_multiplier: 1.35
+        rationale: "Multi-application platform fits concierge 'everything' model"
+      
+      venus_viva:
+        score_multiplier: 1.30
+        rationale: "Facial rejuvenation aligns with executive clientele"
+      
+      venus_nova:
+        score_multiplier: 1.30
+        ideal_if:
+          - "offers weight loss"
+          - "has GLP-1"
+  
+  
+  medspa_aesthetic_clinic:
+    tier: "prime_buyer"
+    base_score_boost: 20
+    priority_level: 1
+    rationale: "Core aesthetic practice, device-dependent business model"
+    
+    detection_keywords:
+      primary:
+        - "med spa"
+        - "medspa"
+        - "medical spa"
+        - "aesthetic clinic"
+        - "aesthetic center"
+        - "cosmetic clinic"
+      secondary:
+        - "aesthetic practice"
+        - "beauty clinic"
+        - "rejuvenation center"
+        - "skin clinic"
+        - "laser clinic"
+    
+    device_fit_matrix:
+      all_devices:
+        score_multiplier: 1.25
+        rationale: "Med spas are natural buyers for any aesthetic device"
+      
+      venus_versa:
+        score_multiplier: 1.35
+        rationale: "Platform consolidation opportunity"
+      
+      venus_bliss_max:
+        score_multiplier: 1.30
+        ideal_if:
+          - "body contouring focus"
+  
+  
+  weight_loss_clinic:
+    tier: "prime_buyer"
+    base_score_boost: 28
+    priority_level: 1
+    rationale: "GLP-1 + bariatric = massive body contouring opportunity"
+    glp1_practice_multiplier: 1.50  # HIGHEST
+    
+    detection_keywords:
+      primary:
+        - "weight loss clinic"
+        - "medical weight loss"
+        - "weight management"
+        - "bariatric clinic"
+        - "obesity clinic"
+      secondary:
+        - "obesity medicine"
+        - "metabolic health"
+        - "weight loss center"
+        - "slim clinic"
+        - "glp-1 clinic"
+        - "semaglutide clinic"
+    
+    device_fit_matrix:
+      venus_nova:
+        score_multiplier: 1.50
+        rationale: "Built for Phase 2 post-weight-loss body contouring"
+      
+      venus_bliss_max:
+        score_multiplier: 1.45
+        ideal_if:
+          - "large patient volume"
+          - "surgical bariatric program"
+  
+  
+  # ==========================================================================
+  # NEW v4.1: BARIATRIC CLINICS (Surgical Weight-Loss Centers)
+  # ==========================================================================
+  
+  bariatric_surgery_center:
+    tier: "prime_buyer"
+    base_score_boost: 32  # VERY HIGH - surgical volume = guaranteed skin laxity
+    priority_level: 1
+    rationale: "100% of bariatric patients develop loose skin post-surgery = GUARANTEED demand"
+    
+    detection_keywords:
+      primary:
+        - "bariatric surgery"
+        - "bariatric center"
+        - "weight loss surgery"
+        - "gastric bypass"
+        - "gastric sleeve"
+        - "lap band"
+      secondary:
+        - "bariatric clinic"
+        - "obesity surgery"
+        - "metabolic surgery"
+        - "surgical weight loss"
+        - "post-bariatric"
+      services:
+        - "gastric bypass surgery"
+        - "sleeve gastrectomy"
+        - "revision surgery"
+        - "post-bariatric care"
+        - "body contouring after weight loss"
+    
+    device_fit_matrix:
+      venus_legacy:
+        score_multiplier: 1.50  # HIGHEST for Legacy
+        rationale: "Perfect entry device for post-bariatric skin tightening, budget-friendly"
+        ideal_if:
+          - "post-surgical aftercare program"
+          - "50+ surgeries/year"
+          - "no body contouring devices"
+        talking_points:
+          - "EVERY bariatric patient develops loose skin 12-18 months post-op"
+          - "Legacy = non-surgical solution for your surgical patients"
+          - "Under $90K entry + no consumables = high margins"
+          - "Average bariatric center: 100+ surgeries/year = 80-100 body contouring candidates"
+      
+      venus_nova:
+        score_multiplier: 1.45
+        rationale: "Mid-tier option for established bariatric programs"
+        ideal_if:
+          - "100+ surgeries annually"
+          - "dedicated aesthetics coordinator"
+      
+      venus_bliss_max:
+        score_multiplier: 1.40
+        rationale: "Premium option for high-volume centers"
+        ideal_if:
+          - "200+ surgeries annually"
+          - "plastic surgery partnership"
+    
+    patient_pipeline_value:
+      annual_surgeries: "50-300 typical range"
+      body_device_candidates: "80-90% of patients (12-24 months post-op)"
+      revenue_opportunity: "$60K-$200K annual from device services"
+    
+    competitive_gap_opportunity:
+      current_solutions: "Most bariatric centers refer out for body contouring"
+      venus_advantage: "Capture revenue in-house with Legacy/Nova"
+  
+  
+  # ==========================================================================
+  # NEW v4.1: POSTPARTUM WOMEN'S HEALTH CLINICS
+  # ==========================================================================
+  
+  postpartum_womens_health:
+    tier: "prime_buyer"
+    base_score_boost: 26
+    priority_level: 1
+    rationale: "Postpartum body concerns = strong aesthetic device demand, cash-pay fluent"
+    demographic_multiplier: 1.30  # Women 25-40 demographic
+    
+    detection_keywords:
+      primary:
+        - "postpartum"
+        - "post-pregnancy"
+        - "mommy makeover"
+        - "postpartum recovery"
+        - "postpartum care"
+      secondary:
+        - "women's wellness"
+        - "maternal health"
+        - "postpartum fitness"
+        - "diastasis recti"
+        - "postpartum body"
+        - "post-baby body"
+      services:
+        - "pelvic floor therapy"
+        - "postpartum nutrition"
+        - "body after baby"
+        - "mommy makeover services"
+        - "core restoration"
+        - "postpartum aesthetics"
+    
+    device_fit_matrix:
+      venus_legacy:
+        score_multiplier: 1.45  # STRONG fit
+        rationale: "Perfect for postpartum skin tightening + diastasis support, affordable entry"
+        ideal_if:
+          - "pelvic floor therapy program"
+          - "postpartum-specific services"
+          - "women's health focus"
+        talking_points:
+          - "80% of postpartum women struggle with loose skin, diastasis, body changes"
+          - "Legacy = non-invasive solution for your postpartum patients"
+          - "Complements pelvic floor therapy with body restoration"
+          - "Cash-pay service = $800-$1,200/package, 3-6 treatments typical"
+      
+      venus_bliss_max:
+        score_multiplier: 1.40
+        rationale: "Premium option for comprehensive mommy makeover programs"
+        ideal_if:
+          - "established postpartum program"
+          - "plastic surgery partnership"
+          - "affluent patient base"
+      
+      venus_viva:
+        score_multiplier: 1.30
+        rationale: "Vaginal rejuvenation component for postpartum care"
+        ideal_if:
+          - "pelvic health focus"
+          - "intimate wellness services"
+    
+    patient_demographics:
+      age_range: "25-42"
+      income_level: "Middle to upper-middle class"
+      cash_pay_willingness: "High - motivated by body restoration goals"
+    
+    service_packaging_opportunity:
+      package_examples:
+        - "Postpartum Body Restoration Package (6 Legacy treatments + nutrition)"
+        - "Mommy Makeover Non-Surgical (Bliss MAX + Viva combination)"
+  
+  
+  # ==========================================================================
+  # NEW v4.1: PELVIC FLOOR / SEXUAL WELLNESS / AESTHETIC GYNECOLOGY
+  # ==========================================================================
+  
+  pelvic_floor_sexual_wellness:
+    tier: "prime_buyer"
+    base_score_boost: 28
+    priority_level: 1
+    rationale: "High cash-pay services, aesthetic gynecology overlap, intimate wellness growth market"
+    
+    detection_keywords:
+      primary:
+        - "pelvic floor therapy"
+        - "sexual wellness"
+        - "intimate wellness"
+        - "aesthetic gynecology"
+        - "vaginal rejuvenation"
+      secondary:
+        - "pelvic health"
+        - "women's intimate health"
+        - "sexual health"
+        - "feminine wellness"
+        - "intimate aesthetics"
+        - "vaginal health"
+      services:
+        - "MonaLisa Touch"
+        - "ThermiVa"
+        - "O-Shot"
+        - "vaginal laxity treatment"
+        - "stress incontinence"
+        - "painful intercourse treatment"
+        - "vulvovaginal rejuvenation"
+    
+    device_fit_matrix:
+      venus_viva:
+        score_multiplier: 1.50  # HIGHEST for Viva in this segment
+        rationale: "Dual-use RF for vaginal + facial rejuvenation, competitive with MonaLisa/ThermiVa"
+        ideal_if:
+          - "existing RF vaginal device"
+          - "aesthetic gynecology focus"
+          - "sexual wellness services"
+        talking_points:
+          - "Viva RF = dual use: vaginal rejuvenation + facial resurfacing"
+          - "More versatile than MonaLisa Touch (vaginal only)"
+          - "Cash-pay: $1,500-$2,500/vaginal treatment series"
+          - "Expand from intimate wellness to facial aesthetics with ONE device"
+      
+      venus_legacy:
+        score_multiplier: 1.35
+        rationale: "Body device for postpartum patients already in your pipeline"
+        ideal_if:
+          - "postpartum patient base"
+          - "pelvic floor therapy program"
+      
+      venus_versa:
+        score_multiplier: 1.25
+        rationale: "Platform expansion for full aesthetic services"
+    
+    competitive_positioning:
+      vs_monalisa: "MonaLisa Touch = vaginal only. Viva = vaginal + facial."
+      vs_thermiva: "ThermiVa higher cost. Viva better ROI + versatility."
+    
+    market_growth:
+      segment_growth: "35% CAGR in intimate wellness devices"
+      patient_demographics: "Women 35-65, postpartum, menopausal"
+      cash_pay_rate: "95%+ (insurance rarely covers)"
+  
+  
+  # ==========================================================================
+  # NEW v4.1: ONCOLOGY SURVIVORSHIP CLINICS WITH AESTHETIC SERVICES
+  # ==========================================================================
+  
+  oncology_survivorship_aesthetics:
+    tier: "strong_buyer"
+    base_score_boost: 22
+    priority_level: 2
+    rationale: "Post-cancer body restoration, scar treatment, skin health = aesthetic device demand"
+    
+    detection_keywords:
+      primary:
+        - "oncology survivorship"
+        - "cancer survivorship"
+        - "post-cancer care"
+        - "survivorship clinic"
+      secondary:
+        - "cancer recovery"
+        - "post-treatment care"
+        - "oncology rehabilitation"
+        - "integrative oncology"
+      services:
+        - "scar treatment"
+        - "skin rejuvenation"
+        - "body restoration"
+        - "aesthetic services"
+        - "reconstructive aesthetics"
+        - "post-mastectomy care"
+        - "lymphedema therapy"
+    
+    device_fit_matrix:
+      venus_viva:
+        score_multiplier: 1.40
+        rationale: "RF resurfacing for post-surgical scars, radiation damage, skin texture restoration"
+        ideal_if:
+          - "scar treatment services"
+          - "post-mastectomy care"
+          - "skin health focus"
+        talking_points:
+          - "Viva safe for post-radiation skin (all Fitzpatrick types)"
+          - "Scar remodeling + texture improvement for cancer survivors"
+          - "Gentle RF = lower risk for compromised skin"
+          - "Supports whole-person recovery and body confidence restoration"
+      
+      venus_legacy:
+        score_multiplier: 1.35
+        rationale: "Body contouring for post-treatment body changes (weight loss/gain)"
+        ideal_if:
+          - "body restoration program"
+          - "lymphedema therapy"
+      
+      venus_versa:
+        score_multiplier: 1.30
+        rationale: "Platform for comprehensive aesthetic survivorship care"
+    
+    patient_considerations:
+      medical_clearance: "Requires oncologist approval post-treatment"
+      treatment_timing: "Typically 6-12 months post-active treatment"
+      service_positioning: "Wellness and restoration, not vanity"
+    
+    market_niche:
+      opportunity: "17M+ cancer survivors in US, growing 2% annually"
+      aesthetic_adoption: "Emerging niche, low competition"
+      reimbursement: "Mostly cash-pay, some insurance for scar treatment"
+  
+  
+  # ==========================================================================
+  # TIER 2: STRONG BUYERS - Aesthetic-Forward (Base Score Boost: +10-18)
+  # ==========================================================================
+  
+  dermatology:
+    tier: "strong_buyer"
+    base_score_boost: 15
+    priority_level: 2
+    rationale: "Medical credibility + aesthetic services = device buyers"
+    
+    detection_keywords:
+      primary:
+        - "dermatology"
+        - "dermatologist"
+        - "skin clinic"
+        - "derm clinic"
+      secondary:
+        - "cosmetic dermatology"
+        - "aesthetic dermatology"
+        - "medical dermatology"
+    
+    device_fit_matrix:
+      venus_viva:
+        score_multiplier: 1.40
+        rationale: "RF resurfacing is core dermatology offering"
+      
+      venus_versa:
+        score_multiplier: 1.35
+        rationale: "Multi-application platform fits dermatology scope"
+  
+  
+  plastic_surgery:
+    tier: "strong_buyer"
+    base_score_boost: 15
+    priority_level: 2
+    rationale: "High budgets, aesthetic expertise"
+    
+    detection_keywords:
+      primary:
+        - "plastic surgery"
+        - "plastic surgeon"
+        - "cosmetic surgery"
+    
+    device_fit_matrix:
+      venus_bliss_max:
+        score_multiplier: 1.40
+        rationale: "Non-surgical body contouring complements surgical procedures"
+      
+      venus_viva:
+        score_multiplier: 1.35
+        rationale: "Facial resurfacing for non-surgical revenue"
+  
+  
+  iv_therapy_lounge:
+    tier: "strong_buyer"
+    base_score_boost: 18
+    priority_level: 2
+    rationale: "Wellness-adjacent, cash-pay fluent"
+    
+    detection_keywords:
+      primary:
+        - "IV therapy"
+        - "IV lounge"
+        - "hydration bar"
+        - "IV wellness"
+    
+    device_fit_matrix:
+      venus_nova:
+        score_multiplier: 1.35
+        rationale: "Body optimization fits wellness IV model"
+  
+  
+  anti_aging_clinic:
+    tier: "strong_buyer"
+    base_score_boost: 18
+    priority_level: 2
+    rationale: "Age management = aesthetics overlap"
+    
+    detection_keywords:
+      primary:
+        - "anti-aging"
+        - "age management"
+        - "longevity clinic"
+    
+    device_fit_matrix:
+      venus_viva:
+        score_multiplier: 1.35
+      venus_nova:
+        score_multiplier: 1.30
+  
+  
+  # ==========================================================================
+  # TIER 3: EMERGING BUYERS (Base Score Boost: +5-12)
+  # ==========================================================================
+  
+  obgyn:
+    tier: "emerging_buyer"
+    base_score_boost: 5
+    priority_level: 3
+    rationale: "Volume ≠ opportunity unless adding cash-pay aesthetics"
+    
+    detection_keywords:
+      primary:
+        - "OB/GYN"
+        - "OBGYN"
+        - "obstetrics"
+        - "gynecology"
+        - "women's health"
+    
+    conditional_boosts:
+      if_has_aesthetic_services:
+        boost: 20
+        keywords:
+          - "vaginal rejuvenation"
+          - "MonaLisa Touch"
+          - "cosmetic services"
+          - "aesthetic gynecology"
+      
+      if_has_medspa_division:
+        boost: 25
+        keywords:
+          - "medical spa"
+          - "aesthetic division"
+      
+      if_traditional_only:
+        penalty: -10
+        rationale: "High volume but no aesthetic infrastructure"
+    
+    device_fit_matrix:
+      venus_viva:
+        score_multiplier: 1.30
+        ideal_if:
+          - "adding aesthetic services"
+          - "vaginal rejuvenation"
+  
+  
+  family_practice:
+    tier: "emerging_buyer"
+    base_score_boost: 8
+    priority_level: 3
+    rationale: "Testing aesthetics as revenue diversification"
+    
+    detection_keywords:
+      primary:
+        - "family practice"
+        - "family medicine"
+        - "primary care"
+    
+    conditional_boosts:
+      if_has_aesthetic_services:
+        boost: 15
+        keywords:
+          - "Botox"
+          - "fillers"
+          - "laser services"
+      
+      if_weight_loss_program:
+        boost: 20
+        keywords:
+          - "medical weight loss"
+          - "GLP-1"
+    
+    device_fit_matrix:
+      venus_nova:
+        score_multiplier: 1.40
+        ideal_if:
+          - "offers weight loss"
+      
+      venus_legacy:
+        score_multiplier: 1.30
+  
+  
+  urgent_care_with_aesthetics:
+    tier: "emerging_buyer"
+    base_score_boost: 10
+    priority_level: 3
+    
+    detection_keywords:
+      primary:
+        - "urgent care"
+        - "walk-in clinic"
+      aesthetic_markers:
+        - "aesthetic services"
+        - "cosmetic treatments"
+    
+    device_fit_matrix:
+      venus_versa:
+        score_multiplier: 1.30
+  
+  
+  chiropractic_with_wellness:
+    tier: "emerging_buyer"
+    base_score_boost: 12
+    priority_level: 3
+    
+    detection_keywords:
+      primary:
+        - "chiropractic"
+        - "chiropractor"
+      wellness_markers:
+        - "wellness center"
+        - "holistic health"
+    
+    device_fit_matrix:
+      venus_legacy:
+        score_multiplier: 1.30
+  
+  
+  # ==========================================================================
+  # TIER 4: NICHE BUYERS (Base Score Boost: +8-15)
+  # ==========================================================================
+  
+  sports_medicine:
+    tier: "niche_buyer"
+    base_score_boost: 12
+    priority_level: 4
+    
+    detection_keywords:
+      primary:
+        - "sports medicine"
+        - "sports clinic"
+        - "athletic performance"
+    
+    device_fit_matrix:
+      venus_nova:
+        score_multiplier: 1.35
+  
+  
+  pain_management_clinic:
+    tier: "niche_buyer"
+    base_score_boost: 8
+    priority_level: 4
+    
+    detection_keywords:
+      primary:
+        - "pain management"
+        - "pain clinic"
+      wellness_markers:
+        - "regenerative medicine"
+        - "wellness services"
+    
+    device_fit_matrix:
+      venus_legacy:
+        score_multiplier: 1.25
+  
+  
+  naturopathic_medicine:
+    tier: "niche_buyer"
+    base_score_boost: 15
+    priority_level: 4
+    
+    detection_keywords:
+      primary:
+        - "naturopathic"
+        - "naturopath"
+        - "natural medicine"
+    
+    device_fit_matrix:
+      venus_nova:
+        score_multiplier: 1.30
+      venus_legacy:
+        score_multiplier: 1.30
+  
+  
+  acupuncture_wellness:
+    tier: "niche_buyer"
+    base_score_boost: 10
+    priority_level: 4
+    
+    detection_keywords:
+      primary:
+        - "acupuncture"
+        - "acupuncturist"
+        - "TCM"
+    
+    device_fit_matrix:
+      venus_legacy:
+        score_multiplier: 1.25
+  
+  
+  mens_health_clinic:
+    tier: "niche_buyer"
+    base_score_boost: 16
+    priority_level: 4
+    rationale: "TRT + hair removal + body sculpting = device opportunity"
+    demographic_multiplier: 1.25  # Male demographic
+    
+    detection_keywords:
+      primary:
+        - "men's health"
+        - "men's clinic"
+        - "TRT clinic"
+        - "testosterone clinic"
+      secondary:
+        - "men's wellness"
+        - "male optimization"
+        - "men's performance"
+    
+    device_fit_matrix:
+      venus_versa:
+        score_multiplier: 1.40  # STRONG for hair removal
+        rationale: "Hair removal = major men's health revenue driver"
+        talking_points:
+          - "Hair removal (back, chest, shoulders) = top men's aesthetic service"
+          - "TRT patients = motivated to optimize appearance"
+      
+      venus_nova:
+        score_multiplier: 1.30
+        rationale: "Body sculpting for TRT patients building muscle"
+
+
+# ============================================================================
+# ENHANCED PRAM FRAMEWORK v4.1 - Increased to 60 Points (was 40)
+# ============================================================================
+# Philosophy: "Quantify cash-pay infrastructure + financial readiness + online presence"
+# Weight Distribution: ENHANCED to give PRAM more influence on final scores
+# Impact: Adds 0-60 points (was 0-40) to device scores
+
+pram_framework:
+  enabled: true
+  version: "4.1"
+  total_max_points: 60  # INCREASED from 40 in v4.0
+  philosophy: "Cash-pay fluency + financial readiness + demographic alignment + web presence"
+  implementation_note: "Calculate PRAM score independently, then ADD to winning device score"
+  
+  factors:
+    
+    # ========================================================================
+    # FACTOR 1: CASH-PAY FLUENCY (35% weight = 21 points max) - INCREASED
+    # ========================================================================
+    
+    cash_pay_fluency:
+      weight: 35  # 35% of total PRAM score
+      max_points: 21  # 35% of 60 points (was 16 in v4.0)
+      philosophy: "Cash-pay infrastructure predicts device adoption"
+      
+      signals:
+        
+        pricing_on_website:
+          points: 8  # INCREASED from 6
+          detection_keywords:
+            - "pricing"
+            - "cost"
+            - "investment"
+            - "$"
+            - "price list"
+            - "service fees"
+            - "treatment cost"
+            - "pricing page"
+          detection_logic: "Check service pages for explicit pricing"
+          rationale: "Pricing transparency = cash-pay fluency"
+        
+        membership_programs:
+          points: 5  # INCREASED from 4
+          detection_keywords:
+            - "membership"
+            - "VIP program"
+            - "monthly subscription"
+            - "membership benefits"
+            - "member pricing"
+            - "join our program"
+            - "exclusive access"
+          rationale: "Membership model = recurring revenue mindset"
+        
+        package_deals:
+          points: 4  # INCREASED from 3
+          detection_keywords:
+            - "package"
+            - "bundle"
+            - "series pricing"
+            - "treatment package"
+            - "buy 3 get 1"
+            - "package discount"
+          rationale: "Package pricing = revenue optimization"
+        
+        financing_mentioned:
+          points: 3  # INCREASED from 2
+          detection_keywords:
+            - "financing"
+            - "payment plans"
+            - "CareCredit"
+            - "Alphaeon"
+            - "Cherry financing"
+            - "monthly payments"
+            - "0% financing"
+            - "Affirm"
+          rationale: "Financing options = removes price barrier"
+        
+        online_booking:
+          points: 1
+          detection_keywords:
+            - "book online"
+            - "schedule appointment"
+            - "booking system"
+            - "book now"
+            - "online scheduling"
+          rationale: "Modern booking = tech-forward practice"
+    
+    
+    # ========================================================================
+    # FACTOR 2: FINANCIAL READINESS INDICATORS (NEW v4.1 - 15% = 9 points)
+    # ========================================================================
+    
+    financial_readiness:
+      weight: 15  # NEW factor in v4.1
+      max_points: 9  # 15% of 60 points
+      philosophy: "Active financial infrastructure = readiness to invest in devices"
+      
+      signals:
+        
+        financing_logos_visible:
+          points: 3
+          detection_keywords:
+            - "CareCredit logo"
+            - "Cherry logo"
+            - "Affirm logo"
+            - "Alphaeon logo"
+            - "financing partner"
+          rationale: "Visible financing = actively promoting payment options"
+        
+        ecommerce_or_online_store:
+          points: 3
+          detection_keywords:
+            - "shop"
+            - "online store"
+            - "buy products"
+            - "product store"
+            - "skincare store"
+          rationale: "E-commerce = sophisticated revenue streams"
+        
+        membership_tiers:
+          points: 2
+          detection_keywords:
+            - "gold membership"
+            - "platinum tier"
+            - "VIP level"
+            - "membership levels"
+          rationale: "Tiered memberships = advanced business model"
+        
+        pre_built_treatment_packages:
+          points: 1
+          detection_keywords:
+            - "signature package"
+            - "ultimate package"
+            - "premier package"
+            - "customized packages"
+          rationale: "Pre-built packages = revenue optimization"
+    
+    
+    # ========================================================================
+    # FACTOR 3: PATIENT-DEVICE ALIGNMENT (15% weight = 9 points max)
+    # ========================================================================
+    
+    patient_device_alignment:
+      weight: 15  # 15% of total PRAM score
+      max_points: 9  # 15% of 60 points (was 8 in v4.0)
+      philosophy: "Right patient demographics + service mix = device success"
+      
+      signals:
+        
+        age_demographics:
+          points: 5  # INCREASED from 4
+          ideal_age_range: "35-65"
+          detection_keywords:
+            - "anti-aging"
+            - "age management"
+            - "mature skin"
+            - "menopausal"
+            - "aging concerns"
+            - "youthful appearance"
+          rationale: "35-65 = prime aesthetic device demographic"
+        
+        service_mix_fit:
+          points: 4
+          detection_logic: "Existing services complement device category"
+          rationale: "Service synergy = cross-sell opportunity"
+    
+    
+    # ========================================================================
+    # FACTOR 4: PATIENT DEMOGRAPHIC SCORING (NEW v4.1 - 10% = 6 points)
+    # ========================================================================
+    
+    patient_demographics:
+      weight: 10  # NEW factor in v4.1
+      max_points: 6  # 10% of 60 points
+      philosophy: "Patient demographic alignment predicts device adoption"
+      
+      signals:
+        
+        womens_health_focus:
+          points: 2
+          detection_keywords:
+            - "women's health"
+            - "women-focused"
+            - "feminine wellness"
+            - "women-only"
+          demographic_multiplier: 1.20
+          rationale: "Women = primary aesthetic device consumers"
+        
+        mens_health_focus:
+          points: 2
+          detection_keywords:
+            - "men's health"
+            - "male wellness"
+            - "testosterone therapy"
+            - "TRT"
+          device_affinity: ["versa_hair_removal", "nova_body"]
+          rationale: "Men's clinics = hair removal + body device need"
+        
+        affluent_demographics:
+          points: 2
+          detection_keywords:
+            - "concierge"
+            - "luxury"
+            - "VIP"
+            - "executive"
+            - "premium"
+          demographic_multiplier: 1.35
+          rationale: "Affluent patients = higher device adoption + premium pricing"
+        
+        younger_clientele_signal:
+          points: -2  # PENALTY
+          detection_keywords:
+            - "teen"
+            - "pediatric"
+            - "adolescent"
+            - "youth focus"
+          rationale: "Younger demographics = lower large device adoption"
+    
+    
+    # ========================================================================
+    # FACTOR 5: STAFFING READINESS (12% weight = 7 points max)
+    # ========================================================================
+    
+    staffing_readiness:
+      weight: 12  # 12% of total PRAM score (was 20% in v4.0)
+      max_points: 7  # 12% of 60 points (was 8 in v4.0)
+      philosophy: "Right staff = device utilization"
+      
+      signals:
+        
+        nurse_injector:
+          points: 4
+          detection_keywords:
+            - "RN"
+            - "nurse injector"
+            - "injector"
+            - "Botox"
+            - "fillers"
+            - "registered nurse"
+            - "aesthetic nurse"
+          rationale: "Nurse injector = aesthetic expertise"
+        
+        aesthetic_coordinator:
+          points: 2
+          detection_keywords:
+            - "patient coordinator"
+            - "aesthetic consultant"
+            - "treatment coordinator"
+          rationale: "Coordinator = sales infrastructure"
+        
+        marketing_staff:
+          points: 1
+          detection_keywords:
+            - "social media manager"
+            - "marketing director"
+          rationale: "Dedicated marketing = device promotion"
+    
+    
+    # ========================================================================
+    # FACTOR 6: WEBSITE/SOCIAL PRESENCE (NEW/ENHANCED v4.1 - 8% = 5 points)
+    # ========================================================================
+    
+    website_social_presence:
+      weight: 8  # NEW consolidated factor in v4.1
+      max_points: 5  # 8% of 60 points
+      philosophy: "Strong online presence = marketing capability for devices"
+      
+      signals:
+        
+        active_book_now:
+          points: 1
+          detection_keywords:
+            - "book now"
+            - "schedule online"
+            - "online booking"
+            - "book appointment"
+          rationale: "Active booking CTA = conversion-focused"
+        
+        before_after_gallery:
+          points: 2  # HIGHEST in this category
+          detection_keywords:
+            - "gallery"
+            - "results"
+            - "before after"
+            - "before and after"
+            - "transformation"
+          rationale: "Gallery = aesthetic marketing fluency"
+        
+        strong_social_posting:
+          points: 1
+          detection_keywords:
+            - "active Instagram"
+            - "3+ posts per week"
+            - "social media engagement"
+          rationale: "Active social = organic device promotion"
+        
+        service_menu_depth:
+          points: 1
+          detection_logic: "10+ services listed on website"
+          rationale: "Service depth = sophisticated practice"
+    
+    
+    # ========================================================================
+    # FACTOR 7: MARKETING ACUMEN (5% weight = 3 points max)
+    # ========================================================================
+    
+    marketing_acumen:
+      weight: 5  # 5% of total PRAM score (was 10% in v4.0)
+      max_points: 3  # 5% of 60 points (was 4 in v4.0)
+      philosophy: "Marketing sophistication = device utilization"
+      
+      signals:
+        
+        video_content:
+          points: 2  # INCREASED importance
+          detection_keywords:
+            - "YouTube"
+            - "video"
+            - "testimonials"
+            - "watch video"
+          rationale: "Video = advanced marketing"
+        
+        staff_credentials_clarity:
+          points: 1  # NEW signal
+          detection_keywords:
+            - "MD"
+            - "NP"
+            - "PA"
+            - "board certified"
+            - "credentials"
+          rationale: "Credential clarity = professionalism"
+    
+    
+    # ========================================================================
+    # FACTOR 8: BUYING SIGNALS (5% weight = 3 points max)
+    # ========================================================================
+    
+    buying_signals:
+      weight: 5  # 5% of total PRAM score (was 10% in v4.0)
+      max_points: 3  # 5% of 60 points (was 4 in v4.0)
+      philosophy: "Active expansion = open to device purchases"
+      
+      signals:
+        
+        recent_expansion:
+          points: 2
+          detection_keywords:
+            - "new location"
+            - "expanded"
+            - "renovated"
+            - "grand opening"
+          timeframe: "Within last 12 months"
+          rationale: "Expansion = capital availability"
+        
+        hiring_or_new_services:
+          points: 1
+          detection_keywords:
+            - "now hiring"
+            - "new service"
+            - "introducing"
+          rationale: "Growth signals"
+
+
+# ============================================================================
+# ENHANCED COMPETITIVE DEVICE SATURATION DETECTION v4.1
+# ============================================================================
+# NEW: Reduces scores for practices with too many high-end devices
+
+competitive_device_saturation:
+  enabled: true
+  version: "4.1"
+  philosophy: "Multiple high-end devices = lower buying probability"
+  
+  red_flag_devices:
+    body_contouring:
+      - "CoolSculpting"
+      - "CoolSculpt"
+      - "Emsculpt"
+      - "Emsculpt NEO"
+      - "TruSculpt"
+      - "TruSculpt iD"
+      - "SculpSure"
+      - "Vanquish"
+      - "Exilis"
+      - "UltraShape"
+    
+    facial_resurfacing:
+      - "Morpheus8"
+      - "Fraxel"
+      - "Fraxel Dual"
+      - "Halo"
+      - "Clear + Brilliant"
+      - "CO2 laser"
+      - "Erbium laser"
+      - "Sciton"
+      - "Thermage"
+      - "Ultherapy"
+    
+    platform_devices:
+      - "Lumecca"
+      - "Lumenis M22"
+      - "Cynosure"
+      - "Alma Harmony"
+      - "Cutera Xeo"
+      - "Cutera Excel V"
+      - "Lutronic"
+    
+    skincare_devices:
+      - "Hydrafacial"
+      - "DiamondGlow"
+      - "Aquagold"
+      - "SkinPen"
+  
+  scoring_logic:
+    one_device:
+      penalty: 0
+      rationale: "One device = potential for addition"
+    
+    two_devices:
+      penalty: -5
+      rationale: "Two devices = some saturation"
+    
+    three_devices:
+      penalty: -15
+      rationale: "Three devices = significant saturation"
+    
+    four_plus_devices:
+      penalty: -30
+      rationale: "Four+ devices = MAJOR saturation, very low buying probability"
+    
+    recent_purchase:
+      penalty: -25
+      timeframe: "Within 6 months"
+      rationale: "Recent purchase = no budget for new devices"
+  
+  implementation_note: "Apply penalties AFTER base device scoring, BEFORE final score calculation"
+
+
+# ============================================================================
+# GEOGRAPHIC & MARKET MODIFIERS (Optional Advanced Scoring)
+# ============================================================================
+
+geographic_market_modifiers:
+  enabled: false
+  philosophy: "Market maturity and affluence affect device adoption"
+  
+  high_value_markets:
+    description: "Affluent markets with high aesthetic adoption"
+    bonus: 5
+    markets:
+      - "Beverly Hills, CA"
+      - "Manhattan, NY"
+      - "Scottsdale, AZ"
+      - "Miami, FL"
+  
+  emerging_markets:
+    description: "Growing aesthetic markets"
+    bonus: 3
+    characteristics:
+      - "Population > 100K"
+      - "Median income > $75K"
+  
+  saturated_markets:
+    description: "Oversaturated markets"
+    penalty: -3
+    characteristics:
+      - "10+ med spas in 5-mile radius"
+
+
+# ============================================================================
+# COMPETITIVE DEVICE INTELLIGENCE DATABASE (Enhanced v4.1)
+# ============================================================================
+
+competitive_device_database:
+  enabled: true
+  version: "4.1"
+  philosophy: "Know what they have to position what they need"
+  
+  body_contouring_competitors:
+    coolsculpt:
+      category: "Cryolipolysis"
+      weakness: "Uncomfortable freezing, long treatment"
+      venus_alternative: "Bliss MAX"
+      talking_points:
+        - "No freezing = more comfortable"
+        - "Faster treatment time"
+    
+    emsculpt:
+      category: "HIFEM muscle building"
+      weakness: "Expensive, limited areas"
+      venus_alternative: "Bliss MAX"
+      talking_points:
+        - "Better ROI with 8 applicators"
+    
+    truSculpt:
+      category: "RF body contouring"
+      weakness: "Lower efficacy"
+      venus_alternative: "Bliss MAX or Nova"
+    
+    vanquish:
+      category: "Contactless RF"
+      weakness: "Variable results"
+      venus_alternative: "Nova or Legacy"
+  
+  facial_competitors:
+    morpheus8:
+      category: "RF microneedling"
+      weakness: "Invasive, longer recovery"
+      venus_alternative: "Viva"
+    
+    fraxel:
+      category: "Fractional laser"
+      weakness: "Hyperpigmentation risk"
+      venus_alternative: "Viva"
+    
+    thermage:
+      category: "Monopolar RF"
+      weakness: "Painful, expensive"
+      venus_alternative: "Legacy or Viva"
+  
+  platform_competitors:
+    lumenis_m22:
+      category: "IPL platform"
+      weakness: "Expensive, complex"
+      venus_alternative: "Versa"
+    
+    cutera_xeo:
+      category: "Multi-application"
+      weakness: "Complex, expensive"
+      venus_alternative: "Versa"
+  
+  intimate_wellness_competitors:
+    monalisa_touch:
+      category: "Vaginal CO2 laser"
+      weakness: "Vaginal only, no facial"
+      venus_alternative: "Viva"
+      talking_points:
+        - "Viva = dual use: vaginal + facial"
+        - "More versatile revenue generation"
+    
+    thermiva:
+      category: "Vaginal RF"
+      weakness: "Higher cost, vaginal only"
+      venus_alternative: "Viva"
+
+
+# ============================================================================
+# SCORING IMPLEMENTATION LOGIC v4.1 - Enhanced Calculation
+# ============================================================================
+
+scoring_implementation:
+  version: "4.1"
+  
+  calculation_process:
+    step_1:
+      action: "Detect business type from keywords"
+      output: "business_type (e.g., 'bariatric_surgery_center')"
+      logic: "Match against detection_keywords (primary > secondary > services)"
+    
+    step_2:
+      action: "Apply base_score_boost to practice"
+      output: "practice_base_boost (e.g., +32 for bariatric)"
+      logic: "Add base_score_boost from matched business type"
+    
+    step_3:
+      action: "Calculate ENHANCED PRAM Framework score"
+      output: "pram_score (0-60 points)"  # INCREASED from 40
+      logic: "Evaluate all PRAM signals across 8 factors, sum points (max 60)"
+    
+    step_3a:
+      action: "NEW: Check for GLP-1 keywords and apply practice multiplier"
+      output: "glp1_practice_multiplier (1.30x-1.50x)"
+      logic: "If GLP-1 keywords detected, multiply PRAM and device scores"
+    
+    step_3b:
+      action: "NEW: Detect competitive device saturation"
+      output: "saturation_penalty (0 to -30 points)"
+      logic: "Count high-end competitor devices, apply penalty"
+    
+    step_4:
+      action: "Score each device independently"
+      output: "device_scores[] (0-100 for each device)"
+      logic: "Universal factors + device keywords + technology gap"
+    
+    step_5:
+      action: "Apply business type device_fit_matrix multiplier"
+      output: "adjusted_device_scores[]"
+      logic: "Multiply each device score by business type multiplier"
+    
+    step_6:
+      action: "Apply GLP-1 bonus if applicable"
+      output: "glp1_adjusted_scores[]"
+      logic: "Add GLP-1 bonus points to Nova/Bliss MAX IF GLP-1 keywords detected"
+    
+    step_7:
+      action: "Add ENHANCED PRAM score (up to 60 points)"
+      output: "pram_adjusted_scores[]"
+      logic: "device_score + pram_score"
+    
+    step_8:
+      action: "NEW: Apply competitive saturation penalty"
+      output: "final_device_scores[]"
+      logic: "Subtract saturation_penalty, then cap at 100"
+    
+    step_9:
+      action: "Calculate Manufacturer Opportunity Score"
+      output: "manufacturer_score = MAX(final_device_scores[])"
+      logic: "Highest scoring device wins"
+    
+    step_10:
+      action: "Determine winning device and generate breakdown"
+      output: "winning_device_breakdown"
+      logic: "Show ONLY winning device's scoring details + talking points"
+  
+  
+  example_calculations:
+    
+    scenario_1:
+      practice: "Bariatric Surgery Center with 100+ surgeries/year"
+      location: "Suburban area"
+      
+      step_1_business_type:
+        detected: "bariatric_surgery_center"
+        base_boost: 32  # HIGHEST for bariatric
+      
+      step_2_pram_score:
+        cash_pay_fluency: 18  # Pricing (8) + membership (5) + packages (4) + online booking (1)
+        financial_readiness: 7  # Financing logos (3) + packages (2) + tiers (2)
+        patient_alignment: 8  # Perfect age demo (5) + service fit (3)
+        patient_demographics: 4  # Women's health focus (2) + affluent (2)
+        staffing: 6  # Nurse (4) + coordinator (2)
+        website_social: 4  # Gallery (2) + booking (1) + menu (1)
+        marketing: 2  # Video (2)
+        buying_signals: 2  # Expansion (2)
+        total_pram: 51  # HIGH
+      
+      step_3_device_scoring:
+        venus_legacy_base: 48  # Keywords + universal factors
+        venus_nova_base: 42
+        venus_bliss_base: 38
+      
+      step_4_business_type_multiplier:
+        legacy: "48 × 1.50 = 72"  # HIGHEST multiplier for bariatric + Legacy
+        nova: "42 × 1.45 = 61"
+        bliss: "38 × 1.40 = 53"
+      
+      step_5_add_pram:
+        legacy: "72 + 51 = 123 → capped at 100"
+        nova: "61 + 51 = 112 → capped at 100"
+        bliss: "53 + 51 = 104 → capped at 100"
+      
+      step_6_competitive_saturation:
+        devices_detected: "CoolSculpt (1)"
+        penalty: -5  # One device
+        legacy_final: "100 - 5 = 95"
+        nova_final: "100 - 5 = 95"
+        bliss_final: "100 - 5 = 95"
+      
+      step_7_manufacturer_score: 95
+      winning_device: "venus_legacy"  # First in config
+      
+      result_summary:
+        manufacturer_opportunity_score: 95
+        winning_device: "Venus Legacy"
+        business_type: "Bariatric Surgery Center"
+        tier: "Prime Buyer"
+        rationale: "100% of bariatric patients develop loose skin = GUARANTEED demand for Legacy"
+    
+    
+    scenario_2:
+      practice: "Postpartum Women's Health Clinic"
+      location: "Affluent suburban area"
+      
+      step_1_business_type:
+        detected: "postpartum_womens_health"
+        base_boost: 26
+      
+      step_2_pram_score:
+        cash_pay_fluency: 20  # Pricing (8) + membership (5) + packages (4) + financing (3)
+        financial_readiness: 8  # Financing logos (3) + e-commerce (3) + tiers (2)
+        patient_alignment: 9  # Age demo (5) + service fit (4)
+        patient_demographics: 6  # Women's focus (2) + affluent (2) + NO penalty (younger focus offset by postpartum = adult)
+        staffing: 7  # Full staffing
+        website_social: 5  # All signals present
+        marketing: 3  # Video + credentials
+        buying_signals: 3  # Expansion + hiring
+        total_pram: 61  # VERY HIGH (near max)
+      
+      step_3_device_scoring:
+        venus_legacy_base: 52
+        venus_bliss_base: 45
+      
+      step_4_business_type_multiplier:
+        legacy: "52 × 1.45 = 75.4"
+        bliss: "45 × 1.40 = 63"
+      
+      step_5_demographic_multiplier:
+        legacy: "75.4 × 1.30 = 98"  # Postpartum demographic multiplier
+        bliss: "63 × 1.30 = 82"
+      
+      step_6_add_pram:
+        legacy: "98 + 61 = 159 → capped at 100"
+        bliss: "82 + 61 = 143 → capped at 100"
+      
+      step_7_competitive_saturation:
+        devices_detected: "None"
+        penalty: 0
+      
+      step_8_manufacturer_score: 100
+      winning_device: "venus_legacy"
+      
+      result_summary:
+        manufacturer_opportunity_score: 100
+        winning_device: "Venus Legacy"
+        business_type: "Postpartum Women's Health"
+        tier: "Prime Buyer"
+        rationale: "Postpartum + affluent demographics + cash-pay + strong PRAM = PERFECT FIT"
+    
+    
+    scenario_3:
+      practice: "Traditional OB/GYN with 4+ aesthetic devices already"
+      location: "Urban area"
+      
+      step_1_business_type:
+        detected: "obgyn"
+        base_boost: 5
+        conditional_penalty: -10
+        final_boost: -5
+      
+      step_2_pram_score:
+        cash_pay_fluency: 3  # Minimal (online booking only)
+        financial_readiness: 0
+        patient_alignment: 4
+        patient_demographics: 0  # No specific signals
+        staffing: 2
+        website_social: 1
+        marketing: 0
+        buying_signals: 0
+        total_pram: 10  # LOW
+      
+      step_3_device_scoring:
+        venus_viva_base: 35
+      
+      step_4_business_type_multiplier:
+        viva: "35 × 1.30 = 45.5"
+      
+      step_5_add_pram:
+        viva: "45.5 + 10 = 55.5"
+      
+      step_6_competitive_saturation:
+        devices_detected: "Morpheus8, Fraxel, CoolSculpt, Hydrafacial (4+)"
+        penalty: -30  # MAJOR saturation
+        viva_final: "55.5 - 30 = 25.5"
+      
+      step_7_manufacturer_score: 26  # VERY LOW
+      winning_device: "venus_viva"
+      
+      result_summary:
+        manufacturer_opportunity_score: 26
+        winning_device: "Venus Viva"
+        business_type: "OB/GYN (Traditional, Oversaturated)"
+        tier: "Tier 5: Low Priority"
+        rationale: "High device saturation + no aesthetic infrastructure + low PRAM = POOR FIT"
+
+
+# ============================================================================
+# IMPLEMENTATION NOTES FOR BACKEND v4.1
 # ============================================================================
 
 system_notes:
@@ -487,24 +2198,66 @@ system_notes:
     - "No penalty for specialization (body-only or face-only OK)"
     - "Each device scores independently 0-100"
     - "Highest score = Manufacturer Opportunity Score"
+    - "Business type detection FIRST, then apply boosts and multipliers"
+    - "ENHANCED PRAM Framework (60 points) adds significant scoring weight"
+    - "GLP-1 detection expanded with 20+ keywords for comprehensive coverage"
+    - "Financial readiness indicators (pricing pages, financing, memberships) boost scores"
+    - "Competitive device saturation detection prevents wasted effort on oversaturated practices"
+    - "Patient demographics (women's health, men's health, affluent) influence scoring"
+    - "Website/social presence indicators quantify marketing readiness"
   
   fairness:
     - "Viva (facial) can score 100"
     - "Bliss MAX (body) can score 100"
+    - "Nova (GLP-1 body) can score 100"
+    - "Legacy (entry body) can score 100"
     - "No body vs. face bias"
+    - "No practice size bias (quality > quantity)"
   
   actionable_intelligence:
     - "Show ONLY winning device breakdown"
-    - "Include specific talking points for that device"
+    - "Include business type in summary"
+    - "Include specific talking points for device × business type"
     - "Provide ROI data and competitive positioning"
+    - "Flag tier (Prime Buyer, Strong Buyer, Emerging)"
+    - "Show competitive device saturation warnings"
   
   scalability:
-    - "Easy to add new devices (e.g., new Cutera devices)"
+    - "Easy to add new business types"
+    - "Easy to add new devices"
     - "Each device self-contained scoring logic"
+    - "Business type detection is keyword-based (scalable)"
     - "Manufacturer-level disqualifiers apply to all"
   
   accuracy:
     - "Real scores preferred over inflated numbers"
-    - "GLP-1 providers get Nova/Bliss bonus"
-    - "Good website/social = investment signal"
+    - "GLP-1 providers get massive Nova/Bliss bonus"
+    - "Bariatric centers get HIGHEST Legacy multiplier (1.50)"
+    - "Postpartum clinics get strong Legacy fit (1.45)"
+    - "Pelvic floor/sexual wellness clinics get strong Viva fit (1.50)"
+    - "HRT clinics get HIGHEST Nova multiplier (1.50)"
+    - "Wellness centers get strong boosts (1.40 for Nova)"
+    - "Traditional OB/GYN without aesthetics = low score"
+    - "PRAM (60 points) significantly influences final scores"
+    - "Competitive saturation (-30 max) prevents oversaturated practice targeting"
     - "4-5+ machines with no gaps = RED FLAG"
+  
+  backend_implementation_checklist:
+    - "[ ] Parse business_type_intelligence section (20+ types)"
+    - "[ ] Match practice against detection_keywords (fuzzy match)"
+    - "[ ] Apply base_score_boost from matched business type"
+    - "[ ] Calculate ENHANCED PRAM score (0-60 points across 8 factors)"
+    - "[ ] Detect GLP-1 keywords and apply practice multiplier (1.30x-1.50x)"
+    - "[ ] Detect competitive device saturation and apply penalty (0 to -30)"
+    - "[ ] Score each device with universal factors + keywords"
+    - "[ ] Apply device_fit_matrix multiplier for business type"
+    - "[ ] Add GLP-1 bonus if applicable"
+    - "[ ] Add ENHANCED PRAM score (up to 60 points)"
+    - "[ ] Apply competitive saturation penalty"
+    - "[ ] Cap all device scores at 100"
+    - "[ ] Select MAX score as manufacturer_opportunity_score"
+    - "[ ] Return winning device details + business type + tier + saturation warning"
+
+# ============================================================================
+# END OF VENUS SCORING v4.1
+# ============================================================================
