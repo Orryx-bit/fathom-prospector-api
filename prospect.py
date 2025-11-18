@@ -498,7 +498,11 @@ class FathomProspector:
             if manufacturer_slug not in ['venus', 'sciton', 'cutera']:
                 manufacturer_slug = 'venus'  # default fallback
             
-            mfr_config_path = config_dir / f'{manufacturer_slug}_scoring.yaml'
+            root_yaml_path = Path(__file__).parent.parent / 'venus_scoring.yaml'
+            if root_yaml_path.exists():
+                mfr_config_path = root_yaml_path
+            else:
+                mfr_config_path = config_dir / f'{manufacturer_slug}_scoring.yaml'
             if mfr_config_path.exists():
                 with open(mfr_config_path, 'r') as f:
                     self.manufacturer_scoring_config = yaml.safe_load(f)
@@ -3100,76 +3104,234 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
             logger.warning(f"Failed to get scoring weight for {factor_name}: {e}")
             return default
 
+    def _detect_business_type(self, practice_text: str) -> Dict:
+        """
+        Detect business type from YAML business_type_intelligence section.
+    
+        Returns:
+            {
+                'type': 'wellness_center',
+                'tier': 'prime_buyer',
+                'base_boost': 25,
+                'glp1_multiplier': 1.40,
+                'device_fit_matrix': {...}
+            }
+        """
+    
+        if not self.manufacturer_scoring_config:
+            return {'type': 'general', 'tier': 'standard', 'base_boost': 0, 'glp1_multiplier': 1.0, 'device_fit_matrix': {}}
+    
+        bt_config = self.manufacturer_scoring_config.get('business_type_intelligence', {})
+        practice_text_lower = practice_text.lower()
+    
+        for bt_key, bt_data in bt_config.items():
+            if not isinstance(bt_data, dict):
+                continue
+    
+            detection_kw = bt_data.get('detection_keywords', {})
+    
+            primary_kw = detection_kw.get('primary', [])
+            for kw in primary_kw:
+                if kw.lower() in practice_text_lower:
+                    return {
+                        'type': bt_key,
+                        'tier': bt_data.get('tier', 'standard'),
+                        'base_boost': bt_data.get('base_score_boost', 0),
+                        'glp1_multiplier': bt_data.get('glp1_practice_multiplier', 1.0),
+                        'device_fit_matrix': bt_data.get('device_fit_matrix', {})
+                    }
+    
+            secondary_kw = detection_kw.get('secondary', [])
+            matched_secondary = sum(1 for kw in secondary_kw if kw.lower() in practice_text_lower)
+            if matched_secondary >= 2:
+                return {
+                    'type': bt_key,
+                    'tier': bt_data.get('tier', 'standard'),
+                    'base_boost': bt_data.get('base_score_boost', 0),
+                    'glp1_multiplier': bt_data.get('glp1_practice_multiplier', 1.0),
+                    'device_fit_matrix': bt_data.get('device_fit_matrix', {})
+                }
+    
+        return {'type': 'general', 'tier': 'standard', 'base_boost': 0, 'glp1_multiplier': 1.0, 'device_fit_matrix': {}}
+    
+    def _detect_glp1_opportunity(self, practice_text: str) -> Dict:
+        """
+        Detect GLP-1/weight-loss opportunity from YAML config.
+    
+        Returns:
+            {
+                'has_glp1': True/False,
+                'bonus_points': 15,
+                'keywords_matched': ['semaglutide', 'Wegovy']
+            }
+        """
+    
+        if not self.manufacturer_scoring_config:
+            return {'has_glp1': False, 'bonus_points': 0, 'keywords_matched': []}
+    
+        glp1_config = self.manufacturer_scoring_config.get('glp1_opportunity_detection', {})
+        detection_kw = glp1_config.get('detection_keywords', {})
+    
+        primary_kw = detection_kw.get('primary', [])
+        secondary_kw = detection_kw.get('secondary', [])
+    
+        practice_text_lower = practice_text.lower()
+    
+        matched_primary = [kw for kw in primary_kw if kw.lower() in practice_text_lower]
+        matched_secondary = [kw for kw in secondary_kw if kw.lower() in practice_text_lower]
+    
+        has_glp1 = len(matched_primary) > 0 or len(matched_secondary) >= 2
+    
+        if has_glp1:
+            score_mods = glp1_config.get('score_modifiers', {})
+            nova_bonus = score_mods.get('nova_bonus', 15)
+            return {
+                'has_glp1': True,
+                'bonus_points': nova_bonus,
+                'keywords_matched': matched_primary + matched_secondary[:3]
+            }
+    
+        return {'has_glp1': False, 'bonus_points': 0, 'keywords_matched': []}
+    
+    def _calculate_pram_score(self, practice_text: str, practice_data: Dict) -> Tuple[int, Dict]:
+        """
+        Calculate PRAM Framework score (cash-pay fluency + financial readiness + demographics).
+        Returns: (total_pram_score, breakdown_dict)
+        """
+    
+        if not self.manufacturer_scoring_config:
+            return 0, {}
+    
+        pram_config = self.manufacturer_scoring_config.get('pram_framework', {})
+        if not pram_config.get('enabled', False):
+            return 0, {}
+    
+        pram_score = 0
+        breakdown = {}
+        practice_text_lower = practice_text.lower()
+    
+        factors = pram_config.get('factors', {})
+    
+        for factor_key, factor_data in factors.items():
+            if not isinstance(factor_data, dict):
+                continue
+    
+            signals = factor_data.get('signals', {})
+    
+            for signal_key, signal_data in signals.items():
+                if not isinstance(signal_data, dict):
+                    continue
+    
+                points = signal_data.get('points', 0)
+                keywords = signal_data.get('detection_keywords', [])
+    
+                if any(kw.lower() in practice_text_lower for kw in keywords):
+                    pram_score += points
+                    breakdown[f'pram_{signal_key}'] = points
+    
+        max_pram = pram_config.get('total_max_points', 60)
+        pram_score = min(pram_score, max_pram)
+    
+        return pram_score, breakdown
+    
+    def _score_single_device_for_business_type(self, device_key: str, device_config: Dict, practice_text: str, business_type: Dict) -> int:
+        """Score a single device based on YAML rules (0–100)."""
+    
+        score = 0
+        practice_text_lower = practice_text.lower()
+    
+        service_keywords = device_config.get('service_keywords_weighted', [])
+        for kw_item in service_keywords:
+            if not isinstance(kw_item, dict):
+                continue
+            term = kw_item.get('term', '').lower()
+            points = kw_item.get('points', 0)
+            if term in practice_text_lower:
+                score += points
+    
+        opportunity_signals = device_config.get('opportunity_signals', [])
+        for signal in opportunity_signals:
+            signal_normalized = signal.replace('_', ' ').replace('-', ' ').lower()
+            if signal_normalized in practice_text_lower:
+                score += 10
+    
+        disqualifiers = device_config.get('disqualifiers', [])
+        for dq in disqualifiers:
+            if not isinstance(dq, dict):
+                continue
+            condition = dq.get('condition', '').lower().replace('_', ' ')
+            penalty = dq.get('penalty', 0)
+            if condition in practice_text_lower:
+                score += penalty
+    
+        device_fit_matrix = business_type.get('device_fit_matrix', {})
+        if device_key in device_fit_matrix:
+            multiplier = device_fit_matrix[device_key].get('score_multiplier', 1.0)
+            score = int(score * multiplier)
+    
+        return max(0, min(100, score))
+
     def _score_venus_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
-        """Venus Concepts opportunity scoring - YAML-driven"""
-        scores = {}
-        
-        # Extract text safely
+        """Venus Concepts opportunity scoring - YAML-driven v4.1"""
+    
+        if not self.manufacturer_scoring_config:
+            logger.warning("⚠️  Venus scoring config not loaded - returning 0")
+            return 0, {}
+    
         all_text = self._extract_safe_text(practice_data)
-        
-        # Get max points from YAML config (with fallback to original hardcoded values)
-        max_portfolio = self._get_scoring_weight('portfolio_alignment', 25)
-        max_body = self._get_scoring_weight('body_focus', 20)
-        max_face_rf = self._get_scoring_weight('face_rf_opportunity', 15)
-        max_multi = self._get_scoring_weight('multi_modality_appeal', 15)
-        max_hair = self._get_scoring_weight('hair_removal_gap', 10)
-        max_weight = self._get_scoring_weight('weight_loss_integration', 10)
-        max_competitor = self._get_scoring_weight('venus_competitor_gap', 5)
-        
-        # Portfolio Alignment
-        venus_services = ['body contouring', 'fat reduction', 'skin tightening', 'cellulite', 
-                         'muscle toning', 'ipl', 'hair removal', 'resurfacing']
-        matches = sum(1 for svc in venus_services if svc in all_text)
-        scores['portfolio_alignment'] = min(matches * 3, max_portfolio)
-        
-        # Body Focus
-        body_keywords = ['body contouring', 'fat reduction', 'cellulite', 'muscle toning', 'body sculpting']
-        body_mentions = sum(1 for kw in body_keywords if kw in all_text)
-        scores['body_focus'] = min(body_mentions * 5, max_body)
-        
-        # Face RF Opportunity
-        has_facial_services = any(kw in all_text for kw in ['facial', 'skin rejuvenation', 'acne scar'])
-        has_rf = 'radiofrequency' in all_text or 'rf' in all_text
-        if has_facial_services and not has_rf:
-            scores['face_rf_opportunity'] = max_face_rf
-        elif has_facial_services:
-            scores['face_rf_opportunity'] = int(max_face_rf * 0.47)  # ~7 pts for 15
-        else:
-            scores['face_rf_opportunity'] = 0
-        
-        # Multi-Modality Appeal
-        if 'platform' in all_text or 'multi' in all_text:
-            scores['multi_modality_appeal'] = max_multi
-        elif practice_data.get('services') and len(practice_data.get('services', [])) >= 5:
-            scores['multi_modality_appeal'] = int(max_multi * 0.67)  # ~10 pts for 15
-        else:
-            scores['multi_modality_appeal'] = 0
-        
-        # Hair Removal Gap
-        if 'hair removal' not in all_text:
-            scores['hair_removal_gap'] = max_hair
-        elif 'laser hair removal' in all_text:
-            scores['hair_removal_gap'] = int(max_hair * 0.5)  # Upgrade opportunity
-        else:
-            scores['hair_removal_gap'] = 0
-        
-        # Weight Loss Integration
-        weight_loss_keywords = ['weight loss', 'glp-1', 'bariatric', 'medical weight']
-        if any(kw in all_text for kw in weight_loss_keywords):
-            scores['weight_loss_integration'] = max_weight
-        else:
-            scores['weight_loss_integration'] = 0
-        
-        # Venus Competitor Gap
-        competitors = ['coolsculpt', 'emsculpt', 'thermage']
-        if not any(comp in all_text for comp in competitors):
-            scores['venus_competitor_gap'] = max_competitor
-        else:
-            scores['venus_competitor_gap'] = 0
-        
-        total = sum(scores.values())
-        logger.info(f"🔵 Venus opportunity score: {total}/100 (YAML-driven)")
-        return total, scores
+    
+        business_type = self._detect_business_type(all_text)
+        logger.info(f"   🏢 Business Type: {business_type['type']} (Tier: {business_type['tier']}, Boost: +{business_type['base_boost']} pts)")
+    
+        glp1_data = self._detect_glp1_opportunity(all_text)
+        if glp1_data['has_glp1']:
+            logger.info(f"   💊 GLP-1 Detected: {', '.join(glp1_data['keywords_matched'][:3])}")
+    
+        devices_config = self.manufacturer_scoring_config.get('devices', {})
+        device_scores = {}
+    
+        for device_key, device_config in devices_config.items():
+            if not isinstance(device_config, dict):
+                continue
+    
+            device_score = self._score_single_device_for_business_type(device_key, device_config, all_text, business_type)
+    
+            if device_key == 'venus_nova' and glp1_data['has_glp1']:
+                device_score = min(100, device_score + glp1_data['bonus_points'])
+            
+            device_scores[device_key] = device_score
+    
+        pram_score, pram_breakdown = self._calculate_pram_score(all_text, practice_data)
+        logger.info(f"   💰 PRAM Score: {pram_score}/60")
+    
+        if not device_scores:
+            logger.warning("   ⚠️  No devices scored - returning 0")
+            return 0, {}
+    
+        best_device = max(device_scores, key=device_scores.get)
+        best_device_score = device_scores[best_device]
+    
+        final_score = best_device_score + pram_score + business_type['base_boost']
+        final_score = min(100, final_score)
+    
+        breakdown = {
+            'best_device': best_device,
+            'device_score': best_device_score,
+            'pram_score': pram_score,
+            'business_type': business_type['type'],
+            'business_boost': business_type['base_boost'],
+            'glp1_detected': glp1_data['has_glp1'],
+            'glp1_keywords': glp1_data['keywords_matched'] if glp1_data['has_glp1'] else []
+        }
+    
+        breakdown.update(pram_breakdown)
+    
+        for k, v in device_scores.items():
+            breakdown[f'device_{k}_score'] = v
+    
+        logger.info(f"🔵 Venus YAML Scoring v4.1: {final_score}/100 (Best: {best_device}, Type: {business_type['type']})")
+    
+        return final_score, breakdown
     
     def _score_sciton_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
         """Sciton opportunity scoring"""
