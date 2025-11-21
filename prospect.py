@@ -507,38 +507,63 @@ class FathomProspector:
                 with open(mfr_config_path, 'r') as f:
                     self.manufacturer_scoring_config = yaml.safe_load(f)
                 logger.info(f"✓ Loaded {manufacturer_slug} manufacturer scoring config")
+                
+                # Check if this is a Sales Brain YAML (v5.0+)
+                yaml_version = self.manufacturer_scoring_config.get('version', '').lower()
+                if 'sales_brain' in yaml_version or yaml_version.startswith('5'):
+                    logger.info("🧠 Sales Brain YAML detected - activating strategic pillar logic")
+                    self.is_sales_brain_mode = True
+                    self.strategic_pillars = self.manufacturer_scoring_config.get('strategic_pillars', {})
+                else:
+                    self.is_sales_brain_mode = False
+                    self.strategic_pillars = {}
             else:
                 logger.warning(f"Manufacturer scoring config not found at {mfr_config_path}")
                 self.manufacturer_scoring_config = {}
+                self.is_sales_brain_mode = False
+                self.strategic_pillars = {}
             
             # Load device-specific scoring configs (NEW - Per-Device Scoring)
             self.device_scoring_configs = {}
-            devices_dir = config_dir / 'devices'
-            if devices_dir.exists():
-                for device_yaml in devices_dir.glob('*.yaml'):
-                    try:
-                        with open(device_yaml, 'r') as f:
-                            device_config = yaml.safe_load(f)
-                            device_name = device_config.get('device_name', device_yaml.stem)
-                            device_manufacturer = device_config.get('manufacturer', '').lower()
-                            
-                            # Only load devices for current manufacturer
-                            if manufacturer_slug in device_manufacturer or self.manufacturer.lower() in device_manufacturer:
-                                self.device_scoring_configs[device_name] = device_config
-                                logger.info(f"✓ Loaded device scoring config: {device_name}")
-                    except Exception as e:
-                        logger.warning(f"Failed to load device config {device_yaml}: {e}")
-                
-                logger.info(f"✓ Loaded {len(self.device_scoring_configs)} device scoring configs for {self.manufacturer}")
+            
+            # First check if devices are embedded in manufacturer_scoring_config (Sales Brain style)
+            if 'devices' in self.manufacturer_scoring_config:
+                logger.info("📦 Loading devices from manufacturer YAML")
+                devices_section = self.manufacturer_scoring_config.get('devices', {})
+                for device_key, device_config in devices_section.items():
+                    device_name = device_config.get('name', device_key)
+                    self.device_scoring_configs[device_key] = device_config
+                    logger.info(f"✓ Loaded device: {device_name}")
+                logger.info(f"✓ Loaded {len(self.device_scoring_configs)} devices from manufacturer YAML")
             else:
-                logger.warning(f"Devices directory not found at {devices_dir}")
-                self.device_scoring_configs = {}
+                # Fallback: Load from individual device files (legacy)
+                devices_dir = config_dir / 'devices'
+                if devices_dir.exists():
+                    for device_yaml in devices_dir.glob('*.yaml'):
+                        try:
+                            with open(device_yaml, 'r') as f:
+                                device_config = yaml.safe_load(f)
+                                device_name = device_config.get('device_name', device_yaml.stem)
+                                device_manufacturer = device_config.get('manufacturer', '').lower()
+                                
+                                # Only load devices for current manufacturer
+                                if manufacturer_slug in device_manufacturer or self.manufacturer.lower() in device_manufacturer:
+                                    self.device_scoring_configs[device_name] = device_config
+                                    logger.info(f"✓ Loaded device scoring config: {device_name}")
+                        except Exception as e:
+                            logger.warning(f"Failed to load device config {device_yaml}: {e}")
+                    
+                    logger.info(f"✓ Loaded {len(self.device_scoring_configs)} device scoring configs for {self.manufacturer}")
+                else:
+                    logger.warning(f"Devices directory not found at {devices_dir}")
                 
         except Exception as e:
             logger.warning(f"Failed to load YAML scoring configs: {e} - using fallback logic")
             self.universal_scoring_config = {}
             self.manufacturer_scoring_config = {}
             self.device_scoring_configs = {}
+            self.is_sales_brain_mode = False
+            self.strategic_pillars = {}
     
     
     def call_ai(self, prompt: str, system_message: str = None, max_tokens: int = 500, temperature: float = 0.7) -> str:
@@ -2919,12 +2944,18 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
                             practice_type: str, all_text: str) -> Tuple[int, Dict]:
         """
         Score a single device using its custom YAML scoring factors.
+        Supports BOTH legacy scoring_factors AND new Sales Brain scoring_rules.
         
         Returns: (total_score, breakdown_dict)
         """
         scores = {}
         total_score = 0
         
+        # Check if this is Sales Brain mode with scoring_rules
+        if self.is_sales_brain_mode and 'scoring_rules' in device_config:
+            return self._score_sales_brain_device(device_config, practice_data, practice_type, all_text)
+        
+        # Legacy mode: use scoring_factors
         scoring_factors = device_config.get('scoring_factors', {})
         disqualifiers = device_config.get('disqualifiers', [])
         
@@ -2971,6 +3002,208 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
         total_score = max(0, min(100, total_score))
         
         return total_score, scores
+    
+    def _score_sales_brain_device(self, device_config: Dict, practice_data: Dict, 
+                                   practice_type: str, all_text: str) -> Tuple[int, Dict]:
+        """
+        NEW: Sales Brain scoring logic using strategic pillars.
+        Processes scoring_rules that reference strategic_pillars.
+        
+        Returns: (total_score, breakdown_dict)
+        """
+        scores = {}
+        total_score = 0
+        
+        scoring_rules = device_config.get('scoring_rules', {})
+        
+        # Process each scoring rule
+        for rule_name, rule_config in scoring_rules.items():
+            # Handle list-type configs (like service_keywords)
+            if isinstance(rule_config, list):
+                # Process as service keywords
+                if rule_name == 'service_keywords':
+                    keyword_score = 0
+                    for keyword_item in rule_config:
+                        if isinstance(keyword_item, dict):
+                            term = keyword_item.get('term', '').lower()
+                            points = keyword_item.get('points', 0)
+                            if term in all_text:
+                                keyword_score += points
+                    scores['service_keywords'] = keyword_score
+                    total_score += keyword_score
+                    if keyword_score > 0:
+                        logger.info(f"    📝 service_keywords: +{keyword_score} pts")
+                continue
+            
+            # Skip if disabled
+            if not rule_config.get('enabled', True):
+                continue
+            
+            # Get the pillar this rule applies to
+            pillar_name = rule_config.get('applies_pillar', '')
+            
+            if pillar_name and pillar_name in self.strategic_pillars:
+                # Apply strategic pillar logic
+                pillar_score = self._apply_strategic_pillar(
+                    pillar_name, rule_name, rule_config, 
+                    practice_data, practice_type, all_text
+                )
+                scores[f"{pillar_name}_{rule_name}"] = pillar_score
+                total_score += pillar_score
+                
+                if pillar_score > 0:
+                    logger.info(f"    🧠 {pillar_name}.{rule_name}: +{pillar_score} pts")
+            
+            elif rule_name == 'saturation_penalty':
+                # Hoarder penalty logic
+                penalty = self._apply_saturation_penalty(practice_data, all_text, rule_config)
+                if penalty < 0:
+                    scores['saturation_penalty'] = penalty
+                    total_score += penalty
+                    logger.info(f"    ⚠️  saturation_penalty: {penalty} pts")
+        
+        # Ensure score stays within 0-100
+        total_score = max(0, min(100, total_score))
+        
+        return total_score, scores
+    
+    def _apply_strategic_pillar(self, pillar_name: str, rule_name: str, rule_config: Dict,
+                                practice_data: Dict, practice_type: str, all_text: str) -> int:
+        """Apply a strategic pillar's scoring logic"""
+        
+        pillar = self.strategic_pillars.get(pillar_name, {})
+        max_points = rule_config.get('max_points', 0)
+        
+        if pillar_name == 'dinosaur_hunter':
+            return self._score_dinosaur_hunter(rule_name, pillar, all_text, max_points)
+        
+        elif pillar_name == 'gateway_drug':
+            return self._score_gateway_drug(rule_name, pillar, all_text, max_points)
+        
+        elif pillar_name == 'staff_dependent_logic':
+            return self._score_staff_dependent(rule_name, pillar, all_text, max_points)
+        
+        elif pillar_name == 'glp1_gap':
+            return self._score_glp1_gap(rule_name, pillar, all_text, max_points)
+        
+        return 0
+    
+    def _score_dinosaur_hunter(self, rule_name: str, pillar: Dict, all_text: str, max_points: int) -> int:
+        """Score Dinosaur Hunter opportunities (competitor displacement)"""
+        displacement_targets = pillar.get('displacement_targets', {})
+        
+        # Find the matching displacement target
+        for target_key, target_config in displacement_targets.items():
+            if target_key in rule_name or rule_name.replace('_displacement', '') in target_key:
+                keywords = target_config.get('competitor_keywords', [])
+                bonus_points = target_config.get('bonus_points', max_points)
+                
+                # Check if any competitor keyword is found
+                for keyword in keywords:
+                    if keyword.lower() in all_text:
+                        logger.info(f"      🦖 Dinosaur Hunter: Found '{keyword}' - UPGRADE OPPORTUNITY!")
+                        return min(bonus_points, max_points)
+        
+        return 0
+    
+    def _score_gateway_drug(self, rule_name: str, pillar: Dict, all_text: str, max_points: int) -> int:
+        """Score Gateway Drug opportunities (first-time device buyers)"""
+        gateway_indicators = pillar.get('gateway_indicators', {})
+        
+        # Find the matching gateway indicator
+        for indicator_key, indicator_config in gateway_indicators.items():
+            if indicator_key in rule_name or rule_name.replace('_gateway', '') in indicator_key:
+                detection_logic = indicator_config.get('detection_logic', {})
+                must_have = detection_logic.get('must_have_keywords', [])
+                must_not_have = detection_logic.get('must_not_have_keywords', [])
+                bonus_points = indicator_config.get('bonus_points', max_points)
+                
+                # Check must_have keywords
+                has_required = any(kw.lower() in all_text for kw in must_have)
+                # Check must_not_have keywords
+                has_disqualifier = any(kw.lower() in all_text for kw in must_not_have)
+                
+                if has_required and not has_disqualifier:
+                    logger.info(f"      💊 Gateway Drug: Testing aesthetics without major equipment!")
+                    return min(bonus_points, max_points)
+        
+        return 0
+    
+    def _score_staff_dependent(self, rule_name: str, pillar: Dict, all_text: str, max_points: int) -> int:
+        """Score Staff-Dependent device recommendations"""
+        staffing_profiles = pillar.get('staffing_profiles', {})
+        
+        # Check each staffing profile
+        for profile_key, profile_config in staffing_profiles.items():
+            if profile_key in rule_name or rule_name.replace('_fit', '') in profile_key:
+                keywords = profile_config.get('detection_keywords', [])
+                
+                # Check if any keyword is found
+                for keyword in keywords:
+                    if keyword.lower() in all_text:
+                        recommended_devices = profile_config.get('recommended_devices', [])
+                        # Check if current device is in recommended list
+                        for device_info in recommended_devices:
+                            bonus_points = device_info.get('bonus_points', max_points)
+                            logger.info(f"      👥 Staff Match: {profile_key} detected!")
+                            return min(bonus_points, max_points)
+        
+        return 0
+    
+    def _score_glp1_gap(self, rule_name: str, pillar: Dict, all_text: str, max_points: int) -> int:
+        """Score GLP-1 Gap opportunities (highest priority)"""
+        opportunity_logic = pillar.get('opportunity_detection', {})
+        
+        if not opportunity_logic:
+            # Fallback: simple keyword detection
+            glp1_keywords = ['glp-1', 'glp1', 'ozempic', 'wegovy', 'mounjaro', 'semaglutide', 'tirzepatide']
+            weight_loss_keywords = ['weight loss', 'weight management', 'medical weight loss', 'loose skin', 'post-weight loss']
+            
+            has_glp1 = any(kw in all_text for kw in glp1_keywords)
+            has_weight_loss = any(kw in all_text for kw in weight_loss_keywords)
+            
+            if has_glp1 or has_weight_loss:
+                logger.info(f"      💉 GLP-1 Gap: PRIME OPPORTUNITY for body contouring!")
+                return max_points
+        else:
+            # Use YAML-defined logic
+            must_have = opportunity_logic.get('must_have_keywords', [])
+            boost_keywords = opportunity_logic.get('boost_keywords', [])
+            
+            has_core = any(kw.lower() in all_text for kw in must_have)
+            has_boost = any(kw.lower() in all_text for kw in boost_keywords)
+            
+            if has_core:
+                base_points = opportunity_logic.get('base_points', max_points // 2)
+                boost_points = opportunity_logic.get('boost_points', max_points // 2) if has_boost else 0
+                total_points = min(base_points + boost_points, max_points)
+                logger.info(f"      💉 GLP-1 Gap: +{total_points} pts")
+                return total_points
+        
+        return 0
+    
+    def _apply_saturation_penalty(self, practice_data: Dict, all_text: str, rule_config: Dict) -> int:
+        """Apply Hoarder Penalty for over-equipped practices"""
+        max_penalty = rule_config.get('max_penalty', -40)
+        
+        # Count devices mentioned
+        device_keywords = [
+            'coolsculpt', 'emsculpt', 'thermage', 'ultherapy', 'fraxel', 
+            'morpheus', 'xeo', 'icon', 'laser', 'ipl', 'rf device'
+        ]
+        
+        device_count = sum(1 for kw in device_keywords if kw in all_text)
+        
+        # Check for specialist exemptions
+        specialist_keywords = ['plastic surgery', 'dermatology', 'dermatologist', 'plastic surgeon']
+        is_specialist = any(kw in all_text or kw in practice_data.get('practice_type', '').lower() 
+                           for kw in specialist_keywords)
+        
+        if device_count >= 5 and not is_specialist:
+            logger.info(f"      🚨 Saturation: {device_count} devices detected - Hoarder Penalty!")
+            return max_penalty
+        
+        return 0
     
     def _score_icp(self, factor_config: Dict, practice_type: str, all_text: str, max_points: int) -> int:
         """Score ideal customer profile (practice type alignment)"""
