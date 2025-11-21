@@ -1,0 +1,148 @@
+# Venus OB/GYN Scoring Configuration
+# Phase 1: Base Logic
+
+readiness_signals:
+  high:
+    - "postpartum"
+    - "mommy makeover"
+    - "pelvic floor"
+    - "incontinence"
+    - "urinary incontinence"
+    - "stress incontinence"
+    - "vaginal rejuvenation"
+    - "sexual wellness"
+    - "intimacy"
+    - "hormone therapy"
+    - "hrt"
+    - "menopause"
+    - "perimenopause"
+    - "labiaplasty"
+    - "vaginoplasty"
+
+  medium:
+    - "womens health"
+    - "gynecology"
+    - "comprehensive care"
+    - "integrative medicine"
+
+  low:
+    - "obstetrics only"
+    - "maternity"
+    - "prenatal"
+    - "delivery"
+    - "high risk pregnancy"
+
+practice_type_signals:
+  required: []
+  helpful:
+    - "obgyn"
+    - "obstetrics"
+    - "gynecology"
+    - "womens health"
+
+expansion_signals:
+  - "cash pay"
+  - "membership"
+  - "financing"
+  - "carecredit"
+  - "online booking"
+
+device_ownership_signals:
+  - "tribella"
+  - "ipl"
+  - "photofacial"
+  - "rf microneedling"
+  - "radiofrequency"
+  - "co2 laser"
+  - "laser resurfacing"
+  - "laser hair removal"
+  - "venus"
+  - "inmode"
+  - "morpheus8"
+  - "btl"
+  - "emsculpt"
+  - "emface"
+  - "cynosure"
+  - "cutera"
+  - "sciton"
+  - "alma"
+  - "lumenis"
+  - "coolsculpting"
+  - "vivace"
+  - "potenza"
+  - "sylfirm"
+  - "virtue rf"
+  - "sofwave"
+  - "ultherapy"
+  - "viva"
+  - "empower"
+  - "vtone"
+  - "forma"
+
+disqualifiers:
+  - "medicaid"
+  - "insurance only"
+  - "planned parenthood"
+  - "fertility clinic"
+  - "ivf center"
+
+scoring_weights:
+  readiness_high_base: 40
+  readiness_high_bonus: 5
+  readiness_high_cap: 60
+  readiness_medium: 30
+  readiness_low: 5
+  practice_match: 20
+  expansion: 15
+  disqualifier: -30
+
+intelligence_expansion_phase:
+  synonyms:
+    - "vaginoplasty"
+    - "labiaplasty"
+    - "perineoplasty"
+    - "hymenoplasty"
+    - "hoodectomy"
+    - "monsplasty"
+    - "o-shot"
+    - "g-shot"
+    - "prp injection"
+    - "diastasis recti repair"
+    - "tummy tuck"
+    - "abdominoplasty"
+    - "liposuction"
+    - "mommy makeover"
+    - "urinary incontinence"
+    - "stress incontinence"
+    - "urge incontinence"
+    - "overactive bladder"
+    - "prolapse"
+    - "pelvic pain"
+    - "vaginismus"
+    - "dyspareunia"
+    - "painful sex"
+    - "menopause management"
+    - "perimenopause"
+    - "atrophy"
+    - "dryness"
+    - "lichens sclerosus"
+  
+  adjacent_services:
+    - "pelvic floor physical therapy"
+    - "kegels"
+    - "biofeedback"
+    - "emsella"
+    - "empowerrf"
+    - "vtone"
+    - "forma v"
+    - "morpheus8v"
+    - "diva"
+    - "monalisa touch"
+    - "femtouch"
+    - "juliet"
+    - "core intima"
+    - "thermiva"
+    - "viveve"
+    - "ultra femme 360"
+    - "doula services"
+    - "lactation consulting"

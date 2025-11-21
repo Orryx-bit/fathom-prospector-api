@@ -374,6 +374,12 @@ class FathomProspector:
                 "TruSculpt Flex": {"services": ["muscle toning"]},
                 "Enlighten": {"services": ["tattoo removal", "pigment correction"]},
                 "Xeo": {"services": ["laser hair removal", "IPL", "multi-platform"]},
+            },
+            "Bellafill": {
+                "Bellafill": {"services": ["acne scars", "facial filler", "long lasting filler", "PMMA", "collagen", "penile girth", "labia augmentation"]},
+            },
+            "Tiger Aesthetics": {
+                "Bellafill": {"services": ["acne scars", "facial filler", "long lasting filler", "PMMA", "collagen", "penile girth", "labia augmentation"]},
             }
         }
         
@@ -495,8 +501,12 @@ class FathomProspector:
             
             # Load manufacturer-specific scoring rubric (legacy - keeping for compatibility)
             manufacturer_slug = self.manufacturer.lower().replace(' ', '_').replace('concepts', '').strip('_')
-            if manufacturer_slug not in ['venus', 'sciton', 'cutera']:
+            if manufacturer_slug not in ['venus', 'sciton', 'cutera', 'bellafill', 'tiger_aesthetics']:
                 manufacturer_slug = 'venus'  # default fallback
+            
+            # Map Tiger Aesthetics to Bellafill
+            if 'tiger' in manufacturer_slug:
+                manufacturer_slug = 'bellafill'
             
             root_yaml_path = Path(__file__).parent.parent / 'venus_scoring.yaml'
             if root_yaml_path.exists():
@@ -1667,6 +1677,106 @@ Consider factors like competition, market position, current services, and growth
             logger.error(f"AI pain point analysis failed: {str(e)}, using rule-based fallback")
             return self.analyze_pain_points_rule_based(practice_data, specialty)
     
+    def _load_template(self, template_name: str) -> str:
+        """
+        Load a text/markdown template from the api directory.
+        Handles both .txt and .md extensions.
+        """
+        try:
+            # Try .md first
+            template_path = Path(__file__).parent / f"{template_name}.md"
+            if not template_path.exists():
+                # Try .txt
+                template_path = Path(__file__).parent / f"{template_name}.txt"
+            
+            if template_path.exists():
+                with open(template_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            return ""
+        except Exception as e:
+            logger.error(f"Error loading template {template_name}: {e}")
+            return ""
+
+    def generate_bellafill_report(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> str:
+        """
+        Generate a Markdown report for Bellafill using the PDF template.
+        """
+        try:
+            template = self._load_template("bellafill_pdf_template")
+            if not template:
+                return ""
+
+            # Prepare data for template
+            name = practice_data.get('name', 'Practice')
+            location = practice_data.get('location', 'Unknown')
+            ai_score = practice_data.get('manufacturer_opportunity_score', 0)
+            ai_prospect_class = practice_data.get('ai_prospect_class', 'Unknown')
+            
+            # Generate sections using AI if needed, or construct from existing data
+            # For now, we'll use the pain analysis and outreach data
+            
+            # We need to generate specific sections for the report
+            # 1. Executive Summary
+            # 2. Opportunity Analysis
+            # 3. Competitive Strategy
+            
+            prompt = f"""
+            Generate content for a Bellafill Practice Fit Report for:
+            Practice: {name} ({specialty})
+            Location: {location}
+            Score: {ai_score} ({ai_prospect_class})
+            Pain Points: {pain_analysis.get('pain_points', [])}
+            
+            Generate 3 sections:
+            EXECUTIVE_SUMMARY: 2-3 sentences summarizing the fit.
+            OPPORTUNITY_ANALYSIS: Why Bellafill specifically? (Mention acne scars, long-lasting, etc if relevant)
+            COMPETITIVE_STRATEGY: How to position against competitors.
+            
+            Format:
+            EXECUTIVE_SUMMARY: ...
+            OPPORTUNITY_ANALYSIS: ...
+            COMPETITIVE_STRATEGY: ...
+            """
+            
+            system_msg = "You are a strategic analyst for Bellafill."
+            response = self.call_ai(prompt, system_msg, max_tokens=600)
+            
+            exec_summary = ""
+            opp_analysis = ""
+            comp_strategy = ""
+            
+            if response:
+                parts = response.split('OPPORTUNITY_ANALYSIS:')
+                if len(parts) > 0:
+                    exec_summary = parts[0].replace('EXECUTIVE_SUMMARY:', '').strip()
+                if len(parts) > 1:
+                    subparts = parts[1].split('COMPETITIVE_STRATEGY:')
+                    opp_analysis = subparts[0].strip()
+                    if len(subparts) > 1:
+                        comp_strategy = subparts[1].strip()
+            
+            # Fill template
+            report = template.format(
+                practice_name=name,
+                date=datetime.now().strftime("%Y-%m-%d"),
+                specialty=specialty,
+                location=location,
+                ai_score=ai_score,
+                ai_prospect_class=ai_prospect_class,
+                executive_summary=exec_summary,
+                opportunity_analysis=opp_analysis,
+                competitive_strategy=comp_strategy,
+                outreach_opener=pain_analysis.get('outreachOpener', ''),
+                key_talking_point=pain_analysis.get('pain_points', [''])[0] if pain_analysis.get('pain_points') else '',
+                next_step="Schedule Discovery Meeting"
+            )
+            
+            return report
+            
+        except Exception as e:
+            logger.error(f"Error generating Bellafill report: {e}")
+            return ""
+
     def generate_outreach_ai(self, practice_data: Dict, specialty: str, pain_analysis: Dict) -> Dict:
         """
         CREATIVE AI outreach generation using Abacus RouteLLM
@@ -1686,9 +1796,61 @@ Consider factors like competition, market position, current services, and growth
             phone_number = practice_data.get('phone', '')
             services = practice_data.get('services', [])
             review_count = practice_data.get('review_count', 0)
+            website = practice_data.get('website', '')
             
             # Handle missing contact info gracefully
             contact_display = contact_name if contact_name else 'the practice'
+            
+            # ---------------------------------------------------------
+            # BELLAFILL SPECIFIC LOGIC
+            # ---------------------------------------------------------
+            if self.manufacturer == "Bellafill" or self.manufacturer == "Tiger Aesthetics":
+                # Load Sales Brief Template
+                brief_template = self._load_template("bellafill_sales_brief")
+                
+                if brief_template:
+                    # Prepare data for template
+                    ai_score = practice_data.get('manufacturer_opportunity_score', 0)
+                    ai_prospect_class = practice_data.get('ai_prospect_class', 'Unknown')
+                    key_signals = []
+                    if 'acne' in str(services).lower(): key_signals.append("Acne Scars")
+                    if 'microneedling' in str(services).lower(): key_signals.append("Microneedling")
+                    if 'prp' in str(services).lower(): key_signals.append("Regenerative")
+                    
+                    # Format prompt
+                    prompt = brief_template.format(
+                        practice_name=practice_name,
+                        specialty=specialty,
+                        location=location,
+                        website=website,
+                        ai_score=ai_score,
+                        ai_prospect_class=ai_prospect_class,
+                        key_signals=", ".join(key_signals) if key_signals else "None specific",
+                        scoring_breakdown=str(practice_data.get('manufacturer_opportunity_breakdown', {}))
+                    )
+                    
+                    system_msg = "You are a strategic sales consultant for Bellafill."
+                    
+                    # Generate Brief
+                    brief_response = self.call_ai(prompt, system_msg, max_tokens=800, temperature=0.7)
+                    
+                    # Generate PDF Report Content (Markdown)
+                    pdf_report_md = self.generate_bellafill_report(practice_data, specialty, pain_analysis)
+                    
+                    return {
+                        'outreachColdCall': "See Sales Brief in Email Tab", # Placeholder
+                        'outreachInstagram': "See Sales Brief in Email Tab", # Placeholder
+                        'outreachEmail': brief_response, # Put Brief here
+                        'outreachEmailSubject': f"SALES BRIEF: {practice_name}",
+                        'talking_points': pain_analysis.get('pain_points', [])[:3],
+                        'ai_generated': True,
+                        'creative_framework': 'sales_brief',
+                        'pdf_report_markdown': pdf_report_md # Store for potential PDF generation
+                    }
+
+            # ---------------------------------------------------------
+            # STANDARD LOGIC (Existing)
+            # ---------------------------------------------------------
             
             # Creative frameworks
             creative_frameworks = [
@@ -2859,18 +3021,6 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
         # Fallback to legacy manufacturer-level scoring
         manufacturer_lower = self.manufacturer.lower()
         
-        if 'venus' in manufacturer_lower:
-            return self._score_venus_opportunity(practice_data, practice_type, universal_score)
-        elif 'sciton' in manufacturer_lower:
-            return self._score_sciton_opportunity(practice_data, practice_type, universal_score)
-        elif 'cutera' in manufacturer_lower:
-            return self._score_cutera_opportunity(practice_data, practice_type, universal_score)
-        else:
-            # Default fallback
-            logger.warning(f"Unknown manufacturer '{self.manufacturer}', using default scoring")
-            return self._score_venus_opportunity(practice_data, practice_type, universal_score)
-    
-    def _score_best_device_match(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
         """
         NEW: Per-Device Custom Scoring (Option A)
         
@@ -3332,135 +3482,49 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
         logger.info(f"🔵 Venus YAML Scoring v4.1: {final_score}/100 (Best: {best_device}, Type: {business_type['type']})")
     
         return final_score, breakdown
-    
-    def _score_sciton_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
-        """Sciton opportunity scoring"""
-        scores = {}
-        
+
+    def _score_bellafill_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
+        """Bellafill (Tiger Aesthetics) opportunity scoring - YAML-driven"""
+
+        if not self.manufacturer_scoring_config:
+            logger.warning("⚠️  Bellafill scoring config not loaded - returning 0")
+            return 0, {}
+
         all_text = self._extract_safe_text(practice_data)
+
+        # Detect Business Type (MedSpa, Derm, Plastic, etc.)
+        business_type = self._detect_business_type(all_text)
+        logger.info(f"   🏢 Business Type: {business_type['type']} (Tier: {business_type['tier']}, Boost: +{business_type['base_boost']} pts)")
+
+        # Detect GLP-1 (Ozempic Face opportunity)
+        # ============================================================
+        # CANONICAL SCORING SYSTEM (UniversalScorer)
+        # ============================================================
         
-        # Laser Sophistication (25 pts)
-        laser_keywords = ['laser', 'ipl', 'photorejuvenation', 'fractional', 'resurfacing']
-        laser_count = sum(1 for kw in laser_keywords if kw in all_text)
-        if laser_count >= 3:
-            scores['laser_sophistication'] = 25
-        elif laser_count >= 1:
-            scores['laser_sophistication'] = 15
-        else:
-            scores['laser_sophistication'] = 0
+        from scoring_system.universal_scorer import UniversalScorer
         
-        # Premium Positioning (20 pts)
-        premium_indicators = ['luxury', 'premium', 'boutique', 'exclusive', 'vip', 'concierge']
-        if any(ind in all_text for ind in premium_indicators):
-            scores['premium_positioning'] = 20
-        elif universal_score >= 70:  # Infer from sophistication
-            scores['premium_positioning'] = 10
-        else:
-            scores['premium_positioning'] = 0
+        # Initialize UniversalScorer
+        scorer = UniversalScorer(vendor=self.manufacturer)
         
-        # Science-Based Marketing (15 pts)
-        science_keywords = ['clinical', 'proven', 'research', 'study', 'evidence']
-        if any(kw in all_text for kw in science_keywords):
-            scores['science_based_marketing'] = 15
-        else:
-            scores['science_based_marketing'] = 0
+        # Prepare data for scoring
+        # Ensure we have the full text available for the scorer
+        practice_data['text'] = all_text
         
-        # Skin Rejuvenation Focus (15 pts)
-        rejuv_keywords = ['skin rejuvenation', 'photorejuvenation', 'anti-aging', 'laser resurfacing']
-        rejuv_count = sum(1 for kw in rejuv_keywords if kw in all_text)
-        scores['skin_rejuvenation_focus'] = min(rejuv_count * 5, 15)
+        # Execute Scoring
+        score_result = scorer.score_practice(practice_data)
         
-        # Physician-Led (10 pts)
-        if practice_type in ['dermatology', 'plastic_surgery']:
-            scores['physician_led'] = 10
-        elif 'md' in all_text or 'doctor' in all_text:
-            scores['physician_led'] = 7
-        else:
-            scores['physician_led'] = 0
+        final_score = score_result['score']
+        breakdown = score_result['breakdown']
         
-        # Women's Health Opportunity (8 pts)
-        if practice_type == 'obgyn' or 'women' in all_text:
-            scores['womens_health_opportunity'] = 8
-        else:
-            scores['womens_health_opportunity'] = 0
+        # Add metadata to breakdown
+        breakdown['specialty'] = score_result['specialty']
+        breakdown['track'] = score_result['track']
+        breakdown['readiness_tier'] = score_result['readiness_tier']
         
-        # Technology Upgrade Cycle (7 pts)
-        upgrade_keywords = ['upgrade', 'replace', 'outdated', 'old equipment']
-        if any(kw in all_text for kw in upgrade_keywords):
-            scores['technology_upgrade_cycle'] = 7
-        else:
-            scores['technology_upgrade_cycle'] = 0
+        logger.info(f"🎯 Canonical Scoring: {final_score}/100 ({score_result['specialty']} - {score_result['track']} - {score_result['readiness_tier']})")
         
-        total = sum(scores.values())
-        logger.info(f"🟢 Sciton opportunity score: {total}/100")
-        return total, scores
-    
-    def _score_cutera_opportunity(self, practice_data: Dict, practice_type: str, universal_score: int) -> Tuple[int, Dict]:
-        """Cutera opportunity scoring - YAML-driven"""
-        scores = {}
-        
-        all_text = self._extract_safe_text(practice_data)
-        
-        # Get max points from YAML config (with fallback to original hardcoded values)
-        max_portfolio = self._get_scoring_weight('portfolio_breadth', 20)
-        max_tattoo = self._get_scoring_weight('tattoo_removal_opportunity', 20)
-        max_body = self._get_scoring_weight('body_contouring_focus', 15)
-        max_vascular = self._get_scoring_weight('vascular_pigment_need', 15)
-        max_microneedling = self._get_scoring_weight('microneedling_upgrade', 12)
-        max_platform = self._get_scoring_weight('platform_efficiency_need', 10)
-        max_derm = self._get_scoring_weight('dermatology_alignment', 8)
-        
-        # Portfolio Breadth
-        cutera_services = ['body contouring', 'tattoo removal', 'vascular', 'pigment', 
-                          'microneedling', 'laser hair removal']
-        matches = sum(1 for svc in cutera_services if svc in all_text)
-        scores['portfolio_breadth'] = min(matches * 4, max_portfolio)
-        
-        # Tattoo Removal Opportunity - HIGH VALUE
-        if 'tattoo removal' in all_text:
-            scores['tattoo_removal_opportunity'] = max_tattoo
-        elif practice_type == 'dermatology':
-            scores['tattoo_removal_opportunity'] = int(max_tattoo * 0.5)  # Strong opportunity
-        else:
-            scores['tattoo_removal_opportunity'] = 0
-        
-        # Body Contouring Focus
-        body_keywords = ['body contouring', 'fat reduction', 'muscle toning', 'body sculpting']
-        body_count = sum(1 for kw in body_keywords if kw in all_text)
-        scores['body_contouring_focus'] = min(body_count * 5, max_body)
-        
-        # Vascular/Pigment Need
-        vascular_keywords = ['rosacea', 'vascular', 'spider vein', 'pigmentation']
-        if any(kw in all_text for kw in vascular_keywords):
-            scores['vascular_pigment_need'] = max_vascular
-        else:
-            scores['vascular_pigment_need'] = 0
-        
-        # Microneedling Upgrade
-        if 'microneedling' in all_text:
-            if 'rf' not in all_text:
-                scores['microneedling_upgrade'] = max_microneedling  # Upgrade opportunity
-            else:
-                scores['microneedling_upgrade'] = int(max_microneedling * 0.42)  # Already has RF (~5 pts for 12)
-        else:
-            scores['microneedling_upgrade'] = 0
-        
-        # Platform Efficiency Need
-        if len(practice_data.get('services', [])) >= 5:
-            scores['platform_efficiency_need'] = max_platform
-        else:
-            scores['platform_efficiency_need'] = 0
-        
-        # Dermatology Alignment
-        if practice_type == 'dermatology':
-            scores['dermatology_alignment'] = max_derm
-        else:
-            scores['dermatology_alignment'] = 0
-        
-        total = sum(scores.values())
-        logger.info(f"🟠 Cutera opportunity score: {total}/100 (YAML-driven)")
-        return total, scores
-    
+        return final_score, breakdown
+
     def _extract_safe_text(self, practice_data: Dict) -> str:
         """Safely extract and combine all text data from practice"""
         name = practice_data.get('name', '')
@@ -3474,13 +3538,18 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
         website_text = practice_data.get('website_text', '')
         if website_text is None:
             website_text = ''
+            
+        # Add headers and footer if available (from new scraper)
+        headers = ' '.join(practice_data.get('headers', []))
+        footer = practice_data.get('footer_text', '')
         
         services = practice_data.get('services', [])
         if services is None:
             services = []
         services_text = ' '.join(services)
         
-        return f"{name} {description} {services_text} {website_text}".lower()
+        return f"{name} {description} {services_text} {website_text} {headers} {footer}".lower()
+
 
     def calculate_ai_score(self, practice_data: Dict) -> Tuple[int, Dict[str, int], str, str]:
         """

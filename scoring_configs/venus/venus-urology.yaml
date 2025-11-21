@@ -1,0 +1,127 @@
+# Venus Urology Scoring Configuration
+# Phase 1: Base Logic
+
+readiness_signals:
+  high:
+    - "mens health"
+    - "erectile dysfunction"
+    - "ed"
+    - "peyronies"
+    - "low t"
+    - "testosterone"
+    - "hormone therapy"
+    - "hrt"
+    - "incontinence"
+    - "sexual wellness"
+    - "vasectomy"
+    - "shockwave therapy"
+    - "gainswave"
+
+  medium:
+    - "prostate health"
+    - "bph"
+    - "bladder health"
+    - "comprehensive urology"
+
+  low:
+    - "pediatric urology"
+    - "kidney stones"
+    - "lithotripsy"
+    - "dialysis"
+    - "transplant"
+
+practice_type_signals:
+  required: []
+  helpful:
+    - "urology"
+    - "urologist"
+    - "mens clinic"
+
+expansion_signals:
+  - "cash pay"
+  - "financing"
+  - "carecredit"
+  - "online booking"
+
+device_ownership_signals:
+  - "tribella"
+  - "ipl"
+  - "photofacial"
+  - "rf microneedling"
+  - "radiofrequency"
+  - "co2 laser"
+  - "laser resurfacing"
+  - "laser hair removal"
+  - "venus"
+  - "inmode"
+  - "morpheus8"
+  - "btl"
+  - "emsculpt"
+  - "emface"
+  - "cynosure"
+  - "cutera"
+  - "sciton"
+  - "alma"
+  - "lumenis"
+  - "coolsculpting"
+  - "vivace"
+  - "potenza"
+  - "sylfirm"
+  - "virtue rf"
+  - "sofwave"
+  - "ultherapy"
+  - "renova"
+  - "alma duo"
+
+disqualifiers:
+  - "medicaid"
+  - "insurance only"
+  - "university hospital"
+  - "va hospital"
+
+scoring_weights:
+  readiness_high_base: 40
+  readiness_high_bonus: 5
+  readiness_high_cap: 60
+  readiness_medium: 30
+  readiness_low: 5
+  practice_match: 20
+  expansion: 15
+  disqualifier: -30
+
+intelligence_expansion_phase:
+  synonyms:
+    - "mens health"
+    - "erectile dysfunction"
+    - "ed"
+    - "peyronies disease"
+    - "xiaflex"
+    - "low testosterone"
+    - "low t"
+    - "hypogonadism"
+    - "prostate health"
+    - "bph"
+    - "urolift"
+    - "rezum"
+    - "aquablation"
+    - "kidney stones"
+    - "lithotripsy"
+    - "vasectomy"
+    - "vasectomy reversal"
+    - "infertility"
+  
+  adjacent_services:
+    - "shockwave therapy"
+    - "gainswave"
+    - "p-shot"
+    - "prp injection"
+    - "pelvic floor therapy"
+    - "emsella"
+    - "kegel throne"
+    - "biofeedback"
+    - "hormone replacement therapy"
+    - "testosterone pellets"
+    - "testopel"
+    - "aveed"
+    - "scrotox"
+    - "botox for scrotum"

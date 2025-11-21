@@ -1,0 +1,123 @@
+# Venus Internal Medicine Scoring Configuration
+# Phase 1: Base Logic
+
+readiness_signals:
+  high:
+    - "glp-1"
+    - "semaglutide"
+    - "tirzepatide"
+    - "weight loss"
+    - "medical weight loss"
+    - "wellness"
+    - "hrt"
+    - "hormone replacement"
+    - "anti-aging"
+    - "regenerative medicine"
+    - "iv therapy"
+    - "peptide therapy"
+
+  medium:
+    - "concierge medicine"
+    - "direct primary care"
+    - "executive health"
+    - "preventative medicine"
+
+  low:
+    - "geriatrics"
+    - "nursing home"
+    - "hospitalist"
+    - "acute care"
+
+practice_type_signals:
+  required: []
+  helpful:
+    - "internal medicine"
+    - "internist"
+    - "primary care"
+    - "adult medicine"
+
+expansion_signals:
+  - "cash pay"
+  - "membership"
+  - "financing"
+  - "carecredit"
+  - "online booking"
+
+device_ownership_signals:
+  - "tribella"
+  - "ipl"
+  - "photofacial"
+  - "rf microneedling"
+  - "radiofrequency"
+  - "co2 laser"
+  - "laser resurfacing"
+  - "laser hair removal"
+  - "venus"
+  - "inmode"
+  - "morpheus8"
+  - "btl"
+  - "emsculpt"
+  - "emface"
+  - "cynosure"
+  - "cutera"
+  - "sciton"
+  - "alma"
+  - "lumenis"
+  - "coolsculpting"
+  - "vivace"
+  - "potenza"
+  - "sylfirm"
+  - "virtue rf"
+  - "sofwave"
+  - "ultherapy"
+
+disqualifiers:
+  - "medicaid"
+  - "insurance only"
+  - "dialysis center"
+  - "rehab center"
+
+scoring_weights:
+  readiness_high_base: 40
+  readiness_high_bonus: 5
+  readiness_high_cap: 60
+  readiness_medium: 30
+  readiness_low: 5
+  practice_match: 20
+  expansion: 15
+  disqualifier: -30
+
+intelligence_expansion_phase:
+  synonyms:
+    - "executive health"
+    - "concierge doctor"
+    - "retainer medicine"
+    - "boutique medicine"
+    - "personalized medicine"
+    - "precision medicine"
+    - "longevity medicine"
+    - "geriatrics"
+    - "adult medicine"
+    - "complex care"
+    - "chronic disease management"
+    - "hypertension"
+    - "diabetes management"
+    - "cardiovascular health"
+  
+  adjacent_services:
+    - "advanced diagnostics"
+    - "full body mri"
+    - "prenuvo"
+    - "galleri test"
+    - "grail test"
+    - "liquid biopsy"
+    - "vo2 max testing"
+    - "metabolic testing"
+    - "continuous glucose monitoring"
+    - "cgm"
+    - "dexcom"
+    - "freestyle libre"
+    - "sleep study"
+    - "stress test"
+    - "ekg"
+    - "echocardiogram"

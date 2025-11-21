@@ -1,0 +1,132 @@
+# Venus Wellness Scoring Configuration
+# Phase 1: Base Logic
+
+readiness_signals:
+  high:
+    - "glp-1"
+    - "semaglutide"
+    - "tirzepatide"
+    - "weight loss"
+    - "medical weight loss"
+    - "hrt"
+    - "hormone replacement"
+    - "testosterone"
+    - "iv therapy"
+    - "iv drip"
+    - "sexual wellness"
+    - "peptide therapy"
+    - "regenerative medicine"
+
+  medium:
+    - "functional medicine"
+    - "integrative medicine"
+    - "nutrition"
+    - "lifestyle medicine"
+    - "naturopathic"
+
+  low:
+    - "supplements only"
+    - "health food store"
+    - "yoga studio"
+    - "gym"
+    - "fitness center"
+
+practice_type_signals:
+  required: []
+  helpful:
+    - "wellness center"
+    - "wellness clinic"
+    - "weight loss clinic"
+    - "anti-aging clinic"
+
+expansion_signals:
+  - "cash pay"
+  - "membership"
+  - "financing"
+  - "carecredit"
+  - "online booking"
+
+device_ownership_signals:
+  - "tribella"
+  - "ipl"
+  - "photofacial"
+  - "rf microneedling"
+  - "radiofrequency"
+  - "co2 laser"
+  - "laser resurfacing"
+  - "laser hair removal"
+  - "venus"
+  - "inmode"
+  - "morpheus8"
+  - "btl"
+  - "emsculpt"
+  - "emface"
+  - "cynosure"
+  - "cutera"
+  - "sciton"
+  - "alma"
+  - "lumenis"
+  - "coolsculpting"
+  - "vivace"
+  - "potenza"
+  - "sylfirm"
+  - "virtue rf"
+  - "sofwave"
+  - "ultherapy"
+
+disqualifiers:
+  - "medicaid"
+  - "insurance only"
+  - "franchise gym"
+
+scoring_weights:
+  readiness_high_base: 40
+  readiness_high_bonus: 5
+  readiness_high_cap: 60
+  readiness_medium: 30
+  readiness_low: 5
+  practice_match: 20
+  expansion: 15
+  disqualifier: -30
+
+intelligence_expansion_phase:
+  synonyms:
+    - "biohacking"
+    - "anti-aging"
+    - "longevity"
+    - "performance medicine"
+    - "functional health"
+    - "holistic health"
+    - "naturopathic medicine"
+    - "nd"
+    - "nmd"
+    - "chiropractic"
+    - "acupuncture"
+    - "tcm"
+    - "ayurveda"
+    - "energy healing"
+    - "reiki"
+  
+  adjacent_services:
+    - "cryotherapy"
+    - "infrared sauna"
+    - "red light therapy"
+    - "photobiomodulation"
+    - "joovv"
+    - "thor"
+    - "novothor"
+    - "hyperbaric oxygen"
+    - "hbot"
+    - "float tank"
+    - "sensory deprivation"
+    - "compression therapy"
+    - "normatec"
+    - "pulsed electromagnetic field therapy"
+    - "pemf"
+    - "beamer"
+    - "pulse centers"
+    - "iv drip"
+    - "vitamin infusion"
+    - "nad+"
+    - "ozone therapy"
+    - "colon hydrotherapy"

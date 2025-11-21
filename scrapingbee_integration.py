@@ -74,91 +74,9 @@ def scrape_with_scrapingbee(url: str, extract_emails_fn, extract_names_fn,
                     'contact_names': [],
                     'additional_phones': [],
                     'contact_form_url': '',
-                    'team_members': []
+                    'team_members': [],
+                    'found_keywords': []
                 }
-                
-                # Get page title
-                if soup.title and soup.title.string:
-                    data['title'] = soup.title.string.strip()
-                else:
-                    data['title'] = 'Not Available'
-                
-                # Get meta description
-                meta_desc = soup.find('meta', attrs={'name': 'description'})
-                if meta_desc and meta_desc.get('content'):
-                    data['description'] = meta_desc.get('content', '').strip()
-                else:
-                    og_desc = soup.find('meta', attrs={'property': 'og:description'})
-                    if og_desc and og_desc.get('content'):
-                        data['description'] = og_desc.get('content', '').strip()
-                    else:
-                        data['description'] = 'Not Available'
-                
-                # Extract services mentioned
-                text_content = soup.get_text(' ', strip=True).lower()
-                service_keywords = [
-                    'laser hair removal', 'botox', 'fillers', 'coolsculpting',
-                    'body contouring', 'skin tightening', 'photorejuvenation',
-                    'cellulite treatment', 'weight loss', 'ems', 'muscle building',
-                    'dermatology', 'skin care', 'facial', 'microneedling',
-                    'chemical peel', 'laser treatment', 'acne treatment'
-                ]
-                
-                services_found = []
-                for keyword in service_keywords:
-                    if keyword in text_content:
-                        services_found.append(keyword)
-                
-                data['services'] = services_found[:10]  # Limit to 10
-                
-                # Find social media links
-                social_platforms = {
-                    'facebook.com': 'Facebook',
-                    'fb.com': 'Facebook',
-                    'instagram.com': 'Instagram',
-                    'twitter.com': 'Twitter',
-                    'x.com': 'Twitter',
-                    'linkedin.com': 'LinkedIn',
-                    'youtube.com': 'YouTube',
-                    'youtu.be': 'YouTube',
-                    'tiktok.com': 'TikTok',
-                    'pinterest.com': 'Pinterest'
-                }
-                
-                social_links = []
-                seen_platforms = set()
-                
-                # Get all links
-                all_links = soup.find_all('a', href=True)
-                for link_element in all_links:
-                    try:
-                        href = link_element.get('href', '').strip()
-                        href_lower = href.lower()
-                        
-                        # Skip empty or invalid hrefs
-                        if not href or href.startswith('#') or href.startswith('javascript:'):
-                            continue
-                        
-                        for domain, platform_name in social_platforms.items():
-                            if domain in href_lower and platform_name not in seen_platforms:
-                                # Clean up the URL
-                                full_url = href
-                                if href.startswith('//'):
-                                    full_url = 'https:' + href
-                                elif href.startswith('/') or not href.startswith('http'):
-                                    # Relative URL - skip it as it's not a social link
-                                    continue
-                                
-                                social_links.append(full_url)
-                                seen_platforms.add(platform_name)
-                                logger.info(f"Found {platform_name} link: {full_url}")
-                                break
-                    except Exception:
-                        continue
-                
-                data['social_links'] = social_links
-                
-                # Estimate staff count
                 staff_indicators = soup.find_all(text=re.compile(
                     r'\b(dr\.|doctor|physician|provider|practitioner)\b', re.I))
                 unique_staff = len(set(str(s).strip() for s in staff_indicators if len(str(s).strip()) > 5))

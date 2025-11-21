@@ -1,0 +1,153 @@
+# Venus Family Practice Scoring Configuration
+# Phase 1: Base Logic
+
+readiness_signals:
+  high:
+    - "glp-1"
+    - "semaglutide"
+    - "tirzepatide"
+    - "ozempic"
+    - "wegovy"
+    - "mounjaro"
+    - "weight loss"
+    - "medical weight loss"
+    - "hrt"
+    - "hormone replacement"
+    - "testosterone"
+    - "biote"
+    - "iv therapy"
+    - "iv drip"
+    - "vitamin infusion"
+    - "wellness"
+    - "sexual wellness"
+    - "mens health"
+    - "womens health"
+    - "botox" # High readiness signal for FP, not a reclassifier
+    - "fillers" # High readiness signal for FP, not a reclassifier
+
+  medium:
+    - "established practice" # Placeholder for logic check
+    - "comprehensive care"
+    - "preventative medicine"
+    - "concierge medicine"
+    - "direct primary care"
+    - "dpc"
+
+  low:
+    - "pediatrics"
+    - "immunizations"
+    - "sick visits"
+    - "urgent care"
+    - "occupational health"
+
+practice_type_signals:
+  required: []
+  helpful:
+    - "family medicine"
+    - "family practice"
+    - "primary care"
+    - "internal medicine"
+    - "general practice"
+
+expansion_signals:
+  - "cash pay"
+  - "membership"
+  - "financing"
+  - "carecredit"
+  - "online booking"
+  - "telehealth"
+
+device_ownership_signals:
+  - "tribella"
+  - "ipl"
+  - "photofacial"
+  - "rf microneedling"
+  - "radiofrequency"
+  - "co2 laser"
+  - "laser resurfacing"
+  - "laser hair removal"
+  - "venus"
+  - "inmode"
+  - "morpheus8"
+  - "btl"
+  - "emsculpt"
+  - "emface"
+  - "cynosure"
+  - "cutera"
+  - "sciton"
+  - "alma"
+  - "lumenis"
+  - "coolsculpting"
+  - "vivace"
+  - "potenza"
+  - "sylfirm"
+  - "virtue rf"
+  - "sofwave"
+  - "ultherapy"
+
+disqualifiers:
+  - "medicaid"
+  - "insurance only"
+  - "pediatrics only"
+  - "federally qualified health center"
+  - "fqhc"
+  - "community health center"
+  - "dental"
+  - "dentist"
+  - "chiropractor"
+  - "radiology"
+  - "imaging center"
+
+scoring_weights:
+  readiness_high_base: 40
+  readiness_high_bonus: 5
+  readiness_high_cap: 60
+  readiness_medium: 30
+  readiness_low: 5
+  practice_match: 20
+  expansion: 15
+  disqualifier: -30
+
+intelligence_expansion_phase:
+  synonyms:
+    - "ozempic"
+    - "wegovy"
+    - "mounjaro"
+    - "zepbound"
+    - "saxenda"
+    - "contrave"
+    - "phentermine"
+    - "qsymia"
+    - "bioidentical hormones"
+    - "bhrt"
+    - "pellet therapy"
+    - "sottopelle"
+    - "evexippel"
+    - "testosterone cypionate"
+    - "peptide therapy"
+    - "cjC-1295"
+    - "ipamorelin"
+    - "bpc-157"
+    - "functional medicine"
+    - "integrative medicine"
+    - "holistic medicine"
+    - "lifestyle medicine"
+    - "anti-aging medicine"
+    - "regenerative medicine"
+  
+  adjacent_services:
+    - "nutrition counseling"
+    - "dietitian"
+    - "health coaching"
+    - "body composition analysis"
+    - "inbody"
+    - "dexa scan"
+    - "allergy testing"
+    - "food sensitivity testing"
+    - "gut health"
+    - "microbiome testing"
+    - "genetic testing"
+    - "pharmacogenomics"
+    - "advanced lipid testing"
+    - "cleveland heartlab"
+    - "boston heart"

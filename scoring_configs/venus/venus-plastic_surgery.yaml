@@ -1,0 +1,138 @@
+# Venus Plastic Surgery Scoring Configuration
+# Phase 1: Base Logic
+
+readiness_signals:
+  high:
+    - "post-op"
+    - "post-surgical"
+    - "lymphatic drainage"
+    - "skin tightening"
+    - "cellulite"
+    - "body contouring"
+    - "non-surgical"
+    - "minimally invasive"
+    - "medspa services"
+
+  medium:
+    - "mommy makeover"
+    - "tummy tuck"
+    - "liposuction"
+    - "breast augmentation"
+    - "facelift"
+    - "comprehensive aesthetic center"
+
+  low:
+    - "reconstructive only"
+    - "hand surgery"
+    - "burn center"
+    - "craniofacial"
+    - "trauma"
+
+practice_type_signals:
+  required: []
+  helpful:
+    - "plastic surgery"
+    - "cosmetic surgery"
+    - "plastic surgeon"
+    - "aesthetic surgery"
+
+expansion_signals:
+  - "financing"
+  - "carecredit"
+  - "alphleon"
+  - "patientfi"
+  - "consultation fee"
+
+device_ownership_signals:
+  - "tribella"
+  - "ipl"
+  - "photofacial"
+  - "rf microneedling"
+  - "radiofrequency"
+  - "co2 laser"
+  - "laser resurfacing"
+  - "laser hair removal"
+  - "venus"
+  - "inmode"
+  - "morpheus8"
+  - "bodytite"
+  - "facetite"
+  - "btl"
+  - "emsculpt"
+  - "emface"
+  - "cynosure"
+  - "cutera"
+  - "sciton"
+  - "alma"
+  - "lumenis"
+  - "coolsculpting"
+  - "vivace"
+  - "potenza"
+  - "sylfirm"
+  - "virtue rf"
+  - "sofwave"
+  - "ultherapy"
+  - "vaser"
+  - "smartlipo"
+
+disqualifiers:
+  - "medicaid"
+  - "insurance only"
+  - "hospital based"
+  - "university hospital"
+
+scoring_weights:
+  readiness_high_base: 40
+  readiness_high_bonus: 5
+  readiness_high_cap: 60
+  readiness_medium: 30
+  readiness_low: 5
+  practice_match: 20
+  expansion: 15
+  disqualifier: -30
+
+intelligence_expansion_phase:
+  synonyms:
+    - "rhinoplasty"
+    - "blepharoplasty"
+    - "facelift"
+    - "rhytidectomy"
+    - "neck lift"
+    - "brow lift"
+    - "otoplasty"
+    - "breast augmentation"
+    - "breast lift"
+    - "mastopexy"
+    - "breast reduction"
+    - "liposuction"
+    - "tummy tuck"
+    - "abdominoplasty"
+    - "mommy makeover"
+    - "bbl"
+    - "brazilian butt lift"
+    - "gluteal augmentation"
+    - "body contouring surgery"
+    - "thigh lift"
+    - "arm lift"
+    - "brachioplasty"
+    - "hair transplant"
+    - "fue"
+    - "fut"
+    - "neograft"
+    - "artas"
+  
+  adjacent_services:
+    - "lymphatic drainage massage"
+    - "post-op massage"
+    - "scar revision"
+    - "silicone sheets"
+    - "hyperbaric oxygen therapy"
+    - "hbot"
+    - "iv therapy"
+    - "medical grade skincare"
+    - "skinbetter science"
+    - "alastin"
+    - "zo skin health"
+    - "obagi"
+    - "skinceuticals"
+    - "biocorneum"

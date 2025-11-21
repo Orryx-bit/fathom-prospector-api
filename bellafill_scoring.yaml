@@ -1,0 +1,151 @@
+# ============================================================================
+# BELLAFILL (TIGER AESTHETICS) - PRACTICE FIT SCORING SYSTEM v1.0
+# ============================================================================
+# Based on "Bellafill Practice Fit Analysis" PDF
+# Philosophy: Identify practices with "Long-Term Correction" mindset + Clinical Capability
+#
+# Key Differentiators:
+# - 5-Year Duration (Longest lasting filler)
+# - PMMA Microspheres (Structural support)
+# - FDA Approved for Acne Scars
+# - Requires Skin Test (Bovine Collagen)
+# - "Cure" for volume loss vs "Band-aid"
+# ============================================================================
+
+manufacturer: "Tiger Aesthetics"
+version: "1.0"
+last_updated: "2025-11-20"
+system_type: "per_device_custom_scoring"
+
+# ============================================================================
+# DEVICE PORTFOLIO
+# ============================================================================
+
+devices:
+  
+  bellafill:
+    name: "Bellafill"
+    category: "Long-Lasting Dermal Filler"
+    price: "Premium Pricing"
+    research_notes: "The only FDA-approved PMMA collagen filler with 5-year safety data. Indicated for nasolabial folds and moderate to severe, atrophic, distensible facial acne scars."
+    
+    ideal_customers:
+      - "Dermatology (Acne Scar focus)"
+      - "Facial Plastic Surgery"
+      - "High-Volume Injector Med Spas"
+      - "Men's Health Clinics (Penile Girth - Off-label but common)"
+      - "Sexual Wellness Centers (Labia Majora - Off-label)"
+      - "Practices with 'Patient for Life' philosophy"
+    
+    service_keywords_weighted:
+      # Clinical Indications (High Value)
+      - {term: "acne scar treatment", points: 15}
+      - {term: "acne scarring", points: 15}
+      - {term: "atrophic scars", points: 12}
+      - {term: "rolling scars", points: 10}
+      - {term: "boxcar scars", points: 10}
+      - {term: "subcision", points: 12}  # Often paired with Bellafill
+      - {term: "acne scar revision", points: 12}
+      
+      # Product/Category Keywords
+      - {term: "long lasting filler", points: 10}
+      - {term: "permanent filler", points: 8}
+      - {term: "PMMA", points: 10}
+      - {term: "polymethyl methacrylate", points: 10}
+      - {term: "collagen stimulator", points: 8}
+      - {term: "biostimulator", points: 8}
+      - {term: "Sculptra", points: 5}  # Competitor/Complementary
+      - {term: "Radiesse", points: 5}   # Competitor/Complementary
+      - {term: "liquid facelift", points: 8}
+      - {term: "non-surgical rhinoplasty", points: 7} # Structural filler use
+      
+      # Sexual Wellness / Men's Health (Niche but High Value)
+      - {term: "penile girth", points: 15}
+      - {term: "penile enlargement", points: 15}
+      - {term: "male enhancement", points: 12}
+      - {term: "labia augmentation", points: 12}
+      - {term: "labia puffing", points: 12}
+      - {term: "vaginal rejuvenation", points: 8}
+      
+      # Operational/Business Signals
+      - {term: "skin test", points: 5}
+      - {term: "allergy testing", points: 5}
+      - {term: "patient retention", points: 5}
+      - {term: "membership program", points: 5} # Good for long-term patients
+    
+    technology_keywords:
+      - {term: "Bellafill", points: 20} # Already has it (Retention/Expansion)
+      - {term: "Artefill", points: 15}   # Old name
+      - {term: "bovine collagen", points: 8}
+    
+    opportunity_signals:
+      - "High volume acne treatment practice"
+      - "Mentions 'filler fatigue'"
+      - "Focus on long-term results"
+      - "Men's health focus"
+      - "Regenerative medicine focus"
+    
+    competitive_edges:
+      - "5 Year Duration vs 1-2 years for HA"
+      - "No water absorption (no 'puffy' look)"
+      - "Stimulates own collagen"
+      - "FDA approved for acne scars (unique claim)"
+    
+    disqualifiers:
+      - {condition: "no_medical_director", penalty: -50} # Needs MD/DO for skin test usually
+      - {condition: "groupon_discounter", penalty: -30} # Bellafill is premium
+      - {condition: "pure_wellness_only", penalty: -40} # Needs aesthetic focus
+
+# ============================================================================
+# UNIVERSAL SCORING FACTORS (Bellafill Specific Weights)
+# ============================================================================
+
+universal_factors:
+  
+  practice_quality:
+    max_points: 20
+    
+    website_quality:
+      points: 7
+      positive:
+        - "before and after gallery" # Critical for acne scars
+        - "patient testimonials"
+        - "video testimonials"
+    
+    social_media_presence:
+      points: 8
+      detection:
+        instagram:
+          points: 4
+          engagement_bonus: 2
+        tiktok:
+          points: 3 # Huge for acne scar transformations
+    
+    online_reputation:
+      points: 5
+      factors:
+        - "Google reviews > 4.2 stars" # Higher bar for permanent filler
+        - "Recent reviews"
+
+# ============================================================================
+# GLP-1 / WEIGHT LOSS OPPORTUNITY (Bellafill Context)
+# ============================================================================
+# Ozempic face = Volume loss = Bellafill opportunity
+
+glp1_opportunity_detection:
+  enabled: true
+  detection_keywords:
+    primary:
+      - "Ozempic face"
+      - "facial volume loss"
+      - "hollow cheeks"
+      - "gaunt face"
+      - "weight loss facial changes"
+    secondary:
+      - "semaglutide"
+      - "tirzepatide"
+      - "medical weight loss"
+  
+  score_modifiers:
+    bellafill_bonus: 15
+    rationale: "Bellafill restores structural volume lost during rapid weight loss (Ozempic Face) with long-term results."

@@ -1,0 +1,128 @@
+# Venus ENT Scoring Configuration
+# Phase 1: Base Logic
+
+readiness_signals:
+  high:
+    - "facial plastic surgery"
+    - "rhinoplasty"
+    - "blepharoplasty"
+    - "brow lift"
+    - "facelift"
+    - "neck lift"
+    - "skin cancer reconstruction"
+    - "injectables"
+    - "botox"
+    - "fillers"
+    - "laser treatments"
+    - "sleep apnea"
+    - "snoring"
+
+  medium:
+    - "sinus surgery"
+    - "balloon sinuplasty"
+    - "allergy"
+    - "immunotherapy"
+    - "voice center"
+
+  low:
+    - "pediatric ent"
+    - "tubes"
+    - "tonsils"
+    - "adenoids"
+    - "hearing aids"
+    - "audiology"
+    - "balance center"
+
+practice_type_signals:
+  required: []
+  helpful:
+    - "ent"
+    - "otolaryngology"
+    - "ear nose throat"
+    - "facial plastics"
+
+expansion_signals:
+  - "cash pay"
+  - "financing"
+  - "carecredit"
+  - "online booking"
+
+device_ownership_signals:
+  - "tribella"
+  - "ipl"
+  - "photofacial"
+  - "rf microneedling"
+  - "radiofrequency"
+  - "co2 laser"
+  - "laser resurfacing"
+  - "laser hair removal"
+  - "venus"
+  - "inmode"
+  - "morpheus8"
+  - "btl"
+  - "emsculpt"
+  - "emface"
+  - "cynosure"
+  - "cutera"
+  - "sciton"
+  - "alma"
+  - "lumenis"
+  - "coolsculpting"
+  - "vivace"
+  - "potenza"
+  - "sylfirm"
+  - "virtue rf"
+  - "sofwave"
+  - "ultherapy"
+
+disqualifiers:
+  - "medicaid"
+  - "insurance only"
+  - "university hospital"
+  - "va hospital"
+
+scoring_weights:
+  readiness_high_base: 40
+  readiness_high_bonus: 5
+  readiness_high_cap: 60
+  readiness_medium: 30
+  readiness_low: 5
+  practice_match: 20
+  expansion: 15
+  disqualifier: -30
+
+intelligence_expansion_phase:
+  synonyms:
+    - "sinus surgery"
+    - "balloon sinuplasty"
+    - "septoplasty"
+    - "turbinate reduction"
+    - "sleep apnea"
+    - "snoring"
+    - "cpap"
+    - "inspire therapy"
+    - "eustachian tube dilation"
+    - "allergy shots"
+    - "immunotherapy"
+    - "hearing aids"
+    - "audiology"
+    - "voice disorders"
+    - "swallowing disorders"
+    - "thyroid surgery"
+    - "parathyroid surgery"
+    - "head and neck cancer"
+  
+  adjacent_services:
+    - "facial plastic surgery"
+    - "rhinoplasty"
+    - "blepharoplasty"
+    - "facelift"
+    - "botox"
+    - "fillers"
+    - "laser skin resurfacing"
+    - "radiofrequency"
+    - "vivace"
+    - "secret rf"
+    - "co2 laser"
+    - "skin cancer reconstruction"
+    - "scar revision"

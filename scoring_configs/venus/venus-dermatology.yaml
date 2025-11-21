@@ -1,0 +1,130 @@
+# Venus Dermatology Scoring Configuration
+# Phase 1: Base Logic
+
+readiness_signals:
+  high:
+    - "cosmetic dermatology"
+    - "aesthetic dermatology"
+    - "injectables"
+    - "botox"
+    - "fillers"
+    - "laser treatments"
+    - "skin rejuvenation"
+    - "body contouring"
+    - "acne scar treatment"
+
+  medium:
+    - "medical dermatology"
+    - "skin cancer screening"
+    - "mohs surgery"
+    - "general dermatology"
+
+  low:
+    - "pediatric dermatology"
+    - "rash"
+    - "eczema"
+    - "psoriasis"
+    - "allergy"
+
+practice_type_signals:
+  required: []
+  helpful:
+    - "dermatology"
+    - "dermatologist"
+    - "skin center"
+    - "skin clinic"
+
+expansion_signals:
+  - "cash pay"
+  - "financing"
+  - "carecredit"
+  - "online booking"
+  - "skincare store"
+
+device_ownership_signals:
+  - "tribella"
+  - "ipl"
+  - "photofacial"
+  - "rf microneedling"
+  - "radiofrequency"
+  - "co2 laser"
+  - "laser resurfacing"
+  - "laser hair removal"
+  - "venus"
+  - "inmode"
+  - "morpheus8"
+  - "btl"
+  - "emsculpt"
+  - "emface"
+  - "cynosure"
+  - "cutera"
+  - "sciton"
+  - "alma"
+  - "lumenis"
+  - "coolsculpting"
+  - "vivace"
+  - "potenza"
+  - "sylfirm"
+  - "virtue rf"
+  - "sofwave"
+  - "ultherapy"
+  - "pdl"
+  - "vbeam"
+  - "fraxel"
+  - "clear and brilliant"
+
+disqualifiers:
+  - "medicaid"
+  - "insurance only"
+  - "university hospital"
+  - "va hospital"
+
+scoring_weights:
+  readiness_high_base: 40
+  readiness_high_bonus: 5
+  readiness_high_cap: 60
+  readiness_medium: 30
+  readiness_low: 5
+  practice_match: 20
+  expansion: 15
+  disqualifier: -30
+
+intelligence_expansion_phase:
+  synonyms:
+    - "mohs surgery"
+    - "skin cancer screening"
+    - "acne treatment"
+    - "isotretinoin"
+    - "accutane"
+    - "rosacea"
+    - "melasma"
+    - "eczema"
+    - "psoriasis"
+    - "biologics"
+    - "dupixent"
+    - "skyrizi"
+    - "cosmetic dermatology"
+    - "laser surgery"
+    - "mole removal"
+    - "cyst removal"
+    - "lipoma removal"
+  
+  adjacent_services:
+    - "chemical peels"
+    - "microdermabrasion"
+    - "photodynamic therapy"
+    - "pdt"
+    - "blue light therapy"
+    - "red light therapy"
+    - "narrowband uvb"
+    - "excimer laser"
+    - "xtrac"
+    - "vascular laser"
+    - "vbeam"
+    - "excel v"
+    - "laser hair removal"
+    - "tattoo removal"
+    - "picosure"
+    - "enlighten"
+    - "miraDry"
+    - "hyperhidrosis treatment"
