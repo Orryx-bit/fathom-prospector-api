@@ -283,10 +283,6 @@ class FathomProspector:
     Supported manufacturers: "Venus Concepts", "Cutera".
     Default: "Venus Concepts".
     """
-    GENERIC_DOMAINS = [
-        'healthgrades.com', 'vitals.com', 'christushealth.org', 'privia.com',
-        'facebook.com', 'yelp.com', 'webmd.com', 'zocdoc.com', 'sharecare.com'
-    ]
     
     def __init__(self, manufacturer="Venus Concepts", demo_mode=False, existing_customers_csv=None, progress_callback=None):
         self.gmaps_api = None  # Initialize early to prevent AttributeError
@@ -834,8 +830,7 @@ class FathomProspector:
                 'services': ['laser hair removal', 'botox', 'fillers', 'skin tightening'],
                 'social_links': ['Facebook', 'Instagram'],
                 'staff_count': 8,
-                'text': 'Mock website text for Austin Aesthetic Center.',
-                'ad_tech_stack': ['Facebook Pixel', 'Google Ads']
+                'text': 'Mock website text for Austin Aesthetic Center.'
             },
             'https://hillcountrymedspa.com': {
                 'title': 'Hill Country Med Spa - Body Contouring & Wellness',
@@ -843,8 +838,7 @@ class FathomProspector:
                 'services': ['body contouring', 'cellulite treatment', 'weight loss'],
                 'social_links': ['Instagram'],
                 'staff_count': 5,
-                'text': 'Mock website text for Hill Country Med Spa.',
-                'ad_tech_stack': ['Call Tracking']
+                'text': 'Mock website text for Hill Country Med Spa.'
             },
             'https://lonestardermatology.com': {
                 'title': 'Lone Star Dermatology - Advanced Skin Care',
@@ -852,8 +846,7 @@ class FathomProspector:
                 'services': ['laser hair removal', 'skin tightening', 'botox'],
                 'social_links': ['Facebook', 'LinkedIn'],
                 'staff_count': 12,
-                'text': 'Mock website text for Lone Star Dermatology.',
-                'ad_tech_stack': []
+                'text': 'Mock website text for Lone Star Dermatology.'
             }
         }
         
@@ -863,8 +856,7 @@ class FathomProspector:
             'services': ['botox', 'fillers'],
             'social_links': [],
             'staff_count': 3,
-            'text': 'Default mock website content.',
-            'ad_tech_stack': []
+            'text': 'Default mock website content.'
         })
     
     @sleep_and_retry
@@ -1146,25 +1138,6 @@ class FathomProspector:
             return []
 
 
-    def _detect_ad_tech(self, soup: BeautifulSoup) -> List[str]:
-        """Inspects HTML for common marketing and ad tech scripts."""
-        tech_stack = []
-        html_text = str(soup).lower()
-
-        # Facebook Pixel
-        if 'fbevents.js' in html_text or 'connect.facebook.net' in html_text:
-            tech_stack.append('Facebook Pixel')
-
-        # Google Ads
-        if 'googletagmanager.com' in html_text or 'gtag.js' in html_text or 'gtag(' in html_text:
-            tech_stack.append('Google Ads')
-
-        # Call Tracking
-        if any(tracker in html_text for tracker in ['callrail', 'monitor.crm', 'tracking.']):
-            tech_stack.append('Call Tracking')
-
-        return list(set(tech_stack))
-
     def scrape_website(self, url: str) -> Dict[str, any]:
         """Scrape practice website for additional information"""
         
@@ -1184,8 +1157,7 @@ class FathomProspector:
                 'additional_phones': [],
                 'contact_form_url': '',
                 'team_members': [],
-                'text': 'Not Available - No Website',
-                'ad_tech_stack': []
+                'text': 'Not Available - No Website'
             }
         
         if not self.check_robots_txt(url):
@@ -1201,8 +1173,7 @@ class FathomProspector:
                 'additional_phones': [],
                 'contact_form_url': '',
                 'team_members': [],
-                'text': 'Not Available - Restricted',
-                'ad_tech_stack': []
+                'text': 'Not Available - Restricted'
             }
             
         try:
@@ -1224,8 +1195,7 @@ class FathomProspector:
                 'additional_phones': [],
                 'contact_form_url': '',
                 'team_members': [],
-                'text': '',
-                'ad_tech_stack': []
+                'text': ''
             }
             
             # Get page title
@@ -1318,7 +1288,6 @@ class FathomProspector:
             data['additional_phones'] = self.extract_additional_phones(soup, '', url)
             data['contact_form_url'] = self.extract_contact_form_url(soup, url)
             data['team_members'] = self.extract_team_members(soup, url)
-            data['ad_tech_stack'] = self._detect_ad_tech(soup)
             
             logger.info(f"Website scrape complete for {url}: {len(data['services'])} services, {len(data['emails'])} emails, {len(data['contact_names'])} contacts found")
             
@@ -1337,8 +1306,7 @@ class FathomProspector:
                 'additional_phones': [],
                 'contact_form_url': '',
                 'team_members': [],
-                'text': 'Not Available - Timeout',
-                'ad_tech_stack': []
+                'text': 'Not Available - Timeout'
             }
         except Exception as e:
             logger.error(f"Error scraping website {url}: {str(e)}")
@@ -1353,8 +1321,7 @@ class FathomProspector:
                 'additional_phones': [],
                 'contact_form_url': '',
                 'team_members': [],
-                'text': 'Not Available - Error',
-                'ad_tech_stack': []
+                'text': 'Not Available - Error'
             }
     
     def is_js_heavy_site(self, url: str) -> bool:
@@ -1441,8 +1408,7 @@ class FathomProspector:
                 'contact_names': [],
                 'additional_phones': [],
                 'contact_form_url': '',
-                'team_members': [],
-                'ad_tech_stack': []
+                'team_members': []
             }
         
         max_retries = 3
@@ -1521,8 +1487,7 @@ class FathomProspector:
                 'contact_names': [],
                 'additional_phones': [],
                 'contact_form_url': '',
-                'team_members': [],
-                'ad_tech_stack': []
+                'team_members': []
             }
         
         # Check 1: Is this a known JS-heavy platform?
@@ -2318,8 +2283,7 @@ Best regards,
                 'description': 'Not Available - No Website',
                 'services': [], 'social_links': [], 'staff_count': 0, 'emails': [],
                 'contact_names': [], 'additional_phones': [], 'contact_form_url': '', 'team_members': [],
-                'website_text': 'Not Available - No Website',
-                'ad_tech_stack': []
+                'website_text': 'Not Available - No Website'
             }
         
         if not self.check_robots_txt(base_url):
@@ -2345,7 +2309,6 @@ Best regards,
             all_team_members = set()
             all_staff_counts = []
             all_text_content = []
-            all_ad_tech = set()
             
             homepage_result = results[0] if results else {} # Homepage is always first
             title = homepage_result.get('title', 'Not Available')
@@ -2364,7 +2327,6 @@ Best regards,
                 all_team_members.update(page_data.get('team_members', []))
                 all_staff_counts.append(page_data.get('staff_count', 0))
                 all_text_content.append(page_data.get('text', ''))
-                all_ad_tech.update(page_data.get('ad_tech_stack', []))
 
             # Aggregate staff count (use the max found)
             staff_count = max(all_staff_counts) if all_staff_counts else 0
@@ -2382,8 +2344,7 @@ Best regards,
                 'additional_phones': list(all_additional_phones)[:3],
                 'contact_form_url': contact_form_url,
                 'team_members': list(all_team_members)[:10],
-                'website_text': " ".join(all_text_content),
-                'ad_tech_stack': list(all_ad_tech)
+                'website_text': " ".join(all_text_content)
             }
             
         except Exception as e:
@@ -3557,22 +3518,7 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
         # Calculate combined ai_score (weighted average of layers 2 and 3)
         ai_score = int((universal_aesthetic_score * 0.4) + (manufacturer_opportunity_score * 0.6))
         
-        # Ad Spend Bonus
-        marketing_tech_bonus = 15 if practice_data.get('ad_tech_stack') else 0
-        if marketing_tech_bonus > 0:
-            logger.info(f"Applying marketing tech bonus: +{marketing_tech_bonus} points")
-            ai_score += marketing_tech_bonus
-        
-        # Cap score at 100 before applying penalty
-        ai_score = min(100, ai_score)
-        
-        # Generic Shell Penalty/Cap
-        final_website = practice_data.get('website', '')
-        if final_website and any(domain in final_website for domain in self.GENERIC_DOMAINS):
-            logger.warning(f"Applying score cap of 50 due to generic shell URL: {final_website}")
-            ai_score = min(ai_score, 50)
-        
-        # Generate ai_prospect_class based on final score
+        # Generate ai_prospect_class based on combined score
         if ai_score >= 80:
             ai_prospect_class = "High-Potential Target"
         elif ai_score >= 65:
@@ -3600,7 +3546,6 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
             # NEW FIELDS: Three-layer architecture
             'universal_aesthetic_score': universal_aesthetic_score,
             'manufacturer_opportunity_score': manufacturer_opportunity_score,
-            'marketing_tech_bonus': marketing_tech_bonus,
         }
         
         # Store detailed breakdowns in practice_data for export
@@ -3937,36 +3882,8 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
             'staff_count': 0,
             'description': 'Not Available',
             'title': 'Not Available',
-            'website_text': '',
-            'ad_tech_stack': []
+            'website_text': ''
         }
-        
-        # Smart URL Discovery (Anti-Directory Logic)
-        website_url = practice_record.get('website')
-        if website_url and any(domain in website_url for domain in self.GENERIC_DOMAINS):
-            logger.warning(f"Generic URL detected: {website_url}. Attempting specific discovery...")
-            practice_name = place_data.get('name', '')
-            address = place_data.get('formatted_address', '')
-            
-            city_part = ''
-            if ',' in address:
-                parts = [p.strip() for p in address.split(',')]
-                if len(parts) >= 3:
-                    city_part = parts[-2]  # e.g., "Austin TX 78701" or "Austin"
-            
-            if practice_name and city_part:
-                query = f"{practice_name} {city_part} practice website"
-                try:
-                    # Use the full address as the location hint for the search
-                    search_results = self.google_places_search(query=query, location=address, radius=5000)
-                    for new_place in search_results[:3]:
-                        new_website = new_place.get('website')
-                        if new_website and not any(domain in new_website for domain in self.GENERIC_DOMAINS):
-                            logger.info(f"✅ Found specific URL via re-search: {new_website}")
-                            practice_record['website'] = new_website
-                            break
-                except Exception as e:
-                    logger.error(f"Error during specific URL discovery search: {e}")
         
         # Scrape website if available (using deep multi-page scraping)
         if practice_record['website']:
@@ -3990,8 +3907,7 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
                     'contact_names': [],
                     'additional_phones': [],
                     'contact_form_url': '',
-                    'team_members': [],
-                    'ad_tech_stack': []
+                    'team_members': []
                 }
                 practice_record.update(website_data)
             else:
@@ -4171,7 +4087,7 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
                 'title': 'Not Available - No Website', 'description': 'Not Available - No Website',
                 'services': [], 'social_links': [], 'staff_count': 0, 'emails': [],
                 'contact_names': [], 'additional_phones': [], 'contact_form_url': '', 'team_members': [],
-                'text': 'Not Available - No Website', 'ad_tech_stack': []
+                'text': 'Not Available - No Website'
             }
         
         if not self.check_robots_txt(url):
@@ -4187,8 +4103,7 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
                 'additional_phones': [],
                 'contact_form_url': '',
                 'team_members': [],
-                'text': 'Not Available - Restricted',
-                'ad_tech_stack': []
+                'text': 'Not Available - Restricted'
             }
         
         try:
@@ -4211,8 +4126,7 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
                     'additional_phones': [],
                     'contact_form_url': '',
                     'team_members': [],
-                    'text': '',
-                    'ad_tech_stack': []
+                    'text': ''
                 }
                 
                 # Extract title
@@ -4253,7 +4167,6 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
                 data['additional_phones'] = self.extract_additional_phones(soup, '', url)
                 data['contact_form_url'] = self.extract_contact_form_url(soup, url)
                 data['team_members'] = self.extract_team_members(soup, url)
-                data['ad_tech_stack'] = self._detect_ad_tech(soup)
                 # --- END OF ADDITION ---
                 
                 logger.info(f"✓ Async scraped {url}: {len(data['services'])} services, {len(data['emails'])} emails")
@@ -4319,8 +4232,7 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
                         'contact_names': [],
                         'additional_phones': [],
                         'contact_form_url': '',
-                        'team_members': [],
-                        'ad_tech_stack': []
+                        'team_members': []
                     })
                 else:
                     processed_results.append(result)
