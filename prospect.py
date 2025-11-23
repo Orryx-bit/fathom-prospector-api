@@ -4021,43 +4021,59 @@ CRITICAL: Return ONLY the category name (e.g., "medspa"), NO explanation."""
         return total_score, scores, specialty, ai_classification
     
     def recommend_device(self, practice_data: Dict, ai_scores: Dict) -> Dict:
-        """Recommend top device based on practice profile using manufacturer-specific catalog."""
+        """
+        Recommend top device based on practice profile using YAML scoring system.
         
-        services = practice_data.get('services', [])
-        description = practice_data.get('description', '').lower()
-        website_text = practice_data.get('website_text', '').lower()
+        FIXED: Now uses same YAML scoring as manufacturer_opportunity_breakdown
+        to ensure consistency between best_device_match and device recommendations list.
+        """
         
-        # Combine all text sources for a comprehensive search
-        all_prospect_text = ' '.join(services) + ' ' + description + ' ' + website_text
+        # Get practice type from scoring data if available
+        practice_type = practice_data.get('practice_type', 'medspa')
+        all_text = self._extract_safe_text(practice_data)
         
-        device_scores = {}
+        device_scores = []
         
-        # self.device_catalog is already filtered for the active manufacturer in __init__
-        for device_name, device_info in self.device_catalog.items():
-            score = 0
-            reasons = []
-            
-            # Check for service alignment based on the manufacturer's device capabilities
-            for service_keyword in device_info.get('services', []):
-                if service_keyword.lower() in all_prospect_text:
-                    score += 20
-                    reasons.append(f"Offers services related to '{service_keyword}'")
-            
-            device_scores[device_name] = {
-                'score': score,
-                'reasons': list(set(reasons)) # Remove duplicate reasons
-            }
+        # Score each device using the same YAML logic as manufacturer opportunity scoring
+        for device_name, device_config in self.device_scoring_configs.items():
+            try:
+                # Use the same scoring method that calculates manufacturer_opportunity_breakdown
+                device_score, device_breakdown = self._score_single_device(
+                    device_config, 
+                    practice_data, 
+                    practice_type, 
+                    all_text
+                )
+                
+                # Generate rationale from breakdown
+                rationale_parts = []
+                for factor, score in device_breakdown.items():
+                    if score > 0 and not factor.startswith('disqualifier'):
+                        rationale_parts.append(f"{factor}: {score}pts")
+                
+                rationale = '; '.join(rationale_parts[:3]) if rationale_parts else 'General practice fit'
+                
+                device_scores.append({
+                    'device': device_name,
+                    'fit_score': device_score,
+                    'rationale': rationale,
+                    'breakdown': device_breakdown
+                })
+                
+            except Exception as e:
+                logger.error(f"Failed to score device {device_name} in recommend_device: {e}")
+                continue
         
-        sorted_devices = sorted(device_scores.items(), 
-                                key=lambda x: x[1]['score'], reverse=True)
+        # Sort by score and rank
+        sorted_devices = sorted(device_scores, key=lambda x: x['fit_score'], reverse=True)
         
         recommendations = []
-        for i, (device_name, data) in enumerate(sorted_devices[:3]):
-            if data['score'] > 0: # Only recommend if there's a match
+        for i, device_data in enumerate(sorted_devices[:3]):
+            if device_data['fit_score'] > 0:  # Only recommend if there's a match
                 recommendations.append({
-                    'device': device_name,
-                    'fit_score': data['score'],
-                    'rationale': '; '.join(data['reasons']) if data['reasons'] else 'General practice fit',
+                    'device': device_data['device'],
+                    'fit_score': device_data['fit_score'],
+                    'rationale': device_data['rationale'],
                     'rank': i + 1
                 })
         
